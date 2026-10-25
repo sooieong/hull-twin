@@ -132,7 +132,7 @@ export function createSideShell(body,store,ui){
   cv.addEventListener('pointermove',e=>{
     const t=hit(e);cv.style.cursor=t.dot?'pointer':'crosshair';
     if(!t.inside){read.textContent='';return;}
-    const fr=Math.round(t.fr),side=t.u<0?'S':'P',pos=`FR ${fr} · ${strakeName(Math.abs(t.u))}(${side})`;
+    const r=t.dot&&t.dot.r,pos=r?`FR ${r.fr} · ${r.strake}(${r.side})`:`FR ${Math.round(t.fr)} · ${strakeName(Math.abs(t.u))}(${t.u<0?'S':'P'})`;
     read.textContent=t.dot?`${pos} · ${LAYER_LABEL[ui.layer]} ${formatValue(t.dot.r,ui.layer)} · ${LEVEL_LABEL[t.dot.level]}`:pos;
   });
   cv.addEventListener('pointerleave',()=>{read.textContent='';cv.style.cursor='';});
@@ -140,7 +140,8 @@ export function createSideShell(body,store,ui){
 
   const refresh=()=>{rebuildDots();draw();};
   store.subscribe(k=>{
-    if(k.has('records')&&!timer)timer=setTimeout(()=>{timer=null;refresh();},200);
+    if(k.has('state')){clearTimeout(timer);timer=null;rebuildDots();}
+    else if(k.has('records')&&!timer)timer=setTimeout(()=>{timer=null;refresh();},200);
     if(k.has('pose')||k.has('state')){
       const p=store.mapState==='mapping'?store.pose:null;
       robot=p?{X:p.X,u:signedGirth(p.X,p.Y,p.Z,p.side)}:null;

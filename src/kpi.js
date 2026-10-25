@@ -3,7 +3,7 @@
    레이어 전환·매핑 진행에 따라 갱신되고, 항목을 누르면 구역에서 가장 나쁜 점이 선택된다.
    ========================================================= */
 import { FS, STRAKE_W } from './hull.js';
-import { CRIT, WARN, LAYER_LABEL, LEVEL_LABEL, DEFECT_LABEL, dftRatio, plateLoss } from './data/criteria.js';
+import { CRIT, WARN, LAYER_LABEL, LEVEL_LABEL, DEFECT_LABEL, ratioPct, lossPct } from './data/criteria.js';
 import { groupZones } from './data/zones.js';
 import { SAMPLE_EVERY } from './data/scanPath.js';
 
@@ -13,8 +13,8 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 
 /* 큰 숫자 + 단위 + 기준값/비율 */
 function valueParts(r,layer){
-  if(layer==='dft')return {v:r.dft,u:'µm',ref:`/ ${r.dftDesign} · ${Math.round(dftRatio(r)*100)}%`};
-  if(layer==='plate')return {v:r.plate.toFixed(1),u:'mm',ref:`/ ${r.plateOrig.toFixed(1)} · −${(plateLoss(r)*100).toFixed(1)}%`};
+  if(layer==='dft')return {v:r.dft,u:'µm',ref:`/ ${r.dftDesign} · ${ratioPct(r)}`};
+  if(layer==='plate')return {v:r.plate.toFixed(1),u:'mm',ref:`/ ${r.plateOrig.toFixed(1)} · −${lossPct(r)}`};
   return {v:r.defectArea,u:'m²',ref:DEFECT_LABEL[r.defect]||''};
 }
 
@@ -31,7 +31,7 @@ export function createKpiPanel(root,store,ui){
   </div>`;
   const $k=k=>root.querySelector(`[data-k="${k}"]`),list=root.querySelector('.kpi-list');
   const measurable=store.plan.samples.filter(s=>!s.blocked).length;
-  let zones=[],timer=null;
+  let zones=[],timer=null,lastHtml='';
 
   function render(){
     const layer=ui.layer,R=store.records;
@@ -43,19 +43,20 @@ export function createKpiPanel(root,store,ui){
     $k('progSub').textContent=`≈ ${Math.round(R.length*AREA_PER_POINT).toLocaleString()} m²`;
     $k('top').textContent=zones.filter(z=>z.compound).length;
     $k('layer').textContent=LAYER_LABEL[layer];$k('count').textContent=`${zones.length}구역`;
-    if(!zones.length){
-      list.innerHTML=`<li class="empty">${store.mapState==='mapping'?'아직 발견된 이상 구역이 없습니다':'이상 구역이 없습니다'}</li>`;return;}
-    list.innerHTML=zones.map((z,i)=>{
+    const html=!zones.length?`<li class="empty">${store.mapState==='mapping'?'아직 발견된 이상 구역이 없습니다':'이상 구역이 없습니다'}</li>`
+      :zones.map((z,i)=>{
       const r=z.worst,v=valueParts(r,layer);
       const fr=z.frMin===z.frMax?`FR ${z.frMin}`:`FR ${z.frMin}–${z.frMax}`;
       const st=z.strakeMin===z.strakeMax?z.strakeMin:`${z.strakeMin}–${z.strakeMax}`;
-      return `<li class="z lvl${z.level}${z.ids.has(ui.selId)?' sel':''}" data-id="${r.id}" tabindex="0" role="button" aria-label="${i+1}순위 ${fr} ${st} ${SIDE[z.side]} ${LEVEL_LABEL[z.level]}">
+      return `<li class="z lvl${z.level}" data-id="${r.id}" tabindex="0" role="button" aria-label="${i+1}순위 ${fr} ${st} ${SIDE[z.side]} ${LEVEL_LABEL[z.level]}">
         <span class="rk">${i+1}</span>
         <div class="zb">
           <div class="zl"><b>${fr}</b><span>${st} · ${SIDE[z.side]}</span><span class="lv lv${z.level}">${LEVEL_LABEL[z.level]}</span></div>
           <div class="zv"><b>${esc(v.v)}</b><i>${v.u}</i><span${layer==='defect'?' class="tx"':''}>${esc(v.ref)}</span></div>
           <div class="zm"><span>${esc(z.zone)} · ${z.count}점</span>${z.compound?'<span class="cx">복합</span>':''}<span class="act">${esc(z.action)}</span></div>
         </div></li>`;}).join('');
+    if(html!==lastHtml){list.innerHTML=html;lastHtml=html;}   // unchanged while mapping finds nothing new: keep the DOM (hover, clicks)
+    syncSel(false);
   }
   function schedule(){if(timer)return;timer=setTimeout(()=>{timer=null;render();},250);}
   function syncSel(scroll){
@@ -63,10 +64,11 @@ export function createKpiPanel(root,store,ui){
       if(on&&scroll)el.scrollIntoView({block:'nearest'});});
   }
   const pick=el=>{const li=el.closest('.z');if(li)ui.select(+li.dataset.id);};
-  list.addEventListener('click',e=>pick(e.target));
+  list.addEventListener('pointerdown',e=>{if(e.button===0)pick(e.target);});
   list.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(e.target);}});
 
-  store.subscribe(k=>{if(k.has('records')||k.has('state'))schedule();});
+  // mapping start/stop: redraw at once; the stream of new measurements while mapping: throttled
+  store.subscribe(k=>{if(k.has('state')){clearTimeout(timer);timer=null;render();}else if(k.has('records'))schedule();});
   ui.subscribe(k=>{if(k==='layer'){render();list.scrollTop=0;syncSel(true);}if(k==='select')syncSel(true);});
   render();
 }

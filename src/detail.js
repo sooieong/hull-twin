@@ -5,7 +5,7 @@
    - 도막 손상: 실제 손상 사진 + 종류·면적·위치·권장 조치. 사진이 없으면 "사진 없음" 상태 (가짜 이미지는 만들지 않는다)
    ========================================================= */
 import { ZONES, ZONE_LABELS } from './hull.js';
-import { OK, judge, isCompound, actionFor, LEVEL_LABEL, DEFECT_LABEL, dftRatio, plateLoss } from './data/criteria.js';
+import { OK, judge, isCompound, actionFor, LEVEL_LABEL, DEFECT_LABEL, ratioPct, lossPct } from './data/criteria.js';
 
 export const PREV_DOCK='2023.09';                 // 이전 도킹 (헤더 도킹 선택 목록과 같은 값)
 const EXAG=1.6;                                   // 두께 차이 과장 배율 (그림 전용)
@@ -16,9 +16,9 @@ const MINUS='−';
 
 function thickness(r,layer){
   if(layer==='plate')return {eyebrow:'PLATE THICKNESS',title:'강판 두께',unit:'mm',dp:1,ref:r.plateOrig,prev:r.platePrev,cur:r.plate,refLabel:'원두께',
-    material:'#3A4558',cards:[['원두께',r.plateOrig],[`이전 (${PREV_DOCK})`,r.platePrev],['현재',r.plate,1],['감소율 (원두께 대비)',`${(plateLoss(r)*100).toFixed(1)}%`,1]]};
+    material:'#3A4558',cards:[['원두께',r.plateOrig],[`이전 (${PREV_DOCK})`,r.platePrev],['현재',r.plate,1],['감소율 (원두께 대비)',lossPct(r),1]]};
   return {eyebrow:'COATING THICKNESS',title:'도막 두께',unit:'µm',dp:0,ref:r.dftDesign,prev:r.dftPrev,cur:r.dft,refLabel:'설계',
-    material:'#4A3A1E',cards:[['설계 (NDFT)',r.dftDesign],[`이전 (${PREV_DOCK})`,r.dftPrev],['현재',r.dft,1],['설계 대비',`${Math.round(dftRatio(r)*100)}%`,1]]};
+    material:'#4A3A1E',cards:[['설계 (NDFT)',r.dftDesign],[`이전 (${PREV_DOCK})`,r.dftPrev],['현재',r.dft,1],['설계 대비',ratioPct(r),1]]};
 }
 
 /* section drawing (px, W × H) */
@@ -99,7 +99,7 @@ export function createDetailPanel(body,store,ui,titleEl){
     fig.innerHTML=W>40&&H>60?sectionSvg(m,level,W,H):'';
   }
   new ResizeObserver(()=>{const r=ui.selId!=null&&store.get(ui.selId);if(r&&ui.layer!=='defect')drawFig(thickness(r,ui.layer),judge(r,ui.layer).level);}).observe(body);
-  store.subscribe(k=>{if((k.has('records')||k.has('state'))&&!timer)timer=setTimeout(()=>{timer=null;render();},250);});
+  store.subscribe(k=>{if(k.has('state')){clearTimeout(timer);timer=null;render();}else if(k.has('records')&&!timer)timer=setTimeout(()=>{timer=null;render();},250);});
   ui.subscribe(k=>{if(k==='layer'||k==='select')render();});
   render();
 }

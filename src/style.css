@@ -290,6 +290,7 @@ button,select,input{font:inherit;color:inherit}
   .ov-layers{width:auto;max-width:170px}
   .ov-sec{width:auto;right:116px}
   .ov-legend{display:none!important}
+  .ov-bottom{left:12px;right:auto;top:150px;align-items:flex-start}   /* under the three button rows */
   .pane-head .chip,#btnFull{display:none}
   .statusbar{height:auto;padding-block:6px;flex-wrap:wrap;gap:6px 16px}
   .statusbar .right{margin-left:0}
