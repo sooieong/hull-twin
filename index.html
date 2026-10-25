@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hull Twin 설계 콘솔</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M2 19h28l-4.5 7.5H7.5z" fill="#F37321"/><path d="M7 19v-8h6v8M15.5 19v-4.5h11V19" fill="none" stroke="#FBB584" stroke-width="1.6"/><path d="M9.5 11V6.5" stroke="#F89B6C" stroke-width="1.6"/></svg>
+      <div><div class="brand-name">HULL TWIN</div><div class="brand-sub">설계 DX</div></div>
+    </div>
+    <nav class="crumbs" aria-label="현재 위치">
+      <span>선체 외판 디지털 트윈</span><span class="sep">/</span>
+      <b>174K LNG Carrier</b><span class="mono">H-2491</span><span class="sep">/</span>
+      <span>정기 리도킹 · 2번 도크</span>
+    </nav>
+    <div class="top-right">
+      <div class="field"><label for="dockSel">도킹</label>
+        <select id="dockSel">
+          <option>2026.10 리도킹 (현재)</option>
+          <option>2023.09 리도킹</option>
+          <option>2021.06 신조 인도</option>
+        </select>
+      </div>
+      <div class="live"><i></i>로봇 연결됨</div>
+      <div class="avatar" title="설계DX">DX</div>
+    </div>
+  </header>
+
+  <div class="main">
+    <nav class="rail" aria-label="주 메뉴">
+      <button data-soon data-label="개요"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/></svg>개요</button>
+      <button aria-current="page"><svg viewBox="0 0 24 24"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>3D 트윈</button>
+      <button data-soon data-label="도면"><svg viewBox="0 0 24 24"><path d="M4 20V4l16 16z"/><path d="M8 16v-4l4 4z"/></svg>도면</button>
+      <button data-soon data-label="측정 데이터"><svg viewBox="0 0 24 24"><path d="M4 15a8 8 0 0 1 16 0"/><path d="m12 15 4-5"/><circle cx="12" cy="15" r="1.3"/><path d="M4 19h16"/></svg>측정</button>
+      <button data-soon data-label="판정"><svg viewBox="0 0 24 24"><path d="M12 3 19 6v6c0 4.2-3 7.4-7 9-4-1.6-7-4.8-7-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>판정</button>
+      <button data-soon data-label="도킹 이력"><svg viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3 4v4h4"/><path d="M12 7.5V12l3 2"/></svg>이력</button>
+      <button data-soon data-label="보고서"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>보고서</button>
+      <span class="spacer"></span>
+      <button data-soon data-label="설정"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>설정</button>
+    </nav>
+
+    <div class="work" id="work">
+      <section class="pane pane-dwg" id="paneDwg" aria-label="선도">
+        <div class="pane-head">
+          <span class="eyebrow">Lines Plan</span><span class="pane-title">선도</span>
+          <span class="chip">HT-HUL-1001 Rev.B</span>
+          <div class="head-actions">
+            <button class="btn" id="zOut" aria-label="축소">−</button>
+            <button class="btn" id="zFit">맞춤</button>
+            <button class="btn" id="zIn" aria-label="확대">+</button>
+          </div>
+        </div>
+        <div class="pane-body"><canvas id="dwg" aria-label="선도: 측면도, 반폭선도, 정면선도. 측면도를 클릭하면 해당 프레임 단면을 선택합니다."></canvas></div>
+      </section>
+
+      <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="패널 너비 조절" tabindex="0"></div>
+
+      <section class="pane pane-3d" id="pane3d" aria-label="3D 선체 모델">
+        <div class="pane-head">
+          <span class="eyebrow">3D Hull Model</span><span class="pane-title">선체 외판</span>
+          <span class="chip">Ship CS · m</span>
+          <div class="head-actions">
+            <button class="btn" id="btnReset">시점 초기화</button>
+            <button class="btn" id="btnFull">전체 화면</button>
+          </div>
+        </div>
+        <div class="pane-body">
+          <div id="vp"></div>
+          <div id="labels"></div>
+
+          <div class="ov-tools">
+            <div class="seg" role="group" aria-label="시점">
+              <span class="lbl">View</span>
+              <button data-view="iso" aria-pressed="true">ISO</button>
+              <button data-view="side" aria-pressed="false">측면</button>
+              <button data-view="plan" aria-pressed="false">평면</button>
+              <button data-view="front" aria-pressed="false">정면</button>
+              <button data-view="bottom" aria-pressed="false">선저</button>
+            </div>
+            <div class="seg" role="group" aria-label="표현 방식">
+              <span class="lbl">Mode</span>
+              <button data-mode="real" aria-pressed="true">실선</button>
+              <button data-mode="bp" aria-pressed="false">도면</button>
+              <button data-mode="xray" aria-pressed="false">X-ray</button>
+              <button data-mode="zone" aria-pressed="false">측정 구역</button>
+            </div>
+          </div>
+
+          <details class="ov ov-layers" id="layers" open>
+            <summary>Layers</summary>
+            <ul>
+              <li><label class="tog"><input type="checkbox" id="lyFrames" checked>프레임선<span class="sw" style="background:var(--ho-peach)"></span></label></li>
+              <li><label class="tog"><input type="checkbox" id="lySeams" checked>외판열 경계<span class="sw" style="background:rgba(251,181,132,.45)"></span></label></li>
+              <li><label class="tog"><input type="checkbox" id="lyDwl" checked>설계 흘수선<span class="sw" style="background:var(--ho-orange)"></span></label></li>
+              <li><label class="tog"><input type="checkbox" id="lyRobot" checked>로봇 주행경로<span class="sw dash"></span></label></li>
+              <li><label class="tog"><input type="checkbox" id="lySuper" checked>상부 구조</label></li>
+              <li><label class="tog"><input type="checkbox" id="lyBlocks" checked>도크 · 킬 블록</label></li>
+            </ul>
+          </details>
+
+          <div class="ov ov-sec">
+            <div class="row1"><div class="fr"><small>FR</small><span id="secFr">170</span></div><span class="zone" id="secZone">평행 중앙부</span></div>
+            <dl class="kv">
+              <dt>X (AP 기준)</dt><dd id="secX">144.50 m</dd>
+              <dt>반폭 @ 설계흘수</dt><dd id="secHb">23.20 m</dd>
+              <dt>외판 거스 (편현)</dt><dd id="secG">48.6 m</dd>
+              <dt>외판열</dt><dd id="secS">K, A–N</dd>
+            </dl>
+            <input class="slider" type="range" id="secSlider" min="0" max="351" value="170" aria-label="단면 프레임 번호">
+            <div class="sec-foot">
+              <label class="tog"><input type="checkbox" id="cutTog">단면 절단</label>
+              <span class="hint">선체·도면 클릭으로 선택</span>
+            </div>
+          </div>
+
+          <div class="ov ov-legend" id="legend" hidden>
+            <span class="ttl">측정 구역 · 도장 사양별</span>
+            <span><i style="background:#F37321"></i>선저부</span>
+            <span><i style="background:#F89B6C"></i>빌지부</span>
+            <span><i style="background:#FBB584"></i>선측 수선 아래</span>
+            <span><i style="background:#000000"></i>흘수선 부근</span>
+            <span><i style="background:#3C4E70"></i>건현부</span>
+            <span><i style="background:#B5531A"></i>선수 · 선미</span>
+          </div>
+
+          <div class="ov ov-gizmo"><canvas id="gizmo" aria-label="좌표축"></canvas></div>
+          <div class="tip" id="tip" hidden></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="statusbar">
+    <span class="rb" id="stRobotWrap"><i></i><span id="stRobot">RBT-01 주행 중</span><button class="mini" id="robotBtn">일시정지</button></span>
+    <span><span class="k">커서</span><span id="stCursor">—</span></span>
+    <span class="right"><span class="k">좌표계</span>Ship CS · X 선수(+) · Y 좌현(+) · Z 기선 · 프레임 간격 850 mm</span>
+  </footer>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
