@@ -101,11 +101,20 @@
           </div>
         </div>
 
+        <div class="ov-bottom">
+        <div class="seg" role="group" aria-label="재생 속도 (시연용)">
+          <span class="lbl">Speed</span>
+          <button data-speed="1" aria-pressed="false">×1</button>
+          <button data-speed="10" aria-pressed="true">×10</button>
+          <button data-speed="50" aria-pressed="false">×50</button>
+        </div>
+
         <div class="ov ov-legend ov-heat" id="heatLegend">
           <span class="ttl" id="heatTtl">도막 두께 · 현재 / 설계</span>
           <div class="ramp" id="heatRamp"></div>
           <div class="ticks"><span id="heatWarn">주의</span><span id="heatCrit">심각</span></div>
           <span class="note">정상 구역은 선체 기본색</span>
+          <span class="note"><i class="hatch"></i>측정 불가 · 킬 블록 접촉면</span>
         </div>
 
         <div class="ov ov-legend" id="legend" hidden>
@@ -116,6 +125,7 @@
           <span><i style="background:#000000"></i>흘수선 부근</span>
           <span><i style="background:#3C4E70"></i>건현부</span>
           <span><i style="background:#B5531A"></i>선수 · 선미</span>
+        </div>
         </div>
 
         <div class="ov ov-gizmo"><canvas id="gizmo" aria-label="좌표축"></canvas></div>
@@ -146,7 +156,7 @@
   </div>
 
   <footer class="statusbar">
-    <span class="rb" id="stRobotWrap"><i></i><span id="stRobot">RBT-01 주행 중</span><button class="mini" id="robotBtn">일시정지</button></span>
+    <span class="rb idle" id="stRobotWrap"><i></i><span id="stRobot">데이터 불러오는 중…</span></span>
     <span><span class="k">커서</span><span id="stCursor">—</span></span>
     <span class="right"><span class="k">좌표계</span>Ship CS · X 선수(+) · Y 좌현(+) · Z 기선 · 프레임 간격 850 mm</span>
   </footer>

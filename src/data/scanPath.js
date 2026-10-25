@@ -11,7 +11,7 @@ import { FS, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, section, atGirth, strakeLow
 export const SAMPLE_EVERY=3;   // 측정 간격: 3 프레임 (2.55 m)
 const MIN_STRAKE=0.8;          // 이 폭보다 좁게 남은 외판열 끝단은 주행하지 않음 (m)
 const TURN_STEPS=8;            // 외판열 사이 이동 구간 점 개수
-const ROBOT_MARGIN=0.6;        // 블록 접촉면 주변 측정 불가 여유 (m)
+export const ROBOT_MARGIN=0.6; // 블록 접촉면 주변 측정 불가 여유 (m)
 
 const secs=[];for(let fr=0;fr<=FRMAX;fr++)secs.push(section(fr*FS));
 

@@ -1,10 +1,11 @@
 import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { clamp, L, D, T, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
-  deckZ, HB, section, girthOf, strakeName, strakeAt, ZONE_LABELS, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
+import { clamp, L, B, D, T, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
+  deckZ, keelZ, HB, section, girthOf, strakeName, ZONE_LABELS, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
 import { CRITERIA, LAYER_LABEL, LEVEL_LABEL, judge, formatValue } from './data/criteria.js';
-import { heatOf, heatRGB, heatAlpha, heatCss, buildIndex, idw, nearest } from './heatmap.js';
+import { HEAT, heatOf, heatRGB, heatAlpha, heatCss, buildIndex, addToIndex, idw, coverage, nearest } from './heatmap.js';
+import { ROBOT_MARGIN } from './data/scanPath.js';
 import { createUiState } from './uiState.js';
 import { SimulatorSource } from './data/simulator.js';
 import { createStore } from './data/store.js';
@@ -20,7 +21,6 @@ const fmt=(n,d=2)=>n.toFixed(d);
 /* ---------- toast + placeholders ---------- */
 const toastEl=$('#toast');let toastT;
 function toast(m){toastEl.textContent=m;toastEl.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{toastEl.hidden=true;},2400);}
-$('#mapBtn').addEventListener('click',()=>toast('매핑 시작·종료는 다음 단계에서 연결합니다'));
 $('#reportBtn').addEventListener('click',()=>toast('보고서 생성은 다음 단계에서 구현합니다'));
 $('#dockSel').addEventListener('change',()=>toast('도킹 이력 비교는 측정 데이터 연결 후 활성화됩니다'));
 
@@ -28,25 +28,6 @@ $('#dockSel').addEventListener('change',()=>toast('도킹 이력 비교는 측�
 const storeReady=findDefectPhotos().then(photos=>{const store=createStore(new SimulatorSource({photos}));store.connect();logDataSummary(store);return store;});
 /* selected layer + selected measurement, shared by all panels (SPEC 4.3, 4.5) */
 const ui=createUiState();
-
-/* ---------- robot scan path (example run, starboard side) ---------- */
-const robot={pts:[],cum:[],s:0,idx:0,paused:reduce,hold:0,speed:3.6};
-(function(){
-  const Zs=[2.6,3.9,5.2,6.5,7.8,9.1,10.4],x0=132,x1=168;let dir=1;const P=[];
-  Zs.forEach((Z,k)=>{const a=dir>0?x0:x1,b=dir>0?x1:x0;const n=90;
-    for(let t=0;t<=n;t++)P.push([a+(b-a)*t/n,Z]);
-    if(k<Zs.length-1){const Zn=Zs[k+1];for(let t=1;t<4;t++)P.push([b,Z+(Zn-Z)*t/4]);}
-    dir*=-1;});
-  robot.pts=P;robot.cum=[0];for(let i=1;i<P.length;i++)robot.cum.push(robot.cum[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]));
-  robot.total=robot.cum[robot.cum.length-1];
-  robot.s=reduce?robot.total*0.55:robot.total*0.18;
-})();
-function robotState(){
-  while(robot.idx<robot.pts.length-2&&robot.cum[robot.idx+1]<robot.s)robot.idx++;
-  while(robot.idx>0&&robot.cum[robot.idx]>robot.s)robot.idx--;
-  const i=robot.idx,a=robot.pts[i],b=robot.pts[i+1],seg=robot.cum[i+1]-robot.cum[i]||1,t=clamp((robot.s-robot.cum[i])/seg,0,1);
-  return {X:a[0]+(b[0]-a[0])*t,Z:a[1]+(b[1]-a[1])*t,dx:b[0]-a[0],dz:b[1]-a[1],i};
-}
 
 /* ---------- shared state + cross-view hooks ---------- */
 const state={selFR:170,hoverX:null,hoverSrc:null,mode:'real',cut:false};
@@ -67,13 +48,6 @@ function setHover(X,src){state.hoverX=X;state.hoverSrc=X==null?null:src;hooks.on
 $('#secSlider').max=FRMAX;
 $('#secSlider').addEventListener('input',e=>selectFR(+e.target.value));
 
-/* robot control */
-const robotBtn=$('#robotBtn');
-function syncRobotBtn(){robotBtn.textContent=robot.paused?'재개':'일시정지';$('#stRobotWrap').classList.toggle('paused',robot.paused);}
-robotBtn.addEventListener('click',()=>{robot.paused=!robot.paused;syncRobotBtn();});syncRobotBtn();
-function updateRobotStatus(){const rs=robotState();const fr=Math.round(rs.X/FS);
-  $('#stRobot').textContent=`RBT-01 ${robot.paused?'정지':'주행 중'} · FR ${fr} · 외판열 ${strakeAt(rs.X,rs.Z)}(S) · Z ${fmt(rs.Z)} m · 진행 ${Math.round(robot.s/robot.total*100)}%`;}
-
 /* =========================================================
    3D VIEWPORT (three.js)
    ========================================================= */
@@ -90,7 +64,16 @@ const camera=new THREE.PerspectiveCamera(32,1,1,5000);
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.dampingFactor=0.08;controls.minDistance=30;controls.maxDistance=1200;controls.rotateSpeed=0.7;
 const PRESETS={iso:{p:[240,125,275],t:[0,8,0]},side:{p:[0,14,600],t:[0,12,0]},plan:{p:[0,640,0.5],t:[0,0,0]},front:{p:[560,18,0.5],t:[0,14,0]},bottom:{p:[150,-340,170],t:[0,4,0]}};
-camera.position.set(...PRESETS.iso.p);controls.target.set(...PRESETS.iso.t);controls.update();
+// each preset keeps its direction; the distance is fitted so the whole ship shows in the pane (SPEC 4.1)
+const FIT=0.9,SHIP_BOX=[];for(const x of [-XC,XC])for(const y of [-1.8,D+30])for(const z of [-B/2,B/2])SHIP_BOX.push(new V3(x,y,z));
+function fitPreset(k){
+  const pr=PRESETS[k],t=new V3(...pr.t),dir=new V3(...pr.p).sub(t).normalize();
+  const ax=new V3(),ay=new V3(),az=new V3();new THREE.Matrix4().lookAt(dir,new V3(),camera.up).extractBasis(ax,ay,az);
+  const tv=Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*FIT,th=tv*camera.aspect,c=new V3();let d=0;
+  for(const b of SHIP_BOX){c.copy(b).sub(t);const z=c.dot(az);d=Math.max(d,z+Math.abs(c.dot(ax))/th,z+Math.abs(c.dot(ay))/tv);}
+  return {p:t.clone().addScaledVector(dir,d),t};
+}
+let curView='iso';
 
 scene.add(new THREE.HemisphereLight(0xb8c7e6,0x5a6478,0.62));   // lit ground colour so the bottom and its heatmap stay readable
 const key=new THREE.DirectionalLight(0xffffff,0.85);key.position.set(220,320,260);scene.add(key);
@@ -123,6 +106,24 @@ const hullS=new THREE.Mesh(geoS,hullMat),hullP=new THREE.Mesh(geoP,hullMat);hull
 hullS.userData.side='S';hullP.userData.side='P';
 const backS=new THREE.Mesh(hullGeo,backMat),backP=new THREE.Mesh(hullGeo,backMat);backP.scale.z=-1;
 const hullGroup=new THREE.Group();hullGroup.add(hullS,hullP,backS,backP);scene.add(hullGroup);
+const toThree=(X,Y,Z,out=new V3())=>out.set(X-XC,Z,-Y);
+/* outward shell normal (three coords) at ship point (X, Y, Z), from the nearest shell vertex; port mesh is mirrored */
+function shellNormal(X,Y,Z,out=new V3()){
+  const i=clamp(Math.round(X/XMAX*NX),0,NX),s=stSec[i];let j=0,bd=1e9;
+  for(let q=0;q<G;q++){const d=(s.Ys[q]-Math.abs(Y))**2+(s.Zs[q]-Z)**2;if(d<bd){bd=d;j=q;}}
+  const n=hullGeo.attributes.normal,k=i*G+j;
+  return out.set(n.getX(k),n.getY(k),n.getZ(k)*(Y<0?1:-1)).normalize();
+}
+
+/* keel / side block contact areas cannot be measured (SPEC 4.2): hatched on the bottom shell */
+{const cv=document.createElement('canvas');cv.width=cv.height=16;const c=cv.getContext('2d');
+  c.fillStyle='#3A4558';c.fillRect(0,0,16,16);c.strokeStyle='#8A96AA';c.lineWidth=2;
+  c.beginPath();c.moveTo(-4,4);c.lineTo(4,-4);c.moveTo(0,16);c.lineTo(16,0);c.moveTo(12,20);c.lineTo(20,12);c.stroke();
+  const tex=new THREE.CanvasTexture(cv);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+  const mat=cm(new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
+  KEEL_BLOCKS.forEach(b=>{const w=BLOCK_SIZE.dx+2*ROBOT_MARGIN,h=BLOCK_SIZE.dy+2*ROBOT_MARGIN,g=new THREE.PlaneGeometry(w,h),uv=g.attributes.uv;
+    for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*w/1.2,uv.getY(i)*h/1.2);
+    const m=new THREE.Mesh(g,mat);m.rotation.x=Math.PI/2;m.position.set(b.X-XC,keelZ(b.X)-0.04,-b.Y);hullGroup.add(m);});}
 
 /* deck + transom */
 const deckPos=[],deckIdx=[];
@@ -203,26 +204,51 @@ const blkG=new THREE.BoxGeometry(BLOCK_SIZE.dx,1.5,BLOCK_SIZE.dy),capG=new THREE
 KEEL_BLOCKS.forEach(k=>{const b=new THREE.Mesh(blkG,blkMat);b.position.set(k.X-XC,FLOOR+0.75,-k.Y);const c=new THREE.Mesh(capG,capMat);c.position.set(k.X-XC,-0.15,-k.Y);dockGroup.add(b,c);});
 scene.add(dockGroup);
 
-/* robot */
+/* robot (SPEC 4.2, 4.4): K100 body, bright outline and pulse ring, 1.5x the former size. Shown only while mapping.
+   Local axes: x = heading, y = across, z = shell normal. */
+const RB=1.5;
 const robotGroup=new THREE.Group();
-const rbBody=new THREE.Mesh(new THREE.BoxGeometry(1.9,1.2,0.6),new THREE.MeshStandardMaterial({color:0xF37321,emissive:0x5a2208,roughness:0.45,metalness:0.2}));
-const rbTop=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.7,0.25),new THREE.MeshStandardMaterial({color:0x0d1220,roughness:0.6}));rbTop.position.z=0.4;
-const rbEye=new THREE.Mesh(new THREE.SphereGeometry(0.16,12,8),new THREE.MeshBasicMaterial({color:0xFBB584}));rbEye.position.set(0.95,0,0.15);
-const wheelG=new THREE.CylinderGeometry(0.26,0.26,0.2,14),wheelM=new THREE.MeshStandardMaterial({color:0x111622,roughness:0.8});
-[[-0.7,0.65],[0.7,0.65],[-0.7,-0.65],[0.7,-0.65]].forEach(([x,y])=>{const w=new THREE.Mesh(wheelG,wheelM);w.position.set(x,y,-0.2);robotGroup.add(w);});
-const rbRing=new THREE.Mesh(new THREE.RingGeometry(1.9,2.15,40),new THREE.MeshBasicMaterial({color:0xF37321,transparent:true,opacity:0.6,side:THREE.DoubleSide,depthWrite:false}));
-robotGroup.add(rbBody,rbTop,rbEye,rbRing);
-const rbInner=new THREE.Group();rbInner.add(robotGroup);
-const robotWrap=new THREE.Group();robotWrap.add(rbInner);scene.add(robotWrap);
-const pathArr=[];robot.pts.forEach(p=>{const Y=HB(p[0],p[1])+0.12;pathArr.push(p[0]-XC,p[1],Y);});
-const pathGeo=new THREE.BufferGeometry();pathGeo.setAttribute('position',new THREE.Float32BufferAttribute(pathArr,3));
-const planLine=new THREE.Line(pathGeo,new THREE.LineDashedMaterial({color:0xFBB584,dashSize:0.6,gapSize:0.5,transparent:true,opacity:0.45}));planLine.computeLineDistances();
-const trailGeo=new THREE.BufferGeometry();trailGeo.setAttribute('position',new THREE.Float32BufferAttribute(pathArr.slice(),3));
-const trail=new THREE.Line(trailGeo,new THREE.LineBasicMaterial({color:0xF37321}));
-robotWrap.add(planLine,trail);
-function placeRobot(){const rs=robotState();const Y=HB(rs.X,rs.Z);
-  rbInner.position.set(rs.X-XC,rs.Z,Y+0.45);rbInner.rotation.z=Math.atan2(rs.dz,rs.dx);
-  trailGeo.setDrawRange(0,rs.i+1);}
+{const bodyG=new THREE.BoxGeometry(1.9*RB,1.2*RB,0.6*RB);
+  const body=new THREE.Mesh(bodyG,new THREE.MeshStandardMaterial({color:0x050505,roughness:0.5,metalness:0.3}));body.position.z=0.3*RB;
+  const edge=new THREE.LineSegments(new THREE.EdgesGeometry(bodyG),new THREE.LineBasicMaterial({color:0xffffff}));edge.position.copy(body.position);
+  const top=new THREE.Mesh(new THREE.BoxGeometry(1.1*RB,0.7*RB,0.25*RB),new THREE.MeshStandardMaterial({color:0x1a1f2a,roughness:0.6}));top.position.z=0.72*RB;
+  const eye=new THREE.Mesh(new THREE.SphereGeometry(0.16*RB,12,8),new THREE.MeshBasicMaterial({color:0xffffff}));eye.position.set(0.95*RB,0,0.4*RB);
+  const wheelG=new THREE.CylinderGeometry(0.26*RB,0.26*RB,0.2*RB,14),wheelM=new THREE.MeshStandardMaterial({color:0x111622,roughness:0.8});
+  [[-0.7,0.65],[0.7,0.65],[-0.7,-0.65],[0.7,-0.65]].forEach(([x,y])=>{const w=new THREE.Mesh(wheelG,wheelM);w.position.set(x*RB,y*RB,0.26*RB);robotGroup.add(w);});
+  robotGroup.add(body,edge,top,eye);}
+// locator rings lying on the shell; scaled with distance so the robot stays findable on the whole-ship view
+const rbLocator=new THREE.Group();
+const ringOnShell=(r0,r1,opacity)=>new THREE.Mesh(new THREE.RingGeometry(r0,r1,48),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false}));
+const rbHalo=ringOnShell(2.1*RB,2.35*RB,0.95),rbPulse=ringOnShell(2.35*RB,2.6*RB,0.6);
+rbHalo.position.z=rbPulse.position.z=0.05;rbLocator.add(rbHalo,rbPulse);robotGroup.add(rbLocator);
+const robotWrap=new THREE.Group();robotWrap.add(robotGroup);robotWrap.visible=false;scene.add(robotWrap);
+const rbTarget={p:new V3(),q:new THREE.Quaternion()},rbBasis=new THREE.Matrix4();
+function setRobotTarget(pose,snap){
+  const n=shellNormal(pose.X,pose.Y,pose.Z),h=new V3(pose.heading.X,pose.heading.Z,-pose.heading.Y);
+  toThree(pose.X,pose.Y,pose.Z,rbTarget.p);
+  h.addScaledVector(n,-h.dot(n));
+  if(h.lengthSq()>1e-8){h.normalize();rbBasis.makeBasis(h,new V3().crossVectors(n,h),n);rbTarget.q.setFromRotationMatrix(rbBasis);}
+  if(snap){robotGroup.position.copy(rbTarget.p);robotGroup.quaternion.copy(rbTarget.q);}
+}
+
+/* scan path: travelled (faint, current strake solid) and the next part — rest of the current strake + the next strake (dashed) */
+const pathGroup=new THREE.Group();pathGroup.visible=false;scene.add(pathGroup);
+let plan=null,trailLine=null,rowLine=null,nextLine=null,lyRobotOn=true;
+function buildPath(P){
+  plan=P;const arr=new Float32Array(P.points.length*3),v=new V3(),n=new V3();
+  P.points.forEach((p,i)=>{shellNormal(p.X,p.Y,p.Z,n);toThree(p.X,p.Y,p.Z,v).addScaledVector(n,0.15).toArray(arr,i*3);});
+  const geo=()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(arr,3));g.setDrawRange(0,0);return g;};
+  trailLine=new THREE.Line(geo(),new THREE.LineBasicMaterial({color:0x1F2D4A,transparent:true,opacity:0.18}));
+  rowLine=new THREE.Line(geo(),new THREE.LineBasicMaterial({color:0x000000}));
+  nextLine=new THREE.Line(geo(),new THREE.LineDashedMaterial({color:0x1F2D4A,dashSize:1.2,gapSize:0.9}));nextLine.computeLineDistances();
+  pathGroup.add(trailLine,rowLine,nextLine);
+}
+function showPathAt(k){
+  if(!plan)return;const pts=plan.points;let r=-1;
+  for(let i=k;i<pts.length&&r<0;i++)r=pts[i].row;
+  const end=r<0?pts.length-1:plan.rows[Math.min(r+1,plan.rows.length-1)].end,start=r<0?k:Math.min(k,plan.rows[r].start);
+  trailLine.geometry.setDrawRange(0,k+1);rowLine.geometry.setDrawRange(start,k-start+1);nextLine.geometry.setDrawRange(k,Math.max(0,end-k+1));
+}
 
 /* selection ring, hover ring, labels */
 const ringMat=new THREE.MeshBasicMaterial({color:0xF37321});
@@ -275,21 +301,38 @@ document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',(
 
 /* heatmap: IDW of the current layer's judgement over the shell, abnormal areas only (SPEC 4.4).
    Not shown in 'zone' mode, which colours the hull by measurement zone instead. */
-const heatS=new Float32Array(nV),heatP=new Float32Array(nV);
-let store=null,heatIx=buildIndex([]),heatT=null;
+const heatS=new Float32Array(nV),heatP=new Float32Array(nV),covS=new Float32Array(nV),covP=new Float32Array(nV);
+let store=null,heatIx=buildIndex([]),heatT=null,heatArr=null,heatLen=0;
+const hw={w:0};
+function heatVertex(k,X,g){heatS[k]=idw(heatIx,X,-g,hw);covS[k]=coverage(hw.w);heatP[k]=idw(heatIx,X,g,hw);covP[k]=coverage(hw.w);}
 const recU=new WeakMap();   // record -> signed girth u (port +)
 function uOf(r){let u=recU.get(r);if(u===undefined){u=girthOf(section(r.X),r.Y,r.Z)*(r.side==='P'?1:-1);recU.set(r,u);}return u;}
 function rebuildHeat(){
   const layer=ui.layer;
-  heatIx=buildIndex((store?store.records:[]).map(r=>({X:r.X,u:uOf(r),h:heatOf(r,layer),r})));
-  for(let i=0;i<=NX;i++){const X=stX[i];for(let j=0;j<G;j++){const k=i*G+j,g=girth[k];heatS[k]=idw(heatIx,X,-g);heatP[k]=idw(heatIx,X,g);}}
+  heatArr=store?store.records:[];heatLen=heatArr.length;
+  heatIx=buildIndex(heatArr.map(r=>({X:r.X,u:uOf(r),h:heatOf(r,layer),r})));
+  for(let i=0;i<=NX;i++){const X=stX[i];for(let j=0;j<G;j++){const k=i*G+j;heatVertex(k,X,girth[k]);}}
   paintHull();
 }
-function scheduleHeat(){if(heatT)return;heatT=setTimeout(()=>{heatT=null;rebuildHeat();},100);}
+/* records appended while mapping: only the shell around the new points is recomputed */
+function updateHeat(){
+  const R=store.records;
+  if(R!==heatArr||R.length<heatLen){rebuildHeat();return;}
+  if(R.length===heatLen)return;
+  const layer=ui.layer,rad=HEAT.radius,fresh=R.slice(heatLen);heatLen=R.length;
+  fresh.forEach(r=>addToIndex(heatIx,{X:r.X,u:uOf(r),h:heatOf(r,layer),r}));
+  fresh.forEach(r=>{const u=Math.abs(uOf(r)),i0=Math.max(0,Math.floor((r.X-rad)/XMAX*NX)),i1=Math.min(NX,Math.ceil((r.X+rad)/XMAX*NX));
+    for(let i=i0;i<=i1;i++)for(let j=0;j<G;j++){const k=i*G+j;if(Math.abs(girth[k]-u)<rad||girth[k]<rad)heatVertex(k,stX[i],girth[k]);}});
+  paintHull();
+}
+function scheduleHeat(){if(heatT)return;heatT=setTimeout(()=>{heatT=null;updateHeat();},100);}
+const DIM=[0.3,0.33,0.39];   // not-yet-measured shell while mapping (the map "appears" behind the robot)
 function paintHull(){
   const m=state.mode,base=m==='zone'?colZone:(m==='bp'||m==='xray')?colBp:colReal,show=m!=='zone';
-  [[geoS,heatS],[geoP,heatP]].forEach(([g,h])=>{const attr=g.attributes.color,c=attr.array;
+  const dimOn=show&&store&&store.mapState==='mapping';
+  [[geoS,heatS,covS],[geoP,heatP,covP]].forEach(([g,h,cov])=>{const attr=g.attributes.color,c=attr.array;
     for(let k=0;k<nV;k++){const o=k*3;let r=base[o],gr=base[o+1],b=base[o+2];
+      if(dimOn){const d=(1-cov[k])*0.7;r+=(DIM[0]-r)*d;gr+=(DIM[1]-gr)*d;b+=(DIM[2]-b)*d;}
       const a=show?heatAlpha(h[k]):0;
       if(a>0){const hc=heatRGB(h[k]);r+=(hc[0]/255-r)*a;gr+=(hc[1]/255-gr)*a;b+=(hc[2]/255-b)*a;}
       c[o]=r;c[o+1]=gr;c[o+2]=b;}
@@ -315,21 +358,43 @@ const selMarker=new THREE.Group();
 selMarker.visible=false;scene.add(selMarker);
 function placeMarker(r){
   if(!r){selMarker.visible=false;return;}
-  // outward normal of the nearest shell vertex (three z = -Y, port mesh is mirrored)
-  const i=clamp(Math.round(r.X/XMAX*NX),0,NX),s=stSec[i];let j=0,bd=1e9;
-  for(let q=0;q<G;q++){const d=(s.Ys[q]-Math.abs(r.Y))**2+(s.Zs[q]-r.Z)**2;if(d<bd){bd=d;j=q;}}
-  const n=hullGeo.attributes.normal,k=i*G+j;
-  const nv=new V3(n.getX(k),n.getY(k),n.getZ(k)*(r.Y<0?1:-1)).normalize();
-  selMarker.position.set(r.X-XC,r.Z,-r.Y).addScaledVector(nv,0.2);
+  const nv=shellNormal(r.X,r.Y,r.Z);
+  toThree(r.X,r.Y,r.Z,selMarker.position).addScaledVector(nv,0.2);
   selMarker.quaternion.setFromUnitVectors(new V3(0,0,1),nv);selMarker.visible=true;
 }
 ui.subscribe(k=>{
   if(k==='layer'){syncLayer();rebuildHeat();tip.hidden=true;}
   if(k==='select'){const r=store&&store.get(ui.selId);placeMarker(r);if(r)selectFR(r.fr);}
 });
-storeReady.then(s=>{store=s;
-  s.subscribe(k=>{if(!k.has('records'))return;scheduleHeat();placeMarker(ui.selId!=null?s.get(ui.selId):null);});
-  rebuildHeat();
+/* mapping state (SPEC 2, 4.1): done = whole ship + all results, robot and path hidden;
+   mapping = heatmap restarts empty and fills in behind the robot */
+const fmtTime=ts=>{const d=new Date(ts),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}.${p(d.getMonth()+1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;};
+let mapOn=null,robotSeen=false;
+function syncMap(){
+  const on=store.mapState==='mapping';
+  $('#mapState').classList.toggle('on',on);$('#mapBtn').textContent=on?'매핑 종료':'매핑 시작';
+  $('#stRobotWrap').classList.toggle('idle',!on);
+  if(on)$('#mapStateTxt').textContent=`매핑 중 ${Math.floor(store.progress*100)}%`;
+  else{$('#mapStateTxt').textContent='매핑 완료';
+    $('#stRobot').textContent=`매핑 완료 · 측정점 ${store.records.length.toLocaleString()}개 · 마지막 측정 ${store.lastTs?fmtTime(store.lastTs):'—'}`;}
+  if(on!==mapOn){mapOn=on;robotSeen=false;robotWrap.visible=false;pathGroup.visible=on&&lyRobotOn;paintHull();}
+}
+function onPose(p){
+  setRobotTarget(p,!robotSeen);robotSeen=true;robotWrap.visible=true;showPathAt(p.k);
+  const pct=Math.floor(p.progress*100);
+  $('#mapStateTxt').textContent=`매핑 중 ${pct}%`;
+  $('#stRobot').textContent=`RBT-01 매핑 중 · FR ${p.fr} · 외판열 ${p.strake} · ${p.side==='P'?'좌현':'우현'} · X ${fmt(p.X)}  Y ${fmt(p.Y)}  Z ${fmt(p.Z)} m · 진행 ${pct}%`;
+}
+$('#mapBtn').addEventListener('click',()=>{if(!store)return;if(store.mapState==='mapping')store.stop();else store.start();});
+function setSpeed(k){if(store)store.setSpeed(k);document.querySelectorAll('[data-speed]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.speed===k)));}
+document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>setSpeed(+b.dataset.speed)));
+storeReady.then(s=>{store=s;buildPath(s.plan);setSpeed(10);
+  s.subscribe(k=>{
+    if(k.has('records')){scheduleHeat();placeMarker(ui.selId!=null?s.get(ui.selId):null);}
+    if(k.has('state')||k.has('records'))syncMap();
+    if(k.has('pose')&&s.mapState==='mapping'&&s.pose)onPose(s.pose);
+  });
+  rebuildHeat();syncMap();
 });
 const lay=(id,fn)=>{const el=$(id);el.addEventListener('change',()=>fn(el.checked));fn(el.checked);};
 lay('#lyFrames',on=>{frames.visible=on;frLabels.forEach(l=>l.el.hidden=!on);});
@@ -337,18 +402,18 @@ lay('#lySeams',on=>seams.visible=on);
 lay('#lyDwl',on=>dwl.visible=on);
 lay('#lySuper',on=>superGroup.visible=on);
 lay('#lyBlocks',on=>dockGroup.visible=on);
-lay('#lyRobot',on=>{robotWrap.visible=on;});
+lay('#lyRobot',on=>{lyRobotOn=on;pathGroup.visible=on&&mapOn===true;});
 $('#cutTog').addEventListener('change',e=>{state.cut=e.target.checked;const planes=state.cut?[clipPlane]:[];clipMats.forEach(m=>{m.clippingPlanes=planes;m.needsUpdate=true;});});
 
 /* camera presets */
 let tween=null;
 function goView(k){document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===k)));
-  const pr=PRESETS[k];const to={p:new V3(...pr.p),t:new V3(...pr.t)};
+  curView=k;const to=fitPreset(k);
   if(reduce){camera.position.copy(to.p);controls.target.copy(to.t);controls.update();return;}
   tween={from:{p:camera.position.clone(),t:controls.target.clone()},to,t0:performance.now(),dur:800};}
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>goView(b.dataset.view)));
 $('#btnReset').addEventListener('click',()=>goView('iso'));
-controls.addEventListener('start',()=>{tween=null;document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed','false'));});
+controls.addEventListener('start',()=>{tween=null;curView=null;document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed','false'));});
 $('#btnFull').addEventListener('click',()=>{const el=$('#pane3d');try{if(document.fullscreenElement)document.exitFullscreen();else{const r=el.requestFullscreen&&el.requestFullscreen();if(r&&r.catch)r.catch(()=>toast('이 화면에서는 전체 화면을 지원하지 않습니다'));}}catch(_){toast('이 화면에서는 전체 화면을 지원하지 않습니다');}});
 
 /* picking */
@@ -401,7 +466,8 @@ function drawGizmo(){
 }
 
 /* resize + loop */
-function resize3D(){const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
+function resize3D(){const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
+  if(curView&&!tween){const f=fitPreset(curView);camera.position.copy(f.p);controls.target.copy(f.t);controls.update();}}
 new ResizeObserver(resize3D).observe(host);resize3D();
 const tmp=new V3();
 function place(el,p){tmp.copy(p).project(camera);if(tmp.z>1||tmp.z<-1){el.style.display='none';return;}
@@ -412,18 +478,16 @@ function loop(now){
   if(tween){const k=Math.min(1,(now-tween.t0)/tween.dur);const e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
     camera.position.lerpVectors(tween.from.p,tween.to.p,e);controls.target.lerpVectors(tween.from.t,tween.to.t,e);if(k>=1)tween=null;}
   controls.update();
-  if(!robot.paused){if(robot.hold>0){robot.hold-=dt;if(robot.hold<=0){robot.s=0;robot.idx=0;}}
-    else{robot.s+=robot.speed*dt;if(robot.s>=robot.total){robot.s=robot.total;robot.hold=2.5;}}}
-  placeRobot();
-  if(!reduce){const ph=(now/1000)%1.6/1.6;rbRing.scale.setScalar(1+ph*0.9);rbRing.material.opacity=0.6*(1-ph);}
+  if(robotWrap.visible){const e=1-Math.exp(-dt*14);robotGroup.position.lerp(rbTarget.p,e);robotGroup.quaternion.slerp(rbTarget.q,e);
+    rbLocator.scale.setScalar(clamp(camera.position.distanceTo(robotGroup.position)/120,1,3.5));
+    if(!reduce){const ph=(now/1000)%1.4/1.4;rbPulse.scale.setScalar(1+ph*0.8);rbPulse.material.opacity=0.6*(1-ph);}}
   if(pendingMove){pick(pendingMove);pendingMove=null;}
-  if(frame%10===0)updateRobotStatus();
   if(selMarker.visible)selMarker.scale.setScalar(clamp(camera.position.distanceTo(selMarker.position)/110,1,4));
   frLabels.forEach(l=>{if(!l.el.hidden)place(l.el,l.p);});place(selLabel,selLabelPos);
   renderer.render(scene,camera);drawGizmo();
   requestAnimationFrame(loop);
 }
-syncLayer();setMode('real');selectFR(state.selFR);updateRobotStatus();
-if(window.innerWidth<820)$('#layers').open=false;
+syncLayer();setMode('real');selectFR(state.selFR);
+if(window.innerWidth<=1100)$('#layers').open=false;   // narrow main pane: keep the hull visible
 requestAnimationFrame(loop);
 })();

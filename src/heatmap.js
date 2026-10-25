@@ -32,18 +32,23 @@ const cellKey=(cx,cu)=>(cx+1000)*10000+(cu+5000);
 /* 측정점 격자 색인: items = [{X, u, h, r}] */
 export function buildIndex(items){
   const cell=HEAT.radius,map=new Map();
-  for(const it of items){const key=cellKey(Math.floor(it.X/cell),Math.floor(it.u/cell));let a=map.get(key);if(!a)map.set(key,a=[]);a.push(it);}
-  return {cell,map};
+  const ix={cell,map};for(const it of items)addToIndex(ix,it);
+  return ix;
 }
+export function addToIndex(ix,it){const key=cellKey(Math.floor(it.X/ix.cell),Math.floor(it.u/ix.cell));let a=ix.map.get(key);if(!a)ix.map.set(key,a=[]);a.push(it);}
 function forNear(ix,X,u,fn){
   const cx=Math.floor(X/ix.cell),cu=Math.floor(u/ix.cell);
   for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const l=ix.map.get(cellKey(cx+a,cu+b));if(l)for(const it of l)fn(it);}
 }
-export function idw(ix,X,u){
+/* res가 있으면 res.w에 주변 측정점 가중치 합을 넣는다 (측정된 영역인지 판단용) */
+export function idw(ix,X,u,res){
   const R2=HEAT.radius*HEAT.radius;let sw=HEAT.background,sh=0;
   forNear(ix,X,u,it=>{const d2=(it.X-X)**2+(it.u-u)**2;if(d2>=R2)return;const f=1-d2/R2,w=f*f/(d2+HEAT.soft);sw+=w;sh+=w*it.h;});
+  if(res)res.w=sw-HEAT.background;
   return sh/sw;
 }
+/* 측정 범위: 가중치 합 0.03 이하는 미측정, 0.15 이상은 측정 완료 */
+export function coverage(w){const t=Math.min(1,Math.max(0,(w-0.03)/0.12));return t*t*(3-2*t);}
 export function nearest(ix,X,u,maxD){
   let best=null,bd=maxD*maxD;
   forNear(ix,X,u,it=>{const d2=(it.X-X)**2+(it.u-u)**2;if(d2<bd){bd=d2;best=it;}});
