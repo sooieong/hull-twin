@@ -54,6 +54,7 @@ button,select,input{font:inherit;color:inherit}
 .btn-primary:hover{background:var(--ho-coral)}
 .btn-ghost{height:32px;padding:0 13px;border-radius:7px;border:1px solid var(--line-strong);background:var(--surface);color:var(--text)}
 .btn-ghost:hover{border-color:var(--ho-coral)}
+.btn-ghost:disabled{opacity:.6;cursor:progress}
 
 /* ---------- main ---------- */
 /* main 1/2; middle : KPI follows private/레이아웃.png (≈ 59 : 41 of the rest, upper : lower ≈ 6 : 5) */
@@ -94,8 +95,9 @@ button,select,input{font:inherit;color:inherit}
 .tog{display:flex;align-items:center;gap:9px;padding:6px 6px;border-radius:6px;cursor:pointer;color:var(--text-2);font-size:12.5px}
 .tog:hover{background:var(--surface-3);color:var(--text)}
 .tog input{appearance:none;-webkit-appearance:none;width:14px;height:14px;margin:0;border:1.5px solid var(--line-strong);border-radius:3px;display:grid;place-items:center;flex:none;cursor:pointer}
-.tog input:checked{background:var(--ho-orange);border-color:var(--ho-orange)}
-.tog input:checked::after{content:"";width:6px;height:3px;border-left:1.6px solid var(--k100);border-bottom:1.6px solid var(--k100);transform:rotate(-45deg) translate(1px,-1px)}
+.tog input:checked{border-color:var(--ho-orange);
+  background:var(--ho-orange) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.6 7.3l2.3 2.2 4.6-4.8' fill='none' stroke='%23000' stroke-width='1.8'/%3E%3C/svg%3E") center/100% no-repeat}
+/* check mark as a background image, not ::after on the input (html2canvas cannot parse that for the PDF report) */
 .tog .sw{margin-left:auto;width:16px;height:2px;border-radius:1px}
 .tog .sw.dash{background:repeating-linear-gradient(90deg,var(--ho-orange) 0 3px,transparent 3px 5px)}
 
@@ -227,6 +229,35 @@ button,select,input{font:inherit;color:inherit}
 .z .zm{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px;font-size:11px;color:var(--muted);white-space:nowrap;min-width:0}
 .z .zm .cx{padding:0 6px;border-radius:4px;border:1px solid var(--text-2);color:var(--text);line-height:16px}
 .z .zm .act{margin-left:auto;color:var(--text)}
+
+/* ---------- report pages (offscreen, rendered to the PDF; light sheet for print) ---------- */
+.rpt{position:fixed;left:-20000px;top:0;pointer-events:none}
+.rpt-page{width:1123px;height:794px;box-sizing:border-box;padding:30px 40px 26px;background:#fff;color:#14181f;display:flex;flex-direction:column;
+  font:13px/1.45 var(--font-ui);border-top:6px solid var(--ho-orange)}
+.rpt-head{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;padding-bottom:12px;border-bottom:1px solid #d5d9e0}
+.rpt-brand{font-family:var(--font-label);font-weight:600;font-size:26px;letter-spacing:.06em;line-height:1.1}
+.rpt-brand span{font-family:var(--font-ui);font-size:16px;letter-spacing:0;margin-left:8px;color:#3a4252}
+.rpt-ship{margin-top:4px;color:#3a4252}
+.rpt-head dl{display:grid;grid-template-columns:auto auto;gap:1px 12px;margin:0;font-size:12px}
+.rpt-head dt{color:#6b7385}
+.rpt-head dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.rpt-h2{display:flex;justify-content:space-between;align-items:baseline;margin:14px 0 10px;font-size:16px;font-weight:600}
+.rpt-h2 span{font-size:12px;font-weight:400;color:#6b7385}
+.rpt-shot{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.rpt-shot img{max-width:100%;max-height:100%;border:1px solid #c4cad4}
+.rpt-sum{display:flex;gap:22px;margin-bottom:10px;color:#3a4252}
+.rpt-sum b{font-family:var(--font-label);font-size:20px;color:#14181f;margin:0 2px}
+.rpt-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.rpt-tbl th{text-align:left;font-weight:600;color:#3a4252;background:#f1f3f6;padding:7px 8px;border-bottom:1px solid #c4cad4}
+.rpt-tbl td{padding:7px 8px;border-bottom:1px solid #e3e6eb;vertical-align:middle}
+.rpt-tbl .n{text-align:right;font-family:var(--font-mono)}
+.rpt-tbl .m{font-family:var(--font-mono)}
+.rpt-tbl .c{text-align:center}
+.rpt-lv{display:inline-block;padding:0 7px;border-radius:4px;font-size:11.5px;font-weight:600;line-height:18px}
+.rpt-lv1{background:#FFB224;color:#000}
+.rpt-lv2{background:#C42A1B;color:#fff}
+.rpt-none{color:#6b7385}
+.rpt-foot{margin-top:auto;padding-top:10px;font-size:11px;color:#6b7385}
 
 /* ---------- status bar ---------- */
 .statusbar{display:flex;gap:22px;align-items:center;height:32px;padding:0 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;font-family:var(--font-mono);font-size:11.5px;color:var(--text-2);white-space:nowrap;overflow-x:auto;font-variant-numeric:tabular-nums}

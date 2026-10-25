@@ -10,6 +10,7 @@ import { createUiState } from './uiState.js';
 import { createKpiPanel } from './kpi.js';
 import { createSideShell } from './sideShell.js';
 import { createDetailPanel } from './detail.js';
+import { setupReport } from './pdfReport.js';
 import { SimulatorSource } from './data/simulator.js';
 import { createStore } from './data/store.js';
 import { findDefectPhotos } from './data/photos.js';
@@ -24,7 +25,6 @@ const fmt=(n,d=2)=>n.toFixed(d);
 /* ---------- toast + placeholders ---------- */
 const toastEl=$('#toast');let toastT;
 function toast(m){toastEl.textContent=m;toastEl.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{toastEl.hidden=true;},2400);}
-$('#reportBtn').addEventListener('click',()=>toast('보고서 생성은 다음 단계에서 구현합니다'));
 $('#dockSel').addEventListener('change',()=>toast('도킹 이력 비교는 측정 데이터 연결 후 활성화됩니다'));
 
 /* ---------- data layer: every panel draws from this store (SPEC 3) ---------- */
@@ -387,6 +387,10 @@ function onPose(p){
   $('#stRobot').textContent=`RBT-01 매핑 중 · FR ${p.fr} · 외판열 ${p.strake} · ${p.side==='P'?'좌현':'우현'} · X ${fmt(p.X)}  Y ${fmt(p.Y)}  Z ${fmt(p.Z)} m · 진행 ${pct}%`;
 }
 $('#mapBtn').addEventListener('click',()=>{if(!store)return;if(store.mapState==='mapping')store.stop();else store.start();});
+/* report (SPEC 6): the 3D canvas is captured right after a render instead of keeping preserveDrawingBuffer on */
+setupReport({button:$('#reportBtn'),store:()=>store,ui,toast,
+  snapshot3D:()=>{renderer.render(scene,camera);return renderer.domElement.toDataURL('image/png');},
+  ship:()=>({name:$('.crumbs b').textContent,dock:$('#dockSel').value})});
 function setSpeed(k){if(store)store.setSpeed(k);document.querySelectorAll('[data-speed]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.speed===k)));}
 document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>setSpeed(+b.dataset.speed)));
 storeReady.then(s=>{store=s;buildPath(s.plan);setSpeed(10);

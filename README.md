@@ -19,6 +19,7 @@ Node.js 18 이상 필요.
 - `src/kpi.js` — KPI 패널(요약, 보수 구역 우선순위 목록)
 - `src/sideShell.js` — 보조 시각화 1: Side Shell 전개도(Canvas)
 - `src/detail.js` — 보조 시각화 2: 두께 단면 비교(SVG), 손상 사진
+- `src/pdfReport.js` — 보고서 생성(PDF): 화면 캡처 + KPI 상위 10건. `html2canvas`·`jspdf`는 버튼을 누를 때 불러옴
 - `src/data/` — 데이터 계층
   - `robotSource.js` 데이터 소스 인터페이스(+ WebSocket 골격), `simulator.js` 시뮬레이터
   - `scanPath.js` 외판 전체 순회 경로, `synth.js` 예시 측정값 생성
@@ -26,5 +27,6 @@ Node.js 18 이상 필요.
   - `photos.js` `public/images/defects/` 손상 사진 찾기
 
 ## 참고
+- 보고서는 Chrome·Edge에서 저장 창이 뜨고(바탕화면 선택 가능), 그 밖의 브라우저는 다운로드 폴더에 저장된다.
 - three는 0.147.0으로 고정. r155 이후 버전은 조명 기본값이 달라져 화면이 어두워질 수 있음.
 - 선체 형상, 로봇 경로, 선번(H-2491)은 예시 값.
