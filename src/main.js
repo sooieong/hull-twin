@@ -1,12 +1,16 @@
 import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { clamp, L, D, T, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
+  deckZ, HB, section, strakeName, strakeAt, ZONE_LABELS, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
+import { SimulatorSource } from './data/simulator.js';
+import { createStore } from './data/store.js';
+import { findDefectPhotos } from './data/photos.js';
+import { logDataSummary } from './data/report.js';
 
 (function(){
 "use strict";
 const $=s=>document.querySelector(s);
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const fmt=(n,d=2)=>n.toFixed(d);
 
@@ -17,49 +21,8 @@ $('#mapBtn').addEventListener('click',()=>toast('매핑 시작·종료는 다음
 $('#reportBtn').addEventListener('click',()=>toast('보고서 생성은 다음 단계에서 구현합니다'));
 $('#dockSel').addEventListener('change',()=>toast('도킹 이력 비교는 측정 데이터 연결 후 활성화됩니다'));
 
-/* =========================================================
-   HULL FORM  (example: 174K LNG Carrier, parametric)
-   Ship CS: X from AP (+fwd), Y half-breadth (+port), Z from baseline
-   ========================================================= */
-const L=289, B=46.4, D=26.5, T=11.5, R=2.6, FS=0.85;
-const XMAX=L+9.6, XC=XMAX/2, FRMAX=Math.floor(XMAX/FS);
-const NX=300, NB=6, NS=48, G=NB+1+NS;
-const KEEL_HALF=1.6, STRAKE_W=3.2, LETTERS="ABCDEFGHJLMNPQRSTUV";
-const WLS=[2,4,6,8,14,18,22];
-
-function deckZ(X){const xn=X/L;return D+(xn>0.86?3.2*Math.pow(Math.min((xn-0.86)/0.16,1.1),2):0);}
-function keelZ(X){const xn=X/L;if(xn<0.05){const t=(0.05-xn)/0.05;return 9.5*t*t;}return 0;}
-function rake(Z){return 7.0*Math.pow(clamp(Z/D,0,1.3),1.6);}
-function midHB(Z){if(Z>=R)return B/2;const dz=R-Z;return B/2-R+Math.sqrt(Math.max(0,R*R-dz*dz));}
-function hullHB(X,Z){
-  if(X<0||Z<keelZ(X)-1e-6||Z>deckZ(X)+1e-6)return 0;
-  const zn=clamp(Z/D,0,1);let w=1;
-  const xnf=(X-rake(Z))/L;
-  if(xnf>=1)return 0;
-  if(xnf>0.70){const t=(xnf-0.70)/0.30;w*=Math.max(0,1-Math.pow(t,1.6+2.4*zn));}
-  const xn=X/L;
-  if(xn<0.24){const t=(0.24-xn)/0.24;const p=0.6+2.6*zn;const tw=0.80*smooth(0.30,0.85,zn);w*=1-Math.pow(t,p)*(1-tw);}
-  return midHB(Z)*w;
-}
-function bulbHB(X,Z){const u=((X-(L+2.5))/7)**2+((Z-6)/4.6)**2;return u>=1?0:3.4*Math.sqrt(1-u);}
-function HB(X,Z){return Math.max(hullHB(X,Z),Z>=0?bulbHB(X,Z):0);}
-
-function section(X){
-  const zk=keelZ(X),zd=deckZ(X);
-  const Ys=new Float32Array(G),Zs=new Float32Array(G),gs=new Float32Array(G);
-  const yb=HB(X,zk);
-  for(let j=0;j<=NB;j++){Ys[j]=yb*j/NB;Zs[j]=zk;}
-  for(let k=1;k<=NS;k++){const s=k/NS;const Z=zk+(zd-zk)*Math.pow(s,1.5);Ys[NB+k]=HB(X,Z);Zs[NB+k]=Z;}
-  for(let j=1;j<G;j++)gs[j]=gs[j-1]+Math.hypot(Ys[j]-Ys[j-1],Zs[j]-Zs[j-1]);
-  return {Ys,Zs,gs,yb};
-}
-function strakeName(g){if(g<KEEL_HALF)return 'K';const i=Math.floor((g-KEEL_HALF)/STRAKE_W);return LETTERS[Math.min(i,LETTERS.length-1)];}
-const ZONES=['선저부','빌지부','선측 수선 아래','흘수선 부근','건현부','선수부','선미부'];
-function zoneOf(X,Z){const xn=X/L;if(xn>=0.9)return 5;if(xn<0.08)return 6;if(Z<0.15)return 0;if(Z<R+0.6)return 1;if(Z<T-1.2)return 2;if(Z<T+1.6)return 3;return 4;}
-function regionOf(X){const xn=X/L;if(xn<0.08)return '선미부';if(xn<0.24)return '선미 곡면부';if(xn<0.70)return '평행 중앙부';if(xn<0.9)return '선수 곡면부';return '선수부';}
-
-const stX=new Float32Array(NX+1),stSec=[];
-for(let i=0;i<=NX;i++){stX[i]=XMAX*i/NX;stSec.push(section(stX[i]));}
+/* ---------- data layer: every panel draws from this store (SPEC 3) ---------- */
+const storeReady=findDefectPhotos().then(photos=>{const store=createStore(new SimulatorSource({photos}));store.connect();logDataSummary(store);return store;});
 
 /* ---------- robot scan path (example run, starboard side) ---------- */
 const robot={pts:[],cum:[],s:0,idx:0,paused:reduce,hold:0,speed:3.6};
@@ -79,7 +42,6 @@ function robotState(){
   const i=robot.idx,a=robot.pts[i],b=robot.pts[i+1],seg=robot.cum[i+1]-robot.cum[i]||1,t=clamp((robot.s-robot.cum[i])/seg,0,1);
   return {X:a[0]+(b[0]-a[0])*t,Z:a[1]+(b[1]-a[1])*t,dx:b[0]-a[0],dz:b[1]-a[1],i};
 }
-function strakeAt(X,Z){const s=section(X);let j=NB;for(let k=0;k<G-1;k++){if(s.Zs[k]<=Z&&s.Zs[k+1]>=Z&&k>=NB){j=k;break;}}return strakeName(s.gs[j]);}
 
 /* ---------- shared state + cross-view hooks ---------- */
 const state={selFR:170,hoverX:null,hoverSrc:null,mode:'real',cut:false};
@@ -229,9 +191,8 @@ for(let x=DX0;x<=DX1;x+=20){dw.push(x,FLOOR,-DZ,x,DH,-DZ,x,FLOOR,DZ,x,DH,DZ);}
 dockGroup.add(lineSeg(dw,new THREE.LineBasicMaterial({color:0x22355a,transparent:true,opacity:0.7})));
 const blkMat=new THREE.MeshStandardMaterial({color:0x2a303c,roughness:0.9});
 const capMat=new THREE.MeshStandardMaterial({color:0x5a3a22,roughness:0.9});
-const blkG=new THREE.BoxGeometry(1.4,1.5,2.6),capG=new THREE.BoxGeometry(1.4,0.3,2.6);
-for(let X=16;X<=L-6;X+=6){const b=new THREE.Mesh(blkG,blkMat);b.position.set(X-XC,FLOOR+0.75,0);const c=new THREE.Mesh(capG,capMat);c.position.set(X-XC,-0.15,0);dockGroup.add(b,c);}
-for(let X=50;X<=240;X+=19){[-1,1].forEach(sd=>{const b=new THREE.Mesh(blkG,blkMat);b.position.set(X-XC,FLOOR+0.75,sd*14);const c=new THREE.Mesh(capG,capMat);c.position.set(X-XC,-0.15,sd*14);dockGroup.add(b,c);});}
+const blkG=new THREE.BoxGeometry(BLOCK_SIZE.dx,1.5,BLOCK_SIZE.dy),capG=new THREE.BoxGeometry(BLOCK_SIZE.dx,0.3,BLOCK_SIZE.dy);
+KEEL_BLOCKS.forEach(k=>{const b=new THREE.Mesh(blkG,blkMat);b.position.set(k.X-XC,FLOOR+0.75,-k.Y);const c=new THREE.Mesh(capG,capMat);c.position.set(k.X-XC,-0.15,-k.Y);dockGroup.add(b,c);});
 scene.add(dockGroup);
 
 /* robot */
@@ -330,7 +291,7 @@ function pick(e){
   const X=p.x+XC,Z=p.y,Y=-p.z,fr=Math.round(X/FS),side=h.object.userData.side;
   const st=strakeName(girth[best]);
   lastHit={fr,X};
-  tip.innerHTML=`<div class="t1">FR ${fr} <em>· 외판열 ${st}(${side})</em></div><div class="t2">${ZONES[zoneOf(X,Z)]}</div><div class="t3">X ${fmt(X)}  Y ${fmt(Y)}  Z ${fmt(Z)} m</div>`;
+  tip.innerHTML=`<div class="t1">FR ${fr} <em>· 외판열 ${st}(${side})</em></div><div class="t2">${ZONE_LABELS[zoneOf(X,Z)]}</div><div class="t3">X ${fmt(X)}  Y ${fmt(Y)}  Z ${fmt(Z)} m</div>`;
   tip.hidden=false;const pw=r.width;tip.style.left=(e.clientX-r.left)+'px';tip.style.top=(e.clientY-r.top)+'px';
   tip.style.transform=(e.clientX-r.left)>pw-230?'translate(calc(-100% - 14px),14px)':'translate(14px,14px)';
   hoverDot.position.copy(p);hoverDot.visible=true;

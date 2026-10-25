@@ -13,7 +13,13 @@ Node.js 18 이상 필요.
 ## 구조
 - `index.html` — 화면 뼈대 (헤더, 3열 그리드: 3D 종합맵 | Side Shell 도면·상세 | KPI, 상태바)
 - `src/style.css` — 디자인 토큰(한화오션 색상)과 레이아웃
-- `src/main.js` — 선형 생성, 3D 뷰어(Three.js), 로봇 시뮬레이션
+- `src/main.js` — 3D 뷰어(Three.js), 화면 연동
+- `src/hull.js` — 예시 선형 정의(형상, 외판열, 구역, 킬 블록)
+- `src/data/` — 데이터 계층
+  - `robotSource.js` 데이터 소스 인터페이스(+ WebSocket 골격), `simulator.js` 시뮬레이터
+  - `scanPath.js` 외판 전체 순회 경로, `synth.js` 예시 측정값 생성
+  - `criteria.js` 판정 기준·보수 우선순위, `store.js` 화면들이 구독하는 저장소
+  - `photos.js` `public/images/defects/` 손상 사진 찾기
 
 ## 참고
 - three는 0.147.0으로 고정. r155 이후 버전은 조명 기본값이 달라져 화면이 어두워질 수 있음.
