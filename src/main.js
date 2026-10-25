@@ -13,7 +13,8 @@ const fmt=(n,d=2)=>n.toFixed(d);
 /* ---------- toast + placeholders ---------- */
 const toastEl=$('#toast');let toastT;
 function toast(m){toastEl.textContent=m;toastEl.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{toastEl.hidden=true;},2400);}
-document.querySelectorAll('.rail button[data-soon]').forEach(b=>b.addEventListener('click',()=>toast(`'${b.dataset.label}' 화면은 다음 단계에서 구성합니다`)));
+$('#mapBtn').addEventListener('click',()=>toast('매핑 시작·종료는 다음 단계에서 연결합니다'));
+$('#reportBtn').addEventListener('click',()=>toast('보고서 생성은 다음 단계에서 구현합니다'));
 $('#dockSel').addEventListener('change',()=>toast('도킹 이력 비교는 측정 데이터 연결 후 활성화됩니다'));
 
 /* =========================================================
@@ -24,6 +25,7 @@ const L=289, B=46.4, D=26.5, T=11.5, R=2.6, FS=0.85;
 const XMAX=L+9.6, XC=XMAX/2, FRMAX=Math.floor(XMAX/FS);
 const NX=300, NB=6, NS=48, G=NB+1+NS;
 const KEEL_HALF=1.6, STRAKE_W=3.2, LETTERS="ABCDEFGHJLMNPQRSTUV";
+const WLS=[2,4,6,8,14,18,22];
 
 function deckZ(X){const xn=X/L;return D+(xn>0.86?3.2*Math.pow(Math.min((xn-0.86)/0.16,1.1),2):0);}
 function keelZ(X){const xn=X/L;if(xn<0.05){const t=(0.05-xn)/0.05;return 9.5*t*t;}return 0;}
@@ -55,10 +57,6 @@ function strakeName(g){if(g<KEEL_HALF)return 'K';const i=Math.floor((g-KEEL_HALF
 const ZONES=['선저부','빌지부','선측 수선 아래','흘수선 부근','건현부','선수부','선미부'];
 function zoneOf(X,Z){const xn=X/L;if(xn>=0.9)return 5;if(xn<0.08)return 6;if(Z<0.15)return 0;if(Z<R+0.6)return 1;if(Z<T-1.2)return 2;if(Z<T+1.6)return 3;return 4;}
 function regionOf(X){const xn=X/L;if(xn<0.08)return '선미부';if(xn<0.24)return '선미 곡면부';if(xn<0.70)return '평행 중앙부';if(xn<0.9)return '선수 곡면부';return '선수부';}
-function foreX(Z){let x=-1;const xs=L+rake(Z);if(Z<=deckZ(xs))x=xs;const u=(Z-6)/4.6;if(Math.abs(u)<1)x=Math.max(x,L+2.5+7*Math.sqrt(1-u*u));return x;}
-function aftX(Z){return Z>=keelZ(0)?0:0.05*L*(1-Math.sqrt(Z/9.5));}
-let ZTOP=D;for(let z=24;z<34;z+=0.01){if(z<=deckZ(L+rake(z)))ZTOP=z;}
-const XSTEM_TOP=L+rake(ZTOP);
 
 const stX=new Float32Array(NX+1),stSec=[];
 for(let i=0;i<=NX;i++){stX[i]=XMAX*i/NX;stSec.push(section(stX[i]));}
@@ -95,245 +93,12 @@ function selectFR(fr){
   const n=g<KEEL_HALF?0:Math.min(LETTERS.length-1,Math.floor((g-KEEL_HALF)/STRAKE_W));
   $('#secS').textContent=n>0?`K, A–${LETTERS[n]} (${n+2}열)`:'K';
   const sl=$('#secSlider');if(+sl.value!==fr)sl.value=fr;
-  hooks.onSelect.forEach(f=>f(fr,X));requestDraw();
+  hooks.onSelect.forEach(f=>f(fr,X));
 }
-function setHover(X,src){state.hoverX=X;state.hoverSrc=X==null?null:src;hooks.onHover.forEach(f=>f(X,src));requestDraw();
+function setHover(X,src){state.hoverX=X;state.hoverSrc=X==null?null:src;hooks.onHover.forEach(f=>f(X,src));
   if(X==null&&src!=='3d')$('#stCursor').textContent='—';}
 $('#secSlider').max=FRMAX;
 $('#secSlider').addEventListener('input',e=>selectFR(+e.target.value));
-
-/* =========================================================
-   2D LINES PLAN  (sheet units, Path2D + zoom/pan)
-   ========================================================= */
-const dc=$('#dwg'),dx=dc.getContext('2d');
-const SW=800,SH=880,PX0=56,SP=2.25,PBY=212,HBY=374,BX=400,BBY=650,SB=6.5;
-const ROW_ST=PBY-(D+30)*SP-8,DIM_L=PBY+46,DIM_B=PBY+66,BODY_T=BBY-30*SB-22;
-const TB={x:400,y:706,w:370,h:138},LG={x:56,y:712};
-const pX=X=>PX0+X*SP,pZ=Z=>PBY-Z*SP,hY=Y=>HBY-Y*SP,bX=(Y,side)=>BX+side*Y*SB,bZ=Z=>BBY-Z*SB;
-const WLS=[2,4,6,8,14,18,22];
-const C={sheet:'#050912',grid:'#0B1322',gridMaj:'#111C30',frame:'rgba(251,181,132,.55)',hull:'#FBB584',wl:'rgba(248,155,108,.55)',st:'#2A3A58',dim:'#6F7C93',text:'#C9D3E3',orange:'#F37321',coral:'#F89B6C',muted:'#6F7C93',sup:'rgba(167,179,199,.45)'};
-const v={s:1,ox:0,oy:0,fit:1};let dpr=1,cw=0,ch=0;
-
-const PATH={};
-(function build(){
-  const g1=new Path2D(),g2=new Path2D();
-  for(let x=30;x<=SW-30;x+=10){(x%50===0?g2:g1).moveTo(x,30);(x%50===0?g2:g1).lineTo(x,SH-30);}
-  for(let y=30;y<=SH-30;y+=10){(y%50===0?g2:g1).moveTo(30,y);(y%50===0?g2:g1).lineTo(SW-30,y);}
-  PATH.grid=g1;PATH.gridMaj=g2;
-  // profile outline
-  const p=new Path2D();p.moveTo(pX(0),pZ(deckZ(0)));p.lineTo(pX(0),pZ(keelZ(0)));
-  for(let X=0;X<=0.05*L;X+=0.5)p.lineTo(pX(X),pZ(keelZ(X)));
-  p.lineTo(pX(L),pZ(0));
-  for(let Z=0;Z<=ZTOP;Z+=0.08)p.lineTo(pX(foreX(Z)),pZ(Z));
-  for(let X=XSTEM_TOP;X>=0;X-=0.5)p.lineTo(pX(X),pZ(deckZ(X)));
-  p.closePath();PATH.profile=p;
-  const wl=new Path2D();WLS.forEach(Z=>{wl.moveTo(pX(aftX(Z)),pZ(Z));wl.lineTo(pX(foreX(Z)),pZ(Z));});PATH.pWL=wl;
-  const dwl=new Path2D();dwl.moveTo(pX(aftX(T)),pZ(T));dwl.lineTo(pX(foreX(T)),pZ(T));PATH.pDWL=dwl;
-  const st=new Path2D();for(let i=0;i<=20;i++){const X=i*L/20;st.moveTo(pX(X),pZ(keelZ(X)));st.lineTo(pX(X),pZ(deckZ(X)));}PATH.pST=st;
-  const sup=new Path2D();
-  [[40,245,D,D+2.4],[6,24,D,D+20],[2,9,D+20,D+30],[120,135,D+2.4,D+6.4],[278,279.4,deckZ(279),deckZ(279)+11]].forEach(r=>sup.rect(pX(r[0]),pZ(r[3]),(r[1]-r[0])*SP,(r[3]-r[2])*SP));
-  PATH.pSup=sup;
-  const tk=new Path2D(),tkM=new Path2D();
-  for(let n=0;n<=FRMAX;n+=10){const x=pX(n*FS);const m=n%50===0;(m?tkM:tk).moveTo(x,PBY);(m?tkM:tk).lineTo(x,PBY+(m?9:4));}
-  PATH.tick=tk;PATH.tickM=tkM;
-  // half-breadth
-  const hc=new Path2D();hc.moveTo(pX(0)-12,HBY);hc.lineTo(pX(XMAX)+12,HBY);PATH.hCL=hc;
-  const hwl=new Path2D();
-  function wlCurve(path,Z){let on=false;for(let X=0;X<=XMAX;X+=0.5){const ok=Z>=keelZ(X)-1e-6&&Z<=deckZ(X)&&X<=foreX(Z)+0.01;if(!ok){on=false;continue;}const Y=HB(X,Z);if(!on){path.moveTo(pX(X),hY(Y));on=true;}else path.lineTo(pX(X),hY(Y));}const fx=foreX(Z);if(on&&fx>0)path.lineTo(pX(fx),hY(0));}
-  [0,...WLS].forEach(Z=>wlCurve(hwl,Z));PATH.hWL=hwl;
-  const hd=new Path2D();wlCurve(hd,T);PATH.hDWL=hd;
-  const hdk=new Path2D();hdk.moveTo(pX(0),HBY);for(let X=0;X<=XSTEM_TOP;X+=0.5)hdk.lineTo(pX(X),hY(HB(X,deckZ(X))));hdk.lineTo(pX(XSTEM_TOP),HBY);PATH.hDeck=hdk;
-  const hst=new Path2D();for(let i=0;i<=20;i++){const X=i*L/20;hst.moveTo(pX(X),HBY);hst.lineTo(pX(X),hY(HB(X,deckZ(X))));}PATH.hST=hst;
-  // body plan
-  const bg=new Path2D();
-  for(let Z=0;Z<=30;Z+=2){bg.moveTo(bX(B/2+3,-1),bZ(Z));bg.lineTo(bX(B/2+3,1),bZ(Z));}
-  PATH.bWL=bg;
-  const bc=new Path2D();bc.moveTo(BX,bZ(-1.5));bc.lineTo(BX,bZ(31));PATH.bCL=bc;
-  const bb=new Path2D();[5,10,15,20].forEach(Y=>{[-1,1].forEach(sd=>{bb.moveTo(bX(Y,sd),bZ(0));bb.lineTo(bX(Y,sd),bZ(30));});});PATH.bBut=bb;
-  const bs=new Path2D();PATH.bLabels=[];
-  for(let i=0;i<=20;i++){const X=i*L/20;const s=section(X);const sides=i<10?[-1]:i>10?[1]:[-1,1];
-    sides.forEach(sd=>{let on=false;for(let j=0;j<G;j++){const x=bX(s.Ys[j],sd),y=bZ(s.Zs[j]);if(!on){bs.moveTo(x,y);on=true;}else bs.lineTo(x,y);}});
-    PATH.bLabels.push({i,Y:s.Ys[G-1],Z:s.Zs[G-1],sd:i<10?-1:1});}
-  PATH.bST=bs;
-  const bdwl=new Path2D();bdwl.moveTo(bX(B/2+3,-1),bZ(T));bdwl.lineTo(bX(B/2+3,1),bZ(T));PATH.bDWL=bdwl;
-})();
-
-function resizeDwg(){
-  const r=dc.getBoundingClientRect();dpr=Math.min(window.devicePixelRatio||1,2);
-  const nw=Math.max(1,Math.round(r.width)),nh=Math.max(1,Math.round(r.height));
-  const first=!cw;cw=nw;ch=nh;dc.width=cw*dpr;dc.height=ch*dpr;
-  const f=Math.min(cw/SW,ch/SH)*0.98;
-  if(first||Math.abs(v.s-v.fit)<1e-6){v.s=f;v.ox=(cw-SW*f)/2;v.oy=(ch-SH*f)/2;}
-  v.fit=f;drawDwg();
-}
-function fitDwg(){v.s=v.fit;v.ox=(cw-SW*v.s)/2;v.oy=(ch-SH*v.s)/2;requestDraw();}
-function zoomAt(f,mx,my){const ns=clamp(v.s*f,v.fit*0.6,v.fit*10);const k=ns/v.s;v.ox=mx-(mx-v.ox)*k;v.oy=my-(my-v.oy)*k;v.s=ns;requestDraw();}
-let drawPending=false;
-function requestDraw(){if(drawPending)return;drawPending=true;requestAnimationFrame(()=>{drawPending=false;drawDwg();});}
-
-function txt(str,ux,uy,o={}){
-  const size=Math.max(o.min||8,(o.size||11)*v.s);
-  dx.font=`${o.weight||400} ${size}px ${o.font||'"IBM Plex Mono",ui-monospace,monospace'}`;
-  dx.fillStyle=o.color||C.text;dx.textAlign=o.align||'left';dx.textBaseline='alphabetic';
-  const hasLS='letterSpacing' in dx;if(hasLS)dx.letterSpacing=o.ls||'0px';
-  dx.fillText(str,v.ox+ux*v.s+(o.dx||0),v.oy+uy*v.s);
-  const w=dx.measureText(str).width;if(hasLS)dx.letterSpacing='0px';return w;
-}
-function kv(label,val,ux,uy,o={}){const w=txt(label,ux,uy,{font:LBL,size:10.5,color:C.muted,ls:'1px'});txt(val,ux,uy,{dx:w+7,size:11,font:o.font,color:o.color});}
-function pair(en,kr,ux,uy){const w=txt(en,ux,uy,{font:LBL,size:16,weight:600,color:C.coral,ls:'2px'});txt(kr,ux,uy,{dx:w+10,font:KR,size:11,color:C.muted});}
-const LBL='"Barlow Condensed","IBM Plex Sans KR",sans-serif',KR='"IBM Plex Sans KR",sans-serif';
-function arrow(x1,y1,x2,y2,a){const ang=Math.atan2(y2-y1,x2-x1);[[x1,y1,ang],[x2,y2,ang+Math.PI]].forEach(([x,y,t])=>{dx.moveTo(x+Math.cos(t+0.35)*a,y+Math.sin(t+0.35)*a);dx.lineTo(x,y);dx.lineTo(x+Math.cos(t-0.35)*a,y+Math.sin(t-0.35)*a);});}
-
-function drawDwg(){
-  if(!cw)return;const s=v.s;const lw=px=>px/s;
-  dx.setTransform(dpr,0,0,dpr,0,0);dx.fillStyle='#070C17';dx.fillRect(0,0,cw,ch);
-  dx.setTransform(dpr*s,0,0,dpr*s,dpr*v.ox,dpr*v.oy);
-  dx.fillStyle=C.sheet;dx.fillRect(0,0,SW,SH);
-  dx.lineWidth=lw(1);dx.strokeStyle=C.grid;dx.stroke(PATH.grid);dx.strokeStyle=C.gridMaj;dx.stroke(PATH.gridMaj);
-  dx.strokeStyle=C.frame;dx.lineWidth=lw(1);dx.strokeRect(14,14,SW-28,SH-28);dx.lineWidth=lw(1.6);dx.strokeRect(30,30,SW-60,SH-60);
-  dx.beginPath();dx.lineWidth=lw(1);
-  for(let i=1;i<8;i++){const x=30+(SW-60)*i/8;dx.moveTo(x,14);dx.lineTo(x,30);dx.moveTo(x,SH-30);dx.lineTo(x,SH-14);}
-  for(let i=1;i<6;i++){const y=30+(SH-60)*i/6;dx.moveTo(14,y);dx.lineTo(30,y);dx.moveTo(SW-30,y);dx.lineTo(SW-14,y);}
-  dx.stroke();
-  // ---- profile
-  dx.setLineDash([]);dx.lineWidth=lw(0.8);dx.strokeStyle=C.st;dx.stroke(PATH.pST);
-  dx.setLineDash([6,4]);dx.strokeStyle=C.wl;dx.stroke(PATH.pWL);dx.setLineDash([]);
-  dx.strokeStyle=C.sup;dx.lineWidth=lw(0.9);dx.stroke(PATH.pSup);
-  dx.fillStyle='rgba(251,181,132,.035)';dx.fill(PATH.profile);
-  dx.strokeStyle=C.hull;dx.lineWidth=lw(1.7);dx.stroke(PATH.profile);
-  dx.strokeStyle=C.orange;dx.lineWidth=lw(1.5);dx.stroke(PATH.pDWL);
-  dx.strokeStyle=C.dim;dx.lineWidth=lw(1);dx.beginPath();dx.moveTo(pX(0)-12,PBY);dx.lineTo(pX(XMAX)+12,PBY);dx.stroke();
-  dx.stroke(PATH.tick);dx.strokeStyle=C.coral;dx.stroke(PATH.tickM);
-  dx.strokeStyle=C.dim;dx.lineWidth=lw(0.9);dx.beginPath();
-  dx.moveTo(pX(0),PBY+12);dx.lineTo(pX(0),DIM_B+5);dx.moveTo(pX(XMAX),PBY+2);dx.lineTo(pX(XMAX),DIM_L+5);dx.moveTo(pX(L),PBY+12);dx.lineTo(pX(L),DIM_B+5);
-  dx.moveTo(pX(0),DIM_L);dx.lineTo(pX(XMAX),DIM_L);arrow(pX(0),DIM_L,pX(XMAX),DIM_L,5);
-  dx.moveTo(pX(0),DIM_B);dx.lineTo(pX(L),DIM_B);arrow(pX(0),DIM_B,pX(L),DIM_B,5);dx.stroke();
-  // ---- half-breadth
-  dx.setLineDash([3,4]);dx.strokeStyle=C.st;dx.lineWidth=lw(0.8);dx.stroke(PATH.hST);dx.setLineDash([]);
-  dx.strokeStyle=C.dim;dx.lineWidth=lw(1);dx.setLineDash([14,3,2,3]);dx.stroke(PATH.hCL);dx.setLineDash([]);
-  dx.strokeStyle=C.wl;dx.lineWidth=lw(0.9);dx.stroke(PATH.hWL);
-  dx.strokeStyle=C.orange;dx.lineWidth=lw(1.4);dx.stroke(PATH.hDWL);
-  dx.strokeStyle=C.hull;dx.lineWidth=lw(1.7);dx.stroke(PATH.hDeck);
-  dx.strokeStyle=C.dim;dx.lineWidth=lw(0.9);dx.beginPath();const xb=pX(XMAX)+20;dx.moveTo(xb,HBY);dx.lineTo(xb,hY(B/2));arrow(xb,HBY,xb,hY(B/2),4);
-  dx.moveTo(pX(XMAX)+6,hY(B/2));dx.lineTo(xb+4,hY(B/2));dx.stroke();
-  // ---- body plan
-  dx.strokeStyle=C.st;dx.lineWidth=lw(0.7);dx.stroke(PATH.bWL);
-  dx.setLineDash([3,4]);dx.stroke(PATH.bBut);dx.setLineDash([14,3,2,3]);dx.strokeStyle=C.dim;dx.lineWidth=lw(1);dx.stroke(PATH.bCL);dx.setLineDash([]);
-  dx.strokeStyle=C.orange;dx.lineWidth=lw(1.2);dx.stroke(PATH.bDWL);
-  dx.strokeStyle=C.hull;dx.lineWidth=lw(1.1);dx.stroke(PATH.bST);
-  dx.strokeStyle=C.dim;dx.lineWidth=lw(0.9);dx.beginPath();
-  const yBd=BBY+26;dx.moveTo(bX(B/2,-1),BBY+6);dx.lineTo(bX(B/2,-1),yBd+5);dx.moveTo(bX(B/2,1),BBY+6);dx.lineTo(bX(B/2,1),yBd+5);
-  dx.moveTo(bX(B/2,-1),yBd);dx.lineTo(bX(B/2,1),yBd);arrow(bX(B/2,-1),yBd,bX(B/2,1),yBd,5);
-  const xD=bX(B/2+6,1);dx.moveTo(xD,bZ(0));dx.lineTo(xD,bZ(D));arrow(xD,bZ(0),xD,bZ(D),5);dx.moveTo(bX(B/2+1,1),bZ(D));dx.lineTo(xD+5,bZ(D));
-  dx.stroke();
-  // ---- title block + legend frames
-  dx.fillStyle='rgba(0,0,0,.6)';dx.fillRect(TB.x,TB.y,TB.w,TB.h);
-  dx.strokeStyle=C.frame;dx.lineWidth=lw(1.2);dx.strokeRect(TB.x,TB.y,TB.w,TB.h);
-  dx.beginPath();dx.lineWidth=lw(0.8);
-  [34,62,90,114].forEach(o=>{dx.moveTo(TB.x,TB.y+o);dx.lineTo(TB.x+TB.w,TB.y+o);});
-  dx.moveTo(TB.x+190,TB.y+62);dx.lineTo(TB.x+190,TB.y+TB.h);dx.moveTo(TB.x+268,TB.y+90);dx.lineTo(TB.x+268,TB.y+TB.h);dx.stroke();
-  dx.fillStyle=C.orange;dx.fillRect(TB.x,TB.y,6,34);
-  dx.lineWidth=lw(1.6);
-  [[C.hull,[]],[C.orange,[]],['rgba(248,155,108,.8)',[6,4]],[C.st,[]],[C.orange,[2,3]]].forEach((c,i)=>{dx.strokeStyle=c[0];dx.setLineDash(c[1]);dx.beginPath();const y=LG.y+26+i*20;dx.moveTo(LG.x,y);dx.lineTo(LG.x+30,y);dx.stroke();});
-  dx.setLineDash([]);
-  // ---- robot trail on profile
-  if(lyRobotOn){
-    const rs=robotState();
-    dx.strokeStyle='rgba(243,115,33,.3)';dx.lineWidth=lw(1);dx.setLineDash([2,3]);dx.beginPath();
-    robot.pts.forEach((p,i)=>{i?dx.lineTo(pX(p[0]),pZ(p[1])):dx.moveTo(pX(p[0]),pZ(p[1]));});dx.stroke();dx.setLineDash([]);
-    dx.strokeStyle=C.orange;dx.lineWidth=lw(1.6);dx.beginPath();
-    for(let i=0;i<=rs.i;i++){const p=robot.pts[i];i?dx.lineTo(pX(p[0]),pZ(p[1])):dx.moveTo(pX(p[0]),pZ(p[1]));}dx.lineTo(pX(rs.X),pZ(rs.Z));dx.stroke();
-    dx.fillStyle=C.orange;dx.beginPath();dx.arc(pX(rs.X),pZ(rs.Z),lw(4.5),0,Math.PI*2);dx.fill();
-    dx.strokeStyle='rgba(243,115,33,.5)';dx.lineWidth=lw(1);dx.beginPath();dx.arc(pX(rs.X),pZ(rs.Z),lw(9),0,Math.PI*2);dx.stroke();
-  }
-  const secPath=(X,sd)=>{const sh=section(X);dx.beginPath();for(let j=0;j<G;j++){const px=bX(sh.Ys[j],sd),py=bZ(sh.Zs[j]);j?dx.lineTo(px,py):dx.moveTo(px,py);}dx.stroke();};
-  if(state.hoverX!=null){
-    const X=state.hoverX,x=pX(X);
-    dx.strokeStyle=C.coral;dx.lineWidth=lw(1);dx.setLineDash([4,3]);dx.beginPath();
-    dx.moveTo(x,ROW_ST+4);dx.lineTo(x,PBY+12);dx.moveTo(x,hY(B/2+3));dx.lineTo(x,HBY+8);dx.stroke();
-    secPath(X,X<L/2?-1:1);dx.setLineDash([]);
-  }
-  {
-    const X=state.selFR*FS,x=pX(X);
-    dx.strokeStyle=C.orange;dx.lineWidth=lw(1.6);dx.beginPath();
-    dx.moveTo(x,ROW_ST-10);dx.lineTo(x,PBY+14);dx.moveTo(x,hY(B/2+3));dx.lineTo(x,HBY+10);dx.stroke();
-    dx.lineWidth=lw(2.6);secPath(X,X<L/2?-1:1);
-  }
-
-  // ================= text (screen space) =================
-  dx.setTransform(dpr,0,0,dpr,0,0);
-  pair('PROFILE','측면도 · 우현에서 본 모습',PX0,52);
-  pair('HALF-BREADTH PLAN','반폭선도',PX0,hY(B/2)-20);
-  pair('BODY PLAN','정면선도',PX0,BODY_T);
-  txt('AFT',bX(B/2,-1),BODY_T,{font:LBL,size:12,weight:600,color:C.muted,ls:'1px'});
-  txt('FWD',bX(B/2,1),BODY_T,{font:LBL,size:12,weight:600,color:C.muted,align:'right',ls:'1px'});
-  txt('B.L.',pX(0)-6,PBY+4,{size:9,color:C.dim,align:'right'});
-  txt('FR',pX(0)-6,PBY+24,{size:9,color:C.coral,align:'right'});
-  for(let n=50;n<=FRMAX;n+=50)txt(String(n),pX(n*FS),PBY+24,{size:9.5,color:C.coral,align:'center'});
-  txt('LOA 298.60',(pX(0)+pX(XMAX))/2,DIM_L-4,{size:10,align:'center'});
-  txt('LBP 289.00',(pX(0)+pX(L))/2,DIM_B-4,{size:10,align:'center'});
-  txt('ST',pX(0)-16,ROW_ST,{size:9,color:C.muted,align:'right'});
-  for(let i=0;i<=20;i+=2){txt(i===0?'AP':i===20?'FP':String(i),pX(i*L/20),ROW_ST,{size:9.5,color:C.muted,align:'center'});}
-  txt('DWL 11.50',pX(foreX(T))+5,pZ(T)+4,{size:9.5,color:C.orange,weight:500});
-  txt('B/2',xb+6,(HBY+hY(B/2))/2-2,{size:9.5});txt('23.20',xb+6,(HBY+hY(B/2))/2+11,{size:9.5});
-  txt('C.L.',pX(XMAX)+14,HBY+14,{size:9,color:C.dim});
-  let lastY={'-1':-99,'1':-99};
-  PATH.bLabels.forEach(l=>{if(l.i===10)return;const key=String(l.sd);if(Math.abs(l.Y-lastY[key])<2.4&&l.i!==0&&l.i!==20)return;lastY[key]=l.Y;
-    txt(String(l.i),bX(l.Y,l.sd)+l.sd*4,bZ(l.Z)-6,{size:9,color:C.muted,align:l.sd<0?'right':'left'});});
-  [0,6,12,18,24].forEach(Z=>txt('WL'+Z,bX(B/2+3,-1)-4,bZ(Z)+4,{size:9,color:C.dim,align:'right'}));
-  txt('B 46.40',BX,yBd-4,{size:10,align:'center'});
-  txt('D 26.50',xD+7,bZ(D/2),{size:10});
-  {const X=state.selFR*FS;txt('FR '+state.selFR,pX(X),ROW_ST-14,{font:LBL,size:13,weight:600,color:C.orange,align:'center'});}
-  if(state.hoverX!=null){const X=state.hoverX;txt('FR '+Math.round(X/FS)+' · X '+fmt(X),pX(X),hY(B/2+3)-5,{size:9.5,color:C.coral,align:'center'});}
-  txt('LEGEND',LG.x,LG.y+6,{font:LBL,size:13,weight:600,color:C.coral,ls:'1.5px'});
-  ['선체 외곽선 · 갑판선','설계 흘수선 (DWL)','수선 (WL) · 2 m 간격','스테이션 (ST 0–20)','로봇 주행경로 · 계획 / 완료'].forEach((t,i)=>txt(t,LG.x+40,LG.y+30+i*20,{font:KR,size:11,color:C.text}));
-  txt('단위 m · 프레임 간격 850 mm · 예시 선형',LG.x,LG.y+134,{font:KR,size:10,color:C.muted});
-  txt('HULL FORM LINES PLAN',TB.x+16,TB.y+23,{font:LBL,size:16,weight:600,ls:'1.5px'});
-  txt('선도',TB.x+TB.w-10,TB.y+23,{font:KR,size:12,color:'#FBB584',align:'right'});
-  txt('선체 외판 도막·강판 두께 측정 디지털 트윈',TB.x+10,TB.y+53,{font:KR,size:11});
-  kv('VESSEL','174K LNGC H-2491',TB.x+10,TB.y+81);
-  kv('DWG','HT-HUL-1001',TB.x+198,TB.y+81,{color:'#FBB584'});
-  kv('SCALE','1:500',TB.x+10,TB.y+107);
-  kv('REV','B',TB.x+198,TB.y+107);
-  txt('2026.10.25',TB.x+276,TB.y+107,{size:11});
-  kv('DRAWN','설계DX',TB.x+10,TB.y+131,{font:KR});
-  kv('UNIT','m',TB.x+198,TB.y+131);
-  kv('SHEET','1/1',TB.x+276,TB.y+131);
-  for(let i=0;i<8;i++){const x=30+(SW-60)*(i+0.5)/8;txt(String(i+1),x,26,{size:9,color:C.dim,align:'center'});txt(String(i+1),x,SH-18,{size:9,color:C.dim,align:'center'});}
-  for(let i=0;i<6;i++){const y=30+(SH-60)*(i+0.5)/6;txt('ABCDEF'[i],22,y+3,{size:9,color:C.dim,align:'center'});txt('ABCDEF'[i],SW-22,y+3,{size:9,color:C.dim,align:'center'});}
-}
-let lyRobotOn=true;
-
-/* drawing interactions */
-function sheetPt(e){const r=dc.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;return {mx,my,u:(mx-v.ox)/v.s,w:(my-v.oy)/v.s};}
-function inPlanViews(u,w){return u>=pX(0)-6&&u<=pX(XMAX)+6&&((w>=ROW_ST-20&&w<=PBY+30)||(w>=hY(B/2+6)&&w<=HBY+12));}
-let drag=null;
-dc.addEventListener('pointerdown',e=>{if(e.button!==0)return;dc.setPointerCapture(e.pointerId);drag={x:e.clientX,y:e.clientY,ox:v.ox,oy:v.oy,moved:false};});
-dc.addEventListener('pointermove',e=>{
-  const p=sheetPt(e);
-  if(drag){const ddx=e.clientX-drag.x,ddy=e.clientY-drag.y;if(!drag.moved&&Math.hypot(ddx,ddy)>3){drag.moved=true;dc.classList.add('grab');}
-    if(drag.moved){v.ox=drag.ox+ddx;v.oy=drag.oy+ddy;requestDraw();return;}}
-  if(inPlanViews(p.u,p.w)){const X=clamp((p.u-PX0)/SP,0,XMAX);setHover(X,'dwg');
-    $('#stCursor').textContent=`FR ${Math.round(X/FS)} · X ${fmt(X)} m`;}
-  else if(state.hoverSrc==='dwg')setHover(null,'dwg');
-});
-dc.addEventListener('pointerup',e=>{const p=sheetPt(e);if(drag&&!drag.moved&&inPlanViews(p.u,p.w))selectFR(clamp((p.u-PX0)/SP,0,XMAX)/FS);drag=null;dc.classList.remove('grab');});
-dc.addEventListener('pointerleave',()=>{if(state.hoverSrc==='dwg')setHover(null,'dwg');});
-dc.addEventListener('wheel',e=>{e.preventDefault();const p=sheetPt(e);zoomAt(Math.exp(-e.deltaY*0.0016),p.mx,p.my);},{passive:false});
-$('#zIn').addEventListener('click',()=>zoomAt(1.3,cw/2,ch/2));
-$('#zOut').addEventListener('click',()=>zoomAt(1/1.3,cw/2,ch/2));
-$('#zFit').addEventListener('click',fitDwg);
-new ResizeObserver(resizeDwg).observe(dc);
-if(document.fonts&&document.fonts.ready)document.fonts.ready.then(requestDraw);
-
-/* splitter */
-(function(){
-  const sp=$('#splitter'),pd=$('#paneDwg'),work=$('#work');let on=false;
-  sp.addEventListener('pointerdown',e=>{on=true;sp.classList.add('on');sp.setPointerCapture(e.pointerId);});
-  sp.addEventListener('pointermove',e=>{if(!on)return;const r=work.getBoundingClientRect();const pct=clamp((e.clientX-r.left)/r.width*100,24,68);pd.style.flexBasis=pct+'%';});
-  sp.addEventListener('pointerup',()=>{on=false;sp.classList.remove('on');});
-  sp.addEventListener('keydown',e=>{if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;const cur=parseFloat(pd.style.flexBasis)||42;pd.style.flexBasis=clamp(cur+(e.key==='ArrowRight'?2:-2),24,68)+'%';});
-})();
 
 /* robot control */
 const robotBtn=$('#robotBtn');
@@ -538,7 +303,7 @@ lay('#lySeams',on=>seams.visible=on);
 lay('#lyDwl',on=>dwl.visible=on);
 lay('#lySuper',on=>superGroup.visible=on);
 lay('#lyBlocks',on=>dockGroup.visible=on);
-lay('#lyRobot',on=>{robotWrap.visible=on;lyRobotOn=on;requestDraw();});
+lay('#lyRobot',on=>{robotWrap.visible=on;});
 $('#cutTog').addEventListener('change',e=>{state.cut=e.target.checked;const planes=state.cut?[clipPlane]:[];clipMats.forEach(m=>{m.clippingPlanes=planes;m.needsUpdate=true;});});
 
 /* camera presets */
@@ -608,8 +373,7 @@ function loop(now){
     camera.position.lerpVectors(tween.from.p,tween.to.p,e);controls.target.lerpVectors(tween.from.t,tween.to.t,e);if(k>=1)tween=null;}
   controls.update();
   if(!robot.paused){if(robot.hold>0){robot.hold-=dt;if(robot.hold<=0){robot.s=0;robot.idx=0;}}
-    else{robot.s+=robot.speed*dt;if(robot.s>=robot.total){robot.s=robot.total;robot.hold=2.5;}}
-    if(frame%3===0)requestDraw();}
+    else{robot.s+=robot.speed*dt;if(robot.s>=robot.total){robot.s=robot.total;robot.hold=2.5;}}}
   placeRobot();
   if(!reduce){const ph=(now/1000)%1.6/1.6;rbRing.scale.setScalar(1+ph*0.9);rbRing.material.opacity=0.6*(1-ph);}
   if(pendingMove){pick(pendingMove);pendingMove=null;}
