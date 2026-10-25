@@ -43,7 +43,7 @@ export function createKpiPanel(root,store,ui){
     $k('progSub').textContent=`≈ ${Math.round(R.length*AREA_PER_POINT).toLocaleString()} m²`;
     $k('top').textContent=zones.filter(z=>z.compound).length;
     $k('layer').textContent=LAYER_LABEL[layer];$k('count').textContent=`${zones.length}구역`;
-    const html=!zones.length?`<li class="empty">${store.mapState==='mapping'?'아직 발견된 이상 구역이 없습니다':'이상 구역이 없습니다'}</li>`
+    const html=!zones.length?`<li class="empty">${store.mapState==='mapping'||store.mapState==='paused'?'아직 발견된 이상 구역이 없습니다':'이상 구역이 없습니다'}</li>`
       :zones.map((z,i)=>{
       const r=z.worst,v=valueParts(r,layer);
       const fr=z.frMin===z.frMax?`FR ${z.frMin}`:`FR ${z.frMin}–${z.frMax}`;
@@ -63,7 +63,7 @@ export function createKpiPanel(root,store,ui){
     list.querySelectorAll('.z').forEach((el,i)=>{const on=!!zones[i]&&zones[i].ids.has(ui.selId);el.classList.toggle('sel',on);
       if(on&&scroll)el.scrollIntoView({block:'nearest'});});
   }
-  const pick=el=>{const li=el.closest('.z');if(li)ui.select(+li.dataset.id);};
+  const pick=el=>{const li=el.closest('.z');if(li)ui.select(+li.dataset.id,{fly:true});};
   list.addEventListener('pointerdown',e=>{if(e.button===0)pick(e.target);});
   list.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(e.target);}});
 

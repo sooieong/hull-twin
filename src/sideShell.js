@@ -136,14 +136,14 @@ export function createSideShell(body,store,ui){
     read.textContent=t.dot?`${pos} · ${LAYER_LABEL[ui.layer]} ${formatValue(t.dot.r,ui.layer)} · ${LEVEL_LABEL[t.dot.level]}`:pos;
   });
   cv.addEventListener('pointerleave',()=>{read.textContent='';cv.style.cursor='';});
-  cv.addEventListener('click',e=>{const t=hit(e);if(t.rec)ui.select(t.rec.id);});
+  cv.addEventListener('click',e=>{const t=hit(e);if(t.rec)ui.select(t.rec.id,{fly:true});});
 
   const refresh=()=>{rebuildDots();draw();};
   store.subscribe(k=>{
     if(k.has('state')){clearTimeout(timer);timer=null;rebuildDots();}
     else if(k.has('records')&&!timer)timer=setTimeout(()=>{timer=null;refresh();},200);
     if(k.has('pose')||k.has('state')){
-      const p=store.mapState==='mapping'?store.pose:null;
+      const p=store.mapState==='mapping'||store.mapState==='paused'?store.pose:null;
       robot=p?{X:p.X,u:signedGirth(p.X,p.Y,p.Z,p.side)}:null;
       if(robot&&!raf)raf=requestAnimationFrame(animate);else if(!robot)draw();
     }

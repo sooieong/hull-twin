@@ -1,7 +1,7 @@
 import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { clamp, L, B, D, T, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
+import { clamp, L, B, D, T, R, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
   deckZ, keelZ, HB, section, recordU, strakeName, ZONE_LABELS, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
 import { CRITERIA, LAYER_LABEL, LEVEL_LABEL, judge, formatValue } from './data/criteria.js';
 import { HEAT, heatOf, heatRGB, heatAlpha, heatCss, buildIndex, addToIndex, idw, coverage, nearest } from './heatmap.js';
@@ -11,6 +11,7 @@ import { createKpiPanel } from './kpi.js';
 import { createSideShell } from './sideShell.js';
 import { createDetailPanel } from './detail.js';
 import { setupReport } from './pdfReport.js';
+import { setupPanels } from './panels.js';
 import { SimulatorSource } from './data/simulator.js';
 import { createStore } from './data/store.js';
 import { findDefectPhotos } from './data/photos.js';
@@ -21,6 +22,7 @@ import { logDataSummary } from './data/report.js';
 const $=s=>document.querySelector(s);
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const fmt=(n,d=2)=>n.toFixed(d);
+const lsGet=k=>{try{return localStorage.getItem(k);}catch(_){return null;}},lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(_){}};
 
 /* ---------- toast + placeholders ---------- */
 const toastEl=$('#toast');let toastT;
@@ -33,11 +35,11 @@ const storeReady=findDefectPhotos().then(photos=>{const store=createStore(new Si
 const ui=createUiState();
 
 /* ---------- shared state + cross-view hooks ---------- */
-const state={selFR:170,hoverX:null,hoverSrc:null,mode:'real',cut:false};
+const state={selFR:170,hoverX:null,hoverSrc:null,cut:false};
 const hooks={onSelect:[],onHover:[]};
 function selectFR(fr){
   fr=clamp(Math.round(fr),0,FRMAX);state.selFR=fr;const X=fr*FS;const s=section(X);
-  $('#secFr').textContent=fr;$('#secZone').textContent=regionOf(X);
+  $('#secFr').textContent=fr;$('#secMiniFr').textContent=fr;$('#secZone').textContent=regionOf(X);
   $('#secX').textContent=fmt(X)+' m';
   const hb=HB(X,T);$('#secHb').textContent=hb>0?fmt(hb)+' m':'—';
   const g=s.gs[G-1];$('#secG').textContent=fmt(g,1)+' m';
@@ -65,7 +67,7 @@ scene.background=new THREE.Color(0x04070d);
 scene.fog=new THREE.Fog(0x04070d,480,1250);
 const camera=new THREE.PerspectiveCamera(32,1,1,5000);
 const controls=new OrbitControls(camera,renderer.domElement);
-controls.enableDamping=true;controls.dampingFactor=0.08;controls.minDistance=30;controls.maxDistance=1200;controls.rotateSpeed=0.7;
+controls.enableDamping=true;controls.dampingFactor=0.08;controls.minDistance=8;controls.maxDistance=1200;controls.rotateSpeed=0.7;
 const PRESETS={iso:{p:[240,125,275],t:[0,8,0]},side:{p:[0,14,600],t:[0,12,0]},plan:{p:[0,640,0.5],t:[0,0,0]},front:{p:[560,18,0.5],t:[0,14,0]},bottom:{p:[150,-340,170],t:[0,4,0]}};
 // each preset keeps its direction; the distance is fitted so the whole ship shows in the pane (SPEC 4.1)
 const FIT=0.9,SHIP_BOX=[];for(const x of [-XC,XC])for(const y of [-1.8,D+30])for(const z of [-B/2,B/2])SHIP_BOX.push(new V3(x,y,z));
@@ -89,12 +91,11 @@ function cm(m){clipMats.push(m);return m;}
 
 /* hull shell */
 const nV=(NX+1)*G;const pos=new Float32Array(nV*3),girth=new Float32Array(nV);
-const colReal=new Float32Array(nV*3),colZone=new Float32Array(nV*3),colBp=new Float32Array(nV*3);
-const ZC=[0xF37321,0xF89B6C,0xFBB584,0x000000,0x3C4E70,0xB5531A,0x8F3F13].map(h=>new THREE.Color(h));
-const cHull=new THREE.Color(0xD3D8DF),cBp=new THREE.Color(0x0c1528);   // real mode: light achromatic hull (SPEC 4.4)
+const colReal=new Float32Array(nV*3),colBp=new Float32Array(nV*3);
+const cHull=new THREE.Color(0xD3D8DF),cBp=new THREE.Color(0x0c1528);   // 실선: light achromatic hull (SPEC 4.4) · 도면: dark navy
 for(let i=0;i<=NX;i++){const s=stSec[i],X=stX[i];for(let j=0;j<G;j++){const k=i*G+j;const Z=s.Zs[j];
   pos[k*3]=X-XC;pos[k*3+1]=Z;pos[k*3+2]=s.Ys[j];girth[k]=s.gs[j];
-  cHull.toArray(colReal,k*3);ZC[zoneOf(X,Z)].toArray(colZone,k*3);cBp.toArray(colBp,k*3);}}
+  cHull.toArray(colReal,k*3);cBp.toArray(colBp,k*3);}}
 const idx=[];for(let i=0;i<NX;i++)for(let j=0;j<G-1;j++){const a=i*G+j,b=(i+1)*G+j,c=a+1,d=b+1;idx.push(a,b,c,b,d,c);}
 const hullGeo=new THREE.BufferGeometry();
 hullGeo.setAttribute('position',new THREE.BufferAttribute(pos,3));
@@ -133,11 +134,11 @@ const deckPos=[],deckIdx=[];
 for(let i=0;i<=NX;i++){const s=stSec[i],X=stX[i];const Y=s.Ys[G-1],Z=s.Zs[G-1];deckPos.push(X-XC,Z,-Y,X-XC,Z,Y);
   if(i<NX){const a=i*2;deckIdx.push(a,a+2,a+1,a+1,a+2,a+3);}}
 const deckGeo=new THREE.BufferGeometry();deckGeo.setAttribute('position',new THREE.Float32BufferAttribute(deckPos,3));deckGeo.setIndex(deckIdx);deckGeo.computeVertexNormals();
-const deckMat=cm(new THREE.MeshStandardMaterial({color:0x252e40,roughness:0.85,metalness:0.1,side:THREE.DoubleSide}));
+const deckMat=cm(new THREE.MeshStandardMaterial({color:0xAAB2BD,roughness:0.85,metalness:0.1,side:THREE.DoubleSide}));
 const deck=new THREE.Mesh(deckGeo,deckMat);hullGroup.add(deck);
 const trPos=[],trIdx=[];{const s=stSec[0];for(let j=0;j<G;j++){trPos.push(-XC,s.Zs[j],-s.Ys[j],-XC,s.Zs[j],s.Ys[j]);if(j<G-1){const a=j*2;trIdx.push(a,a+1,a+2,a+1,a+3,a+2);}}}
 const trGeo=new THREE.BufferGeometry();trGeo.setAttribute('position',new THREE.Float32BufferAttribute(trPos,3));trGeo.setIndex(trIdx);trGeo.computeVertexNormals();
-const trMat=cm(new THREE.MeshStandardMaterial({color:0x1d2638,roughness:0.6,metalness:0.18,side:THREE.DoubleSide}));
+const trMat=cm(new THREE.MeshStandardMaterial({color:0xC4CAD2,roughness:0.6,metalness:0.18,side:THREE.DoubleSide}));
 hullGroup.add(new THREE.Mesh(trGeo,trMat));
 
 /* line helpers */
@@ -148,16 +149,17 @@ function sectionSegs(X,out,off=0.06){
     const z1=s.Zs[j]-(j<=NB?off:0),z2=s.Zs[j+1]-(j+1<=NB?off:0),y1=s.Ys[j]+(j>NB?off:0),y2=s.Ys[j+1]+(j+1>NB?off:0);
     out.push(X-XC,z1,y1,X-XC,z2,y2, X-XC,z1,-y1,X-XC,z2,-y2);}
 }
-const frameMat=cm(new THREE.LineBasicMaterial({color:0xFBB584,transparent:true,opacity:0.22}));
-const frameMajMat=cm(new THREE.LineBasicMaterial({color:0xF89B6C,transparent:true,opacity:0.7}));
+// lines: dark slate so they read on the light hull
+const frameMat=cm(new THREE.LineBasicMaterial({color:0x5C687D,transparent:true,opacity:0.3}));
+const frameMajMat=cm(new THREE.LineBasicMaterial({color:0x34415A,transparent:true,opacity:0.7}));
 const fA=[],fB=[];for(let n=10;n<=FRMAX;n+=10)sectionSegs(n*FS,n%50===0?fB:fA);
 const frames=new THREE.Group();frames.add(lineSeg(fA,frameMat),lineSeg(fB,frameMajMat));
 // sheer line (deck edge)
 const sheer=[];for(let i=0;i<NX;i++){const a=stSec[i],b=stSec[i+1];const ya=a.Ys[G-1],yb=b.Ys[G-1];if(ya<0.02&&yb<0.02)continue;sheer.push(stX[i]-XC,a.Zs[G-1],ya,stX[i+1]-XC,b.Zs[G-1],yb,stX[i]-XC,a.Zs[G-1],-ya,stX[i+1]-XC,b.Zs[G-1],-yb);}
-const sheerMat=cm(new THREE.LineBasicMaterial({color:0xFBB584,transparent:true,opacity:0.55}));
+const sheerMat=cm(new THREE.LineBasicMaterial({color:0x34415A,transparent:true,opacity:0.7}));
 hullGroup.add(lineSeg(sheer,sheerMat));
 // strake seams
-const seamMat=cm(new THREE.LineBasicMaterial({color:0xFBB584,transparent:true,opacity:0.16}));
+const seamMat=cm(new THREE.LineBasicMaterial({color:0x5C687D,transparent:true,opacity:0.26}));
 const seamArr=[];
 function seamPt(s,g){if(g>s.gs[G-1])return null;let j=0;while(j<G-2&&s.gs[j+1]<g)j++;const valid=k=>k<=NB?s.yb>0.02:s.Ys[k]>0.02;if(!valid(j)||!valid(j+1))return null;
   const t=(g-s.gs[j])/((s.gs[j+1]-s.gs[j])||1);const Y=s.Ys[j]+(s.Ys[j+1]-s.Ys[j])*t,Z=s.Zs[j]+(s.Zs[j+1]-s.Zs[j])*t;const onB=j<NB;return [onB?Y:Y+0.06,onB?Z-0.06:Z];}
@@ -166,22 +168,29 @@ for(let k=0;k<LETTERS.length;k++){const g=KEEL_HALF+STRAKE_W*k;let prev=null;
 const seams=lineSeg(seamArr,seamMat);
 // DWL
 const dwlArr=[];for(let X=0;X<XMAX;X+=0.5){const y1=HB(X,T),y2=HB(X+0.5,T);if(y1<0.02||y2<0.02)continue;dwlArr.push(X-XC,T,y1+0.1,X+0.5-XC,T,y2+0.1,X-XC,T,-y1-0.1,X+0.5-XC,T,-y2-0.1);}
-const dwlMat=cm(new THREE.LineBasicMaterial({color:0xF37321}));
+const dwlMat=cm(new THREE.LineBasicMaterial({color:0x2F5597}));
 const dwl=lineSeg(dwlArr,dwlMat);
-// blueprint lines (WL + stations)
-const bpMat=cm(new THREE.LineBasicMaterial({color:0xFBB584,transparent:true,opacity:0.32}));
+// design lines (waterlines + stations): shown in the 도면 look only
+const bpMat=cm(new THREE.LineBasicMaterial({color:0xFBB584,transparent:true,opacity:0.4}));
 const bpArr=[];WLS.forEach(Z=>{for(let X=0;X<XMAX;X+=0.6){const y1=HB(X,Z),y2=HB(X+0.6,Z);if(y1<0.02||y2<0.02)continue;bpArr.push(X-XC,Z,y1+0.06,X+0.6-XC,Z,y2+0.06,X-XC,Z,-y1-0.06,X+0.6-XC,Z,-y2-0.06);}});
 for(let i=0;i<=20;i++)sectionSegs(i*L/20,bpArr,0.07);
 const bpLines=lineSeg(bpArr,bpMat);bpLines.visible=false;
 hullGroup.add(frames,seams,dwl,bpLines);
+// measurement zone boundaries (hull.zoneOf limits) + names: LAYERS "구역 경계", off by default, lines and text only
+const zoneArr=[],ZX0=0.08*L,ZX1=0.9*L;
+[0.15,R+0.6,T-1.2,T+1.6].forEach(Z=>{for(let X=ZX0;X<ZX1;X+=0.5){const y1=HB(X,Z),y2=HB(X+0.5,Z);if(y1<0.02||y2<0.02)continue;
+  zoneArr.push(X-XC,Z,y1+0.12,X+0.5-XC,Z,y2+0.12,X-XC,Z,-y1-0.12,X+0.5-XC,Z,-y2-0.12);}});
+[ZX0,ZX1].forEach(X=>sectionSegs(X,zoneArr,0.12));
+const zoneMat=cm(new THREE.LineDashedMaterial({color:0x1F2D4A,dashSize:1.6,gapSize:1.1}));
+const zoneLines=lineSeg(zoneArr,zoneMat);zoneLines.computeLineDistances();zoneLines.visible=false;
+hullGroup.add(zoneLines);
 
 /* superstructure */
 const superGroup=new THREE.Group();
-const supMat=cm(new THREE.MeshStandardMaterial({color:0x1a2333,roughness:0.75,metalness:0.15}));
-const supEdgeMat=cm(new THREE.LineBasicMaterial({color:0x3e5070,transparent:true,opacity:0.9}));
+const supMat=cm(new THREE.MeshStandardMaterial({color:0xC9CED6,roughness:0.75,metalness:0.15}));
+const supEdgeMat=cm(new THREE.LineBasicMaterial({color:0x5F6A7C,transparent:true,opacity:0.9}));
 const bandMat=cm(new THREE.MeshStandardMaterial({color:0x0b0b0b,roughness:0.5}));   // K100: orange is reserved for UI accents
-const supSolids=[];
-function box(x0,x1,z0,z1,w,mat=supMat,yc=0){const g=new THREE.BoxGeometry(x1-x0,z1-z0,w);const m=new THREE.Mesh(g,mat);m.position.set((x0+x1)/2-XC,(z0+z1)/2,yc);superGroup.add(m);supSolids.push(m);
+function box(x0,x1,z0,z1,w,mat=supMat,yc=0){const g=new THREE.BoxGeometry(x1-x0,z1-z0,w);const m=new THREE.Mesh(g,mat);m.position.set((x0+x1)/2-XC,(z0+z1)/2,yc);superGroup.add(m);
   const e=new THREE.LineSegments(new THREE.EdgesGeometry(g),supEdgeMat);e.position.copy(m.position);superGroup.add(e);return m;}
 box(40,245,D,D+2.4,34);box(6,24,D,D+20,36);box(18,24,D+17.8,D+20,46);box(2,9,D+20,D+30,9);box(2,9,D+27.4,D+29,9.2,bandMat);
 box(120,135,D+2.4,D+6.4,14);box(278,279.4,deckZ(279),deckZ(279)+11,1.4);
@@ -265,6 +274,11 @@ function ringPoints(X,off){const s=section(X);const pts=[];
 const labelsEl=$('#labels');const frLabels=[];
 for(let n=0;n<=FRMAX;n+=50){const el=document.createElement('div');el.className='lbl3d';el.textContent='FR '+n;labelsEl.appendChild(el);const X=n*FS;const Z=deckZ(X);frLabels.push({el,p:new V3(X-XC,Z+2.2,HB(X,Z)+0.5)});}
 const selLabel=document.createElement('div');selLabel.className='lbl3d sel';labelsEl.appendChild(selLabel);let selLabelPos=new V3();
+// staggered along the ship so the stacked bands do not overlap in the side view
+const zoneLabels=[['선저부',0.3*L,0,B/4],['빌지부',0.34*L,1.2],['선측 수선 아래',0.42*L,(R+0.6+T-1.2)/2],['흘수선 부근',0.52*L,T+0.2],
+  ['건현부',0.6*L,(T+1.6+D)/2],['선수부',0.95*L,T],['선미부',0.04*L,T+4]].map(([t,X,Z,Y])=>{
+  const el=document.createElement('div');el.className='lbl3d zl';el.textContent=t;el.hidden=true;labelsEl.appendChild(el);
+  return {el,p:new V3(X-XC,Z,Y!=null?Y:HB(X,Z)+0.4)};});
 
 hooks.onSelect.push((fr,X)=>{
   if(ringMesh){hullGroup.remove(ringMesh);ringMesh.geometry.dispose();}
@@ -280,30 +294,7 @@ hooks.onHover.push((X,src)=>{
   if(src!=='3d')hoverDot.visible=false;
 });
 
-/* modes, layers, cut */
-function setMode(m){state.mode=m;
-  document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===m)));
-  const xr=m==='xray',bp=m==='bp'||xr,real=m==='real';
-  hullMat.transparent=xr;hullMat.opacity=xr?0.13:1;hullMat.depthWrite=!xr;hullMat.roughness=bp?0.95:0.7;hullMat.needsUpdate=true;
-  backS.visible=backP.visible=!xr;
-  deckMat.color.setHex(bp?0x0c1528:real?0xAAB2BD:0x252e40);deckMat.transparent=xr;deckMat.opacity=xr?0.1:1;deckMat.depthWrite=!xr;
-  trMat.color.setHex(bp?0x0c1528:real?0xC4CAD2:0x3C4E70);trMat.transparent=xr;trMat.opacity=xr?0.12:1;trMat.depthWrite=!xr;
-  supMat.color.setHex(real?0xC9CED6:0x1a2333);supEdgeMat.color.setHex(real?0x5F6A7C:0x3e5070);
-  bpLines.visible=bp;
-  // lines: dark slate on the light hull, peach on the dark modes
-  frameMat.color.setHex(real?0x5C687D:0xFBB584);frameMat.opacity=real?0.3:m==='zone'?0.32:0.5;
-  frameMajMat.color.setHex(real?0x34415A:0xF89B6C);
-  seamMat.color.setHex(real?0x5C687D:0xFBB584);seamMat.opacity=real?0.26:m==='zone'?0.2:0.35;
-  sheerMat.color.setHex(real?0x34415A:0xFBB584);sheerMat.opacity=real?0.7:0.55;
-  dwlMat.color.setHex(real?0x2F5597:0x7FA6E8);
-  supSolids.forEach(s=>s.visible=!bp);
-  $('#legend').hidden=m!=='zone';$('#heatLegend').hidden=m==='zone';
-  paintHull();
-}
-document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
-
-/* heatmap: IDW of the current layer's judgement over the shell, abnormal areas only (SPEC 4.4).
-   Not shown in 'zone' mode, which colours the hull by measurement zone instead. */
+/* heatmap: IDW of the current layer's judgement over the shell, abnormal areas only (SPEC 4.4) — always shown (SPEC 10.8) */
 const heatS=new Float32Array(nV),heatP=new Float32Array(nV),covS=new Float32Array(nV),covP=new Float32Array(nV);
 let store=null,heatIx=buildIndex([]),heatT=null,heatArr=null,heatLen=0;
 const hw={w:0};
@@ -327,13 +318,15 @@ function updateHeat(){
   paintHull();
 }
 function scheduleHeat(){if(heatT)return;heatT=setTimeout(()=>{heatT=null;updateHeat();},100);}
-const DIM=[0.3,0.33,0.39];   // not-yet-measured shell while mapping (the map "appears" behind the robot)
+// not-yet-measured shell while mapping or paused (the map "appears" behind the robot)
+const DIM={real:[0.3,0.33,0.39],bp:[0.02,0.035,0.07]};
+let look='real';
 function paintHull(){
-  const m=state.mode,base=m==='zone'?colZone:(m==='bp'||m==='xray')?colBp:colReal,show=m!=='zone';
-  const dimOn=show&&store&&store.mapState==='mapping';
+  const base=look==='bp'?colBp:colReal,show=true,DIMC=DIM[look];
+  const dimOn=!!store&&(store.mapState==='mapping'||store.mapState==='paused');
   [[geoS,heatS,covS],[geoP,heatP,covP]].forEach(([g,h,cov])=>{const attr=g.attributes.color,c=attr.array;
     for(let k=0;k<nV;k++){const o=k*3;let r=base[o],gr=base[o+1],b=base[o+2];
-      if(dimOn){const d=(1-cov[k])*0.7;r+=(DIM[0]-r)*d;gr+=(DIM[1]-gr)*d;b+=(DIM[2]-b)*d;}
+      if(dimOn){const d=(1-cov[k])*0.7;r+=(DIMC[0]-r)*d;gr+=(DIMC[1]-gr)*d;b+=(DIMC[2]-b)*d;}
       const a=show?heatAlpha(h[k]):0;
       if(a>0){const hc=heatRGB(h[k]);r+=(hc[0]/255-r)*a;gr+=(hc[1]/255-gr)*a;b+=(hc[2]/255-b)*a;}
       c[o]=r;c[o+1]=gr;c[o+2]=b;}
@@ -349,6 +342,12 @@ function syncLayer(){const l=ui.layer;
   document.querySelectorAll('[data-layer]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.layer===l)));
   $('#heatTtl').textContent=LEGEND[l].t;$('#heatWarn').textContent=LEGEND[l].w;$('#heatCrit').textContent=LEGEND[l].c;}
 document.querySelectorAll('[data-layer]').forEach(b=>b.addEventListener('click',()=>ui.setLayer(b.dataset.layer)));
+const legendBtn=$('#legendBtn'),legendPop=$('#legendPop');
+function openLegend(on){
+  legendPop.hidden=!on;legendBtn.setAttribute('aria-expanded',String(on));
+  if(on){const pane=$('#pane3d');legendPop.style.left=Math.max(8,Math.min(legendBtn.offsetLeft-12,pane.clientWidth-legendPop.offsetWidth-8))+'px';}
+}
+legendBtn.addEventListener('click',()=>openLegend(legendPop.hidden));
 
 /* selected measurement: K100 / white bullseye on the shell, distinct from the heatmap and the UI orange */
 const selMarker=new THREE.Group();
@@ -356,6 +355,9 @@ const selMarker=new THREE.Group();
   const ring=(r0,r1,c)=>{const m=new THREE.Mesh(new THREE.RingGeometry(r0,r1,40),mat(c));m.renderOrder=4;return m;};
   const dot=new THREE.Mesh(new THREE.CircleGeometry(0.4,24),mat(0xffffff));dot.renderOrder=4;
   selMarker.add(ring(1.2,1.65,0xffffff),ring(0.65,1.2,0x000000),dot);}
+// pulse after a fly-to (SPEC 10.3)
+const selPulse=new THREE.Mesh(new THREE.RingGeometry(1.65,1.95,48),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,side:THREE.DoubleSide,depthWrite:false}));
+selPulse.renderOrder=4;selPulse.visible=false;selMarker.add(selPulse);
 selMarker.visible=false;scene.add(selMarker);
 function placeMarker(r){
   if(!r){selMarker.visible=false;return;}
@@ -363,22 +365,32 @@ function placeMarker(r){
   toThree(r.X,r.Y,r.Z,selMarker.position).addScaledVector(nv,0.2);
   selMarker.quaternion.setFromUnitVectors(new V3(0,0,1),nv);selMarker.visible=true;
 }
-ui.subscribe(k=>{
+ui.subscribe((k,o)=>{
   if(k==='layer'){syncLayer();rebuildHeat();tip.hidden=true;}
-  if(k==='select'){const r=store&&store.get(ui.selId);placeMarker(r);if(r)selectFR(r.fr);}
+  if(k==='select'||k==='fly'){const r=store&&store.get(ui.selId);
+    if(k==='select'){placeMarker(r);if(r)selectFR(r.fr);}
+    if(r&&o&&o.fly)flyTo(r);}
 });
-/* mapping state (SPEC 2, 4.1): done = whole ship + all results, robot and path hidden;
-   mapping = heatmap restarts empty and fills in behind the robot */
+/* mapping state (SPEC 10.1, 10.2)
+   mapping: heatmap fills in behind the robot · paused: heatmap, robot and path stay where they are ·
+   done: whole ship + all results, robot and path hidden; "다시 매핑" only in the ⋯ menu */
 const fmtTime=ts=>{const d=new Date(ts),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}.${p(d.getMonth()+1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;};
-let mapOn=null,robotSeen=false;
+const poseText=p=>`FR ${p.fr} · 외판열 ${p.strake}(${p.side}) · X ${fmt(p.X)}  Y ${fmt(p.Y)}  Z ${fmt(p.Z)} m`;
+let mapMode=null,robotSeen=false;
 function syncMap(){
-  const on=store.mapState==='mapping';
-  $('#mapState').classList.toggle('on',on);$('#mapBtn').textContent=on?'매핑 종료':'매핑 시작';
-  $('#stRobotWrap').classList.toggle('idle',!on);
-  if(on)$('#mapStateTxt').textContent=`매핑 중 ${Math.floor(store.progress*100)}%`;
-  else{$('#mapStateTxt').textContent='매핑 완료';
-    $('#stRobot').textContent=`매핑 완료 · 측정점 ${store.records.length.toLocaleString()}개 · 마지막 측정 ${store.lastTs?fmtTime(store.lastTs):'—'}`;}
-  if(on!==mapOn){mapOn=on;robotSeen=false;robotWrap.visible=false;pathGroup.visible=on&&lyRobotOn;paintHull();}
+  const st=store.mapState,active=st==='mapping'||st==='paused',pct=Math.floor(store.progress*100);
+  const ms=$('#mapState');ms.classList.toggle('on',st==='mapping');ms.classList.toggle('paused',st==='paused');ms.classList.toggle('done',st==='done');
+  $('#mapStateTxt').textContent=st==='mapping'?`매핑 중 ${pct}%`:st==='paused'?`매핑 중지 · ${pct}%`:'매핑 완료';
+  const btn=$('#mapBtn');btn.hidden=!active;btn.textContent=st==='mapping'?'매핑 중지':'이어서 매핑';btn.classList.toggle('secondary',st==='mapping');
+  $('.map-more').hidden=!(st==='paused'||st==='done');
+  $('#speedSeg').hidden=!active;   // replay speed only matters while a run is going or paused
+  const again=st==='paused'?'처음부터 다시':'다시 매핑';$('#mapRestart').textContent=again;$('#mapConfirm').textContent=again;
+  $('#stRobotWrap').classList.toggle('idle',st!=='mapping');
+  if(st==='done')$('#stRobot').textContent=`매핑 완료 · 측정점 ${store.records.length.toLocaleString()}개 · 마지막 측정 ${store.lastTs?fmtTime(store.lastTs):'—'}`;
+  if(st==='paused')$('#stRobot').textContent=store.pose?`중지됨 · ${poseText(store.pose)} · 진행 ${pct}%`:`중지됨 · 진행 ${pct}%`;
+  if(!active||!store.pose){robotWrap.visible=false;robotSeen=false;}
+  pathGroup.visible=active&&lyRobotOn;
+  if(st!==mapMode){mapMode=st;openMenu(false);paintHull();}
 }
 function onPose(p){
   setRobotTarget(p,!robotSeen);robotSeen=true;robotWrap.visible=true;showPathAt(p.k);
@@ -386,16 +398,56 @@ function onPose(p){
   $('#mapStateTxt').textContent=`매핑 중 ${pct}%`;
   $('#stRobot').textContent=`RBT-01 매핑 중 · FR ${p.fr} · 외판열 ${p.strake} · ${p.side==='P'?'좌현':'우현'} · X ${fmt(p.X)}  Y ${fmt(p.Y)}  Z ${fmt(p.Z)} m · 진행 ${pct}%`;
 }
-$('#mapBtn').addEventListener('click',()=>{if(!store)return;if(store.mapState==='mapping')store.stop();else store.start();});
+$('#mapBtn').addEventListener('click',()=>{if(!store)return;if(store.mapState==='mapping')store.pause();else if(store.mapState==='paused')store.resume();});
+// ⋯ menu: restart from the beginning, confirmed inside the menu (no browser confirm)
+const mapMenu=$('#mapMenu'),mapMoreBtn=$('#mapMoreBtn');
+function openMenu(on){
+  mapMenu.hidden=!on;mapMoreBtn.setAttribute('aria-expanded',String(on));
+  mapMenu.querySelector('.menu-main').hidden=false;mapMenu.querySelector('.menu-confirm').hidden=true;
+  if(on)$('#mapRestart').focus();
+}
+mapMoreBtn.addEventListener('click',()=>openMenu(mapMenu.hidden));
+$('#mapRestart').addEventListener('click',()=>{mapMenu.querySelector('.menu-main').hidden=true;mapMenu.querySelector('.menu-confirm').hidden=false;$('#mapCancel').focus();});
+$('#mapCancel').addEventListener('click',()=>{openMenu(false);mapMoreBtn.focus();});
+$('#mapConfirm').addEventListener('click',()=>{openMenu(false);if(store)store.start();});
+// overlays close on an outside press or Esc (Esc is marked handled so a maximized panel stays maximized)
+document.addEventListener('pointerdown',e=>{
+  if(!mapMenu.hidden&&!e.target.closest('.map-more'))openMenu(false);
+  if(!legendPop.hidden&&!e.target.closest('#legendPop,#legendBtn'))openLegend(false);
+});
+window.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
+  if(!mapMenu.hidden){openMenu(false);mapMoreBtn.focus();e.preventDefault();}
+  else if(!legendPop.hidden){openLegend(false);legendBtn.focus();e.preventDefault();}
+},true);
 /* report (SPEC 6): the 3D canvas is captured right after a render instead of keeping preserveDrawingBuffer on */
 setupReport({button:$('#reportBtn'),store:()=>store,ui,toast,
   snapshot3D:()=>{renderer.render(scene,camera);return renderer.domElement.toDataURL('image/png');},
   ship:()=>({name:$('.crumbs b').textContent,dock:$('#dockSel').value})});
+/* 실선 | 도면 (VIEW row): 도면 = dark navy hull, orange design lines (waterlines, stations, frames); the heatmap stays */
+function setLook(l){
+  look=l;const bp=l==='bp';
+  document.querySelectorAll('[data-look]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.look===l)));
+  hullMat.roughness=bp?0.95:0.7;
+  deckMat.color.setHex(bp?0x0c1528:0xAAB2BD);trMat.color.setHex(bp?0x0c1528:0xC4CAD2);
+  supMat.color.setHex(bp?0x0f1a30:0xC9CED6);supEdgeMat.color.setHex(bp?0xFBB584:0x5F6A7C);supEdgeMat.opacity=bp?0.6:0.9;
+  bpLines.visible=bp;
+  frameMat.color.setHex(bp?0xFBB584:0x5C687D);frameMat.opacity=bp?0.45:0.3;
+  frameMajMat.color.setHex(bp?0xF89B6C:0x34415A);frameMajMat.opacity=bp?0.85:0.7;
+  seamMat.color.setHex(bp?0xFBB584:0x5C687D);seamMat.opacity=bp?0.3:0.26;
+  sheerMat.color.setHex(bp?0xFBB584:0x34415A);sheerMat.opacity=bp?0.7:0.7;
+  dwlMat.color.setHex(bp?0x7FA6E8:0x2F5597);
+  zoneMat.color.setHex(bp?0xC9D3E3:0x1F2D4A);
+  // scan path keeps its contrast on the navy hull
+  if(trailLine){trailLine.material.color.setHex(bp?0xFBB584:0x1F2D4A);trailLine.material.opacity=bp?0.3:0.18;
+    rowLine.material.color.setHex(bp?0xffffff:0x000000);nextLine.material.color.setHex(bp?0xC9D3E3:0x1F2D4A);}
+  paintHull();
+}
+document.querySelectorAll('[data-look]').forEach(b=>b.addEventListener('click',()=>setLook(b.dataset.look)));
 function setSpeed(k){if(store)store.setSpeed(k);document.querySelectorAll('[data-speed]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.speed===k)));}
 document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>setSpeed(+b.dataset.speed)));
 storeReady.then(s=>{store=s;buildPath(s.plan);setSpeed(10);
-  createKpiPanel($('#paneKpi .pane-body'),s,ui);createSideShell($('#paneShell .pane-body'),s,ui);
-  createDetailPanel($('#paneDetail .pane-body'),s,ui,$('#paneDetail .pane-title'));
+  setLook(look);createKpiPanel($('#paneKpi .pane-body'),s,ui);createSideShell($('#paneShell .pane-body'),s,ui);
+  createDetailPanel($('#paneDetail .pane-body'),s,ui,$('#detailSub'));
   s.subscribe(k=>{
     if(k.has('records')){scheduleHeat();placeMarker(ui.selId!=null?s.get(ui.selId):null);}
     if(k.has('state')||k.has('records'))syncMap();
@@ -409,19 +461,39 @@ lay('#lySeams',on=>seams.visible=on);
 lay('#lyDwl',on=>dwl.visible=on);
 lay('#lySuper',on=>superGroup.visible=on);
 lay('#lyBlocks',on=>dockGroup.visible=on);
-lay('#lyRobot',on=>{lyRobotOn=on;pathGroup.visible=on&&mapOn===true;});
+lay('#lyRobot',on=>{lyRobotOn=on;pathGroup.visible=on&&!!store&&(store.mapState==='mapping'||store.mapState==='paused');});
+lay('#lyZones',on=>{zoneLines.visible=on;zoneLabels.forEach(l=>l.el.hidden=!on);});
 $('#cutTog').addEventListener('change',e=>{state.cut=e.target.checked;const planes=state.cut?[clipPlane]:[];clipMats.forEach(m=>{m.clippingPlanes=planes;m.needsUpdate=true;});});
 
-/* camera presets */
-let tween=null;
-function goView(k){document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===k)));
-  curView=k;const to=fitPreset(k);
-  if(reduce){camera.position.copy(to.p);controls.target.copy(to.t);controls.update();return;}
-  tween={from:{p:camera.position.clone(),t:controls.target.clone()},to,t0:performance.now(),dur:800};}
+/* camera: view presets and fly-to share one tween that swings around the target while zooming (ease-in-out, ~1 s) */
+let tween=null,pulseUntil=0;
+const FLY_MS=1000,FLY_DIST=30;   // m: the point plus 2–3 frames around it
+function startTween(to,onDone){
+  const p0=camera.position.clone(),t0=controls.target.clone(),d0=p0.clone().sub(t0),d1=to.p.clone().sub(to.t);
+  if(reduce){camera.position.copy(to.p);controls.target.copy(to.t);controls.update();if(onDone)onDone();return;}
+  const a=d0.clone().normalize(),b=d1.clone().normalize();
+  tween={t0,t1:to.t.clone(),dir0:a,q:new THREE.Quaternion().setFromUnitVectors(a,b),l0:Math.log(d0.length()),l1:Math.log(d1.length()),start:performance.now(),onDone};
+}
+const flyBack=$('#flyBack');
+function pressView(k){document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===k)));}
+function goView(k){pressView(k);curView=k;flyBack.hidden=true;startTween(fitPreset(k));}
+/* fly to a measurement point: look at it along the outward shell normal from ~30 m; bottom points are seen from below */
+function flyTo(r){
+  const t=toThree(r.X,r.Y,r.Z),dir=shellNormal(r.X,r.Y,r.Z);
+  if(dir.y<-0.85){dir.x+=0.12;dir.z+=(r.Y<0?1:-1)*0.35;dir.normalize();}   // straight up would be a degenerate view
+  pressView(null);curView=null;flyBack.hidden=false;
+  startTween({p:t.clone().addScaledVector(dir,FLY_DIST),t},()=>{pulseUntil=performance.now()+2000;});
+}
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>goView(b.dataset.view)));
-$('#btnReset').addEventListener('click',()=>goView('iso'));
-controls.addEventListener('start',()=>{tween=null;curView=null;document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed','false'));});
-$('#btnFull').addEventListener('click',()=>{const el=$('#pane3d');try{if(document.fullscreenElement)document.exitFullscreen();else{const r=el.requestFullscreen&&el.requestFullscreen();if(r&&r.catch)r.catch(()=>toast('이 화면에서는 전체 화면을 지원하지 않습니다'));}}catch(_){toast('이 화면에서는 전체 화면을 지원하지 않습니다');}});
+flyBack.addEventListener('click',()=>goView('iso'));
+controls.addEventListener('start',()=>{tween=null;curView=null;pressView(null);});
+
+/* frame info card: fold to a small "FR 170" chip (SPEC 10.4) */
+const secCard=$('#secCard');
+function foldSec(on){secCard.classList.toggle('collapsed',on);lsSet('drdock.secCard',on?'1':'0');(on?$('#secExpand'):$('#secCollapse')).focus({preventScroll:true});}
+$('#secCollapse').addEventListener('click',()=>foldSec(true));
+$('#secExpand').addEventListener('click',()=>foldSec(false));
+if(lsGet('drdock.secCard')==='1')secCard.classList.add('collapsed');
 
 /* picking */
 const ray=new THREE.Raycaster();const ndc=new THREE.Vector2();let pendingMove=null,lastHit=null,downAt=null;
@@ -482,19 +554,28 @@ function place(el,p){tmp.copy(p).project(camera);if(tmp.z>1||tmp.z<-1){el.style.
 let last=performance.now(),frame=0;
 function loop(now){
   const dt=Math.min(0.05,(now-last)/1000);last=now;frame++;
-  if(tween){const k=Math.min(1,(now-tween.t0)/tween.dur);const e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
-    camera.position.lerpVectors(tween.from.p,tween.to.p,e);controls.target.lerpVectors(tween.from.t,tween.to.t,e);if(k>=1)tween=null;}
+  if(tween){const k=Math.min(1,(now-tween.start)/FLY_MS),e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+    controls.target.lerpVectors(tween.t0,tween.t1,e);
+    const dir=tween.dir0.clone().applyQuaternion(new THREE.Quaternion().slerp(tween.q,e));
+    camera.position.copy(controls.target).addScaledVector(dir,Math.exp(tween.l0+(tween.l1-tween.l0)*e));
+    if(k>=1){const done=tween.onDone;tween=null;if(done)done();}}
   controls.update();
   if(robotWrap.visible){const e=1-Math.exp(-dt*14);robotGroup.position.lerp(rbTarget.p,e);robotGroup.quaternion.slerp(rbTarget.q,e);
     rbLocator.scale.setScalar(clamp(camera.position.distanceTo(robotGroup.position)/120,1,3.5));
     if(!reduce){const ph=(now/1000)%1.4/1.4;rbPulse.scale.setScalar(1+ph*0.8);rbPulse.material.opacity=0.6*(1-ph);}}
   if(pendingMove){pick(pendingMove);pendingMove=null;}
-  if(selMarker.visible)selMarker.scale.setScalar(clamp(camera.position.distanceTo(selMarker.position)/110,1,4));
+  if(selMarker.visible)selMarker.scale.setScalar(clamp(camera.position.distanceTo(selMarker.position)/110,0.45,4));
+  // close-up after a fly-to: the whole-frame section ring would cover the point, so it steps aside
+  const near=camera.position.distanceTo(controls.target)<90;if(ringMesh)ringMesh.visible=!near;selLabel.hidden=near;
+  selPulse.visible=selMarker.visible&&now<pulseUntil;
+  if(selPulse.visible){const ph=(now%700)/700;selPulse.scale.setScalar(1+ph*1.6);selPulse.material.opacity=0.9*(1-ph);}
+  zoneLabels.forEach(l=>{if(!l.el.hidden)place(l.el,l.p);});
   frLabels.forEach(l=>{if(!l.el.hidden)place(l.el,l.p);});place(selLabel,selLabelPos);
   renderer.render(scene,camera);drawGizmo();
   requestAnimationFrame(loop);
 }
-syncLayer();setMode('real');selectFR(state.selFR);
+syncLayer();paintHull();selectFR(state.selFR);
+setupPanels($('.main'));
 if(window.innerWidth<=1100)$('#layers').open=false;   // narrow main pane: keep the hull visible
 requestAnimationFrame(loop);
 })();

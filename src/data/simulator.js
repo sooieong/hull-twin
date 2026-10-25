@@ -19,7 +19,7 @@ export class SimulatorSource extends RobotSource{
       if(v.defect){const list=photos[v.defect]||[];if(list.length)photo=list[cnt[v.defect]%list.length];cnt[v.defect]++;}
       return {id:sm.id,X:sm.X,Y:sm.Y,Z:sm.Z,fr:sm.fr,strake:sm.strake,side:sm.side,zone:sm.zone,...v,photo,_at:sm.at};
     });
-    this.speed=1;this.timer=null;this.s=0;this.next=0;this.k=0;this.last=0;
+    this.speed=1;this.timer=null;this.paused=false;this.s=0;this.next=0;this.k=0;this.last=0;
   }
   record(b,ts){const {_at,...r}=b;return {...r,ts};}
 
@@ -29,17 +29,29 @@ export class SimulatorSource extends RobotSource{
     this.emit('state',{state:'done',progress:1,ts:end});
   }
   start(){
-    if(this.timer)return;
-    this.s=0;this.next=0;this.k=0;this.last=performance.now();
-    this.emit('state',{state:'mapping',progress:0,ts:Date.now()});
-    this.timer=setInterval(()=>this.tick(),TICK_MS);
-    this.tick();
+    this.halt();
+    this.s=0;this.next=0;this.k=0;this.paused=false;
+    this.emit('state',{state:'mapping',progress:0,ts:Date.now(),fresh:true});
+    this.run();
+  }
+  pause(){
+    if(!this.timer)return;
+    this.halt();this.paused=true;
+    this.emit('state',{state:'paused',progress:this.s/this.plan.total,ts:Date.now()});
+  }
+  resume(){
+    if(!this.paused)return;
+    this.paused=false;
+    this.emit('state',{state:'mapping',progress:this.s/this.plan.total,ts:Date.now()});
+    this.run();
   }
   stop(){
-    if(!this.timer)return;
-    clearInterval(this.timer);this.timer=null;
+    if(!this.timer&&!this.paused)return;
+    this.halt();this.paused=false;
     this.emit('state',{state:'done',progress:this.s/this.plan.total,ts:Date.now()});
   }
+  run(){this.last=performance.now();this.timer=setInterval(()=>this.tick(),TICK_MS);this.tick();}
+  halt(){if(this.timer){clearInterval(this.timer);this.timer=null;}}
   setSpeed(k){this.speed=k;}
 
   tick(){

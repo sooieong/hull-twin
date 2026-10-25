@@ -29,9 +29,19 @@
           <option>2021.06 신조 인도</option>
         </select>
       </div>
-      <div class="map-toggle">
-        <span class="map-state" id="mapState"><i></i><span id="mapStateTxt">매핑 완료</span></span>
-        <button class="btn-primary" id="mapBtn">매핑 시작</button>
+      <div class="map-toggle" id="mapToggle">
+        <span class="map-state" id="mapState" role="status"><i></i><svg class="ic ok" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-6.5"/></svg><span id="mapStateTxt">매핑 완료</span></span>
+        <button class="btn-primary" id="mapBtn" hidden>매핑 중지</button>
+        <div class="map-more">
+          <button class="icon-btn" id="mapMoreBtn" aria-haspopup="true" aria-expanded="false" aria-controls="mapMenu" aria-label="매핑 메뉴" title="매핑 메뉴">⋯</button>
+          <div class="menu" id="mapMenu" hidden>
+            <div class="menu-main"><button class="menu-item" id="mapRestart">다시 매핑</button></div>
+            <div class="menu-confirm" hidden>
+              <p>기존 측정 결과를 지우고 처음부터 매핑합니다</p>
+              <div class="menu-actions"><button class="btn-ghost sm" id="mapCancel">취소</button><button class="btn-primary" id="mapConfirm">다시 매핑</button></div>
+            </div>
+          </div>
+        </div>
       </div>
       <button class="btn-ghost" id="reportBtn">보고서 생성</button>
     </div>
@@ -42,10 +52,17 @@
       <div class="pane-head">
         <span class="eyebrow">3D Hull Model</span><span class="pane-title">선체 외판</span>
         <span class="chip">Ship CS · m</span>
-        <div class="head-actions">
-          <button class="btn" id="btnReset">시점 초기화</button>
-          <button class="btn" id="btnFull">전체 화면</button>
-        </div>
+        <button class="help-btn" id="legendBtn" aria-expanded="false" aria-controls="legendPop" aria-label="범례와 조작법" title="범례와 조작법">?</button>
+      </div>
+      <div class="pop" id="legendPop" role="dialog" aria-label="범례" hidden>
+        <span class="pop-ttl" id="heatTtl">도막 두께 · 현재 / 설계</span>
+        <div class="ramp" id="heatRamp"></div>
+        <div class="ticks"><span id="heatWarn">주의</span><span id="heatCrit">심각</span></div>
+        <ul>
+          <li><i class="sw-hull"></i>정상 구역은 선체 기본색</li>
+          <li><i class="hatch"></i>측정 불가 · 킬 블록 접촉면</li>
+        </ul>
+        <p class="pop-help">드래그 회전 · 휠 확대 · 우클릭 이동 · 클릭 선택</p>
       </div>
       <div class="pane-body">
         <div id="vp"></div>
@@ -53,7 +70,7 @@
 
         <div class="ov-tools">
           <div class="seg" role="group" aria-label="측정 레이어">
-            <span class="lbl">Data</span>
+            <span class="lbl">레이어</span>
             <button data-layer="dft" aria-pressed="true">도막 두께</button>
             <button data-layer="plate" aria-pressed="false">강판 두께</button>
             <button data-layer="defect" aria-pressed="false">도막 손상</button>
@@ -65,18 +82,21 @@
             <button data-view="plan" aria-pressed="false">평면</button>
             <button data-view="front" aria-pressed="false">정면</button>
             <button data-view="bottom" aria-pressed="false">선저</button>
+            <span class="sep" aria-hidden="true"></span>
+            <button data-look="real" aria-pressed="true" title="실선: 밝은 선체">실선</button>
+            <button data-look="bp" aria-pressed="false" title="도면: 남색 선체와 주황 설계선">도면</button>
           </div>
-          <div class="seg" role="group" aria-label="표현 방식">
-            <span class="lbl">Mode</span>
-            <button data-mode="real" aria-pressed="true">실선</button>
-            <button data-mode="bp" aria-pressed="false">도면</button>
-            <button data-mode="xray" aria-pressed="false">X-ray</button>
-            <button data-mode="zone" aria-pressed="false">측정 구역</button>
+          <div class="seg" role="group" aria-label="재생 속도 (시연용)" id="speedSeg" hidden>
+            <span class="lbl">Speed</span>
+            <button data-speed="1" aria-pressed="false">×1</button>
+            <button data-speed="10" aria-pressed="true">×10</button>
+            <button data-speed="50" aria-pressed="false">×50</button>
           </div>
+          <button class="chip-back" id="flyBack" hidden>← 선박 전체 보기</button>
         </div>
 
         <details class="ov ov-layers" id="layers" open>
-          <summary>Layers</summary>
+          <summary>Layers<svg class="ic chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></summary>
           <ul>
             <li><label class="tog"><input type="checkbox" id="lyFrames" checked>프레임선<span class="sw" style="background:#8A96AA"></span></label></li>
             <li><label class="tog"><input type="checkbox" id="lySeams" checked>외판열 경계<span class="sw" style="background:#5E6B82"></span></label></li>
@@ -84,11 +104,14 @@
             <li><label class="tog"><input type="checkbox" id="lyRobot" checked>로봇 주행경로<span class="sw dash"></span></label></li>
             <li><label class="tog"><input type="checkbox" id="lySuper" checked>상부 구조</label></li>
             <li><label class="tog"><input type="checkbox" id="lyBlocks" checked>도크 · 킬 블록</label></li>
+            <li><label class="tog"><input type="checkbox" id="lyZones">구역 경계<span class="sw dash2"></span></label></li>
           </ul>
         </details>
 
-        <div class="ov ov-sec">
-          <div class="row1"><div class="fr"><small>FR</small><span id="secFr">170</span></div><span class="zone" id="secZone">평행 중앙부</span></div>
+        <div class="ov ov-sec" id="secCard">
+          <button class="sec-mini" id="secExpand" aria-label="프레임 정보 펼치기" title="펼치기"><small>FR</small><span id="secMiniFr">170</span><svg class="ic chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></button>
+          <div class="row1"><div class="fr"><small>FR</small><span id="secFr">170</span></div><span class="zone" id="secZone">평행 중앙부</span>
+            <button class="icon-btn sm" id="secCollapse" aria-label="프레임 정보 접기" title="접기"><svg class="ic chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></button></div>
           <dl class="kv">
             <dt>X (AP 기준)</dt><dd id="secX">144.50 m</dd>
             <dt>반폭 @ 설계흘수</dt><dd id="secHb">23.20 m</dd>
@@ -102,32 +125,6 @@
           </div>
         </div>
 
-        <div class="ov-bottom">
-        <div class="seg" role="group" aria-label="재생 속도 (시연용)">
-          <span class="lbl">Speed</span>
-          <button data-speed="1" aria-pressed="false">×1</button>
-          <button data-speed="10" aria-pressed="true">×10</button>
-          <button data-speed="50" aria-pressed="false">×50</button>
-        </div>
-
-        <div class="ov ov-legend ov-heat" id="heatLegend">
-          <span class="ttl" id="heatTtl">도막 두께 · 현재 / 설계</span>
-          <div class="ramp" id="heatRamp"></div>
-          <div class="ticks"><span id="heatWarn">주의</span><span id="heatCrit">심각</span></div>
-          <span class="note">정상 구역은 선체 기본색</span>
-          <span class="note"><i class="hatch"></i>측정 불가 · 킬 블록 접촉면</span>
-        </div>
-
-        <div class="ov ov-legend" id="legend" hidden>
-          <span class="ttl">측정 구역 · 도장 사양별</span>
-          <span><i style="background:#F37321"></i>선저부</span>
-          <span><i style="background:#F89B6C"></i>빌지부</span>
-          <span><i style="background:#FBB584"></i>선측 수선 아래</span>
-          <span><i style="background:#000000"></i>흘수선 부근</span>
-          <span><i style="background:#3C4E70"></i>건현부</span>
-          <span><i style="background:#B5531A"></i>선수 · 선미</span>
-        </div>
-        </div>
 
         <div class="ov ov-gizmo"><canvas id="gizmo" aria-label="좌표축"></canvas></div>
         <div class="tip" id="tip" hidden></div>
@@ -144,7 +141,7 @@
 
     <section class="pane pane-detail" id="paneDetail" aria-label="상세">
       <div class="pane-head">
-        <span class="eyebrow">Detail</span><span class="pane-title">상세</span>
+        <span class="eyebrow">Detail</span><span class="pane-title">상세</span><span class="pane-sub" id="detailSub"></span>
       </div>
       <div class="pane-body"></div>
     </section>

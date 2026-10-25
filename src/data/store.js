@@ -1,8 +1,8 @@
 /* =========================================================
    측정 데이터 저장소: 데이터 소스를 구독해 상태를 들고 있고, 화면들은 이 저장소를 구독한다.
    변경 알림은 마이크로태스크 단위로 묶어서 한 번만 보낸다: fn(Set<'records'|'pose'|'state'>)
-   - state 'mapping' 진입: 기존 측정 결과를 비운다 (SPEC 4.1)
-   - 매핑 도중 종료: 이번 측정분만 남긴다
+   - 처음부터 매핑(state 'mapping', fresh): 기존 측정 결과를 비운다 (SPEC 4.1)
+   - 매핑 중지('paused')·이어서 매핑: 측정 결과·로봇 위치를 그대로 둔다 (SPEC 10.1)
    ========================================================= */
 export function createStore(source){
   let mapState='idle',pose=null,progress=0,lastTs=null,version=0;
@@ -14,7 +14,7 @@ export function createStore(source){
     pending.add(kind);
   }
   source.on('state',d=>{
-    if(d.state==='mapping'&&mapState!=='mapping'){records=[];byId.clear();lastTs=null;pose=null;version++;changed('records');}
+    if(d.state==='mapping'&&d.fresh){records=[];byId.clear();lastTs=null;pose=null;version++;changed('records');}
     mapState=d.state;if(d.progress!=null)progress=d.progress;changed('state');
   });
   source.on('measurement',r=>{
@@ -36,6 +36,8 @@ export function createStore(source){
     plan:source.plan,
     connect:()=>source.connect(),
     start:()=>source.start(),
+    pause:()=>source.pause(),
+    resume:()=>source.resume(),
     stop:()=>source.stop(),
     setSpeed:k=>source.setSpeed(k)
   };

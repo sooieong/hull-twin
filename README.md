@@ -17,6 +17,7 @@ Node.js 18 이상 필요.
 - `src/hull.js` — 예시 선형 정의(형상, 외판열, 구역, 킬 블록)
 - `src/heatmap.js` — 히트맵 보간(IDW)과 색상, `src/uiState.js` — 선택한 레이어·측정점(모든 패널이 구독)
 - `src/kpi.js` — KPI 패널(요약, 보수 구역 우선순위 목록)
+- `src/panels.js` — 패널 접기·최대화(상태는 localStorage에 기억)
 - `src/sideShell.js` — 보조 시각화 1: Side Shell 전개도(Canvas)
 - `src/detail.js` — 보조 시각화 2: 두께 단면 비교(SVG), 손상 사진
 - `src/pdfReport.js` — 보고서 생성(PDF): 화면 캡처 + KPI 상위 10건. `html2canvas`·`jspdf`는 버튼을 누를 때 불러옴
