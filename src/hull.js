@@ -64,6 +64,10 @@ export function girthOf(s,Y,Z){
     if(d<bd){bd=d;best=s.gs[j]+(s.gs[j+1]-s.gs[j])*t;}}
   return best;
 }
+/* signed girth u (m from keel CL, port +) of a ship point; measurement records are cached */
+export function signedGirth(X,Y,Z,side){return girthOf(section(X),Y,Z)*(side==='P'?1:-1);}
+const recU=new WeakMap();
+export function recordU(r){let u=recU.get(r);if(u===undefined){u=signedGirth(r.X,r.Y,r.Z,r.side);recU.set(r,u);}return u;}
 /* girth from keel CL to the point at height Z on section s */
 export function girthAtZ(s,Z){
   for(let j=NB;j<G-1;j++){if(s.Zs[j+1]>=Z){const t=(Z-s.Zs[j])/((s.Zs[j+1]-s.Zs[j])||1);return s.gs[j]+(s.gs[j+1]-s.gs[j])*clamp(t,0,1);}}

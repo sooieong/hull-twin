@@ -67,6 +67,6 @@ export function createKpiPanel(root,store,ui){
   list.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(e.target);}});
 
   store.subscribe(k=>{if(k.has('records')||k.has('state'))schedule();});
-  ui.subscribe(k=>{if(k==='layer')render();if(k==='select')syncSel(true);});
+  ui.subscribe(k=>{if(k==='layer'){render();list.scrollTop=0;syncSel(true);}if(k==='select')syncSel(true);});
   render();
 }

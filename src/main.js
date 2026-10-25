@@ -2,12 +2,13 @@ import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { clamp, L, B, D, T, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
-  deckZ, keelZ, HB, section, girthOf, strakeName, ZONE_LABELS, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
+  deckZ, keelZ, HB, section, recordU, strakeName, ZONE_LABELS, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
 import { CRITERIA, LAYER_LABEL, LEVEL_LABEL, judge, formatValue } from './data/criteria.js';
 import { HEAT, heatOf, heatRGB, heatAlpha, heatCss, buildIndex, addToIndex, idw, coverage, nearest } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
 import { createUiState } from './uiState.js';
 import { createKpiPanel } from './kpi.js';
+import { createSideShell } from './sideShell.js';
 import { SimulatorSource } from './data/simulator.js';
 import { createStore } from './data/store.js';
 import { findDefectPhotos } from './data/photos.js';
@@ -306,12 +307,10 @@ const heatS=new Float32Array(nV),heatP=new Float32Array(nV),covS=new Float32Arra
 let store=null,heatIx=buildIndex([]),heatT=null,heatArr=null,heatLen=0;
 const hw={w:0};
 function heatVertex(k,X,g){heatS[k]=idw(heatIx,X,-g,hw);covS[k]=coverage(hw.w);heatP[k]=idw(heatIx,X,g,hw);covP[k]=coverage(hw.w);}
-const recU=new WeakMap();   // record -> signed girth u (port +)
-function uOf(r){let u=recU.get(r);if(u===undefined){u=girthOf(section(r.X),r.Y,r.Z)*(r.side==='P'?1:-1);recU.set(r,u);}return u;}
 function rebuildHeat(){
   const layer=ui.layer;
   heatArr=store?store.records:[];heatLen=heatArr.length;
-  heatIx=buildIndex(heatArr.map(r=>({X:r.X,u:uOf(r),h:heatOf(r,layer),r})));
+  heatIx=buildIndex(heatArr.map(r=>({X:r.X,u:recordU(r),h:heatOf(r,layer),r})));
   for(let i=0;i<=NX;i++){const X=stX[i];for(let j=0;j<G;j++){const k=i*G+j;heatVertex(k,X,girth[k]);}}
   paintHull();
 }
@@ -321,8 +320,8 @@ function updateHeat(){
   if(R!==heatArr||R.length<heatLen){rebuildHeat();return;}
   if(R.length===heatLen)return;
   const layer=ui.layer,rad=HEAT.radius,fresh=R.slice(heatLen);heatLen=R.length;
-  fresh.forEach(r=>addToIndex(heatIx,{X:r.X,u:uOf(r),h:heatOf(r,layer),r}));
-  fresh.forEach(r=>{const u=Math.abs(uOf(r)),i0=Math.max(0,Math.floor((r.X-rad)/XMAX*NX)),i1=Math.min(NX,Math.ceil((r.X+rad)/XMAX*NX));
+  fresh.forEach(r=>addToIndex(heatIx,{X:r.X,u:recordU(r),h:heatOf(r,layer),r}));
+  fresh.forEach(r=>{const u=Math.abs(recordU(r)),i0=Math.max(0,Math.floor((r.X-rad)/XMAX*NX)),i1=Math.min(NX,Math.ceil((r.X+rad)/XMAX*NX));
     for(let i=i0;i<=i1;i++)for(let j=0;j<G;j++){const k=i*G+j;if(Math.abs(girth[k]-u)<rad||girth[k]<rad)heatVertex(k,stX[i],girth[k]);}});
   paintHull();
 }
@@ -390,7 +389,7 @@ $('#mapBtn').addEventListener('click',()=>{if(!store)return;if(store.mapState===
 function setSpeed(k){if(store)store.setSpeed(k);document.querySelectorAll('[data-speed]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.speed===k)));}
 document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>setSpeed(+b.dataset.speed)));
 storeReady.then(s=>{store=s;buildPath(s.plan);setSpeed(10);
-  createKpiPanel($('#paneKpi .pane-body'),s,ui);
+  createKpiPanel($('#paneKpi .pane-body'),s,ui);createSideShell($('#paneShell .pane-body'),s,ui);
   s.subscribe(k=>{
     if(k.has('records')){scheduleHeat();placeMarker(ui.selId!=null?s.get(ui.selId):null);}
     if(k.has('state')||k.has('records'))syncMap();
