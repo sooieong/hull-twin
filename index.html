@@ -51,6 +51,12 @@
         <div id="labels"></div>
 
         <div class="ov-tools">
+          <div class="seg" role="group" aria-label="측정 레이어">
+            <span class="lbl">Data</span>
+            <button data-layer="dft" aria-pressed="true">도막 두께</button>
+            <button data-layer="plate" aria-pressed="false">강판 두께</button>
+            <button data-layer="defect" aria-pressed="false">도막 손상</button>
+          </div>
           <div class="seg" role="group" aria-label="시점">
             <span class="lbl">View</span>
             <button data-view="iso" aria-pressed="true">ISO</button>
@@ -71,9 +77,9 @@
         <details class="ov ov-layers" id="layers" open>
           <summary>Layers</summary>
           <ul>
-            <li><label class="tog"><input type="checkbox" id="lyFrames" checked>프레임선<span class="sw" style="background:var(--ho-peach)"></span></label></li>
-            <li><label class="tog"><input type="checkbox" id="lySeams" checked>외판열 경계<span class="sw" style="background:rgba(251,181,132,.45)"></span></label></li>
-            <li><label class="tog"><input type="checkbox" id="lyDwl" checked>설계 흘수선<span class="sw" style="background:var(--ho-orange)"></span></label></li>
+            <li><label class="tog"><input type="checkbox" id="lyFrames" checked>프레임선<span class="sw" style="background:#8A96AA"></span></label></li>
+            <li><label class="tog"><input type="checkbox" id="lySeams" checked>외판열 경계<span class="sw" style="background:#5E6B82"></span></label></li>
+            <li><label class="tog"><input type="checkbox" id="lyDwl" checked>설계 흘수선<span class="sw" style="background:#4A6FB0"></span></label></li>
             <li><label class="tog"><input type="checkbox" id="lyRobot" checked>로봇 주행경로<span class="sw dash"></span></label></li>
             <li><label class="tog"><input type="checkbox" id="lySuper" checked>상부 구조</label></li>
             <li><label class="tog"><input type="checkbox" id="lyBlocks" checked>도크 · 킬 블록</label></li>
@@ -93,6 +99,13 @@
             <label class="tog"><input type="checkbox" id="cutTog">단면 절단</label>
             <span class="hint">선체 클릭으로 선택</span>
           </div>
+        </div>
+
+        <div class="ov ov-legend ov-heat" id="heatLegend">
+          <span class="ttl" id="heatTtl">도막 두께 · 현재 / 설계</span>
+          <div class="ramp" id="heatRamp"></div>
+          <div class="ticks"><span id="heatWarn">주의</span><span id="heatCrit">심각</span></div>
+          <span class="note">정상 구역은 선체 기본색</span>
         </div>
 
         <div class="ov ov-legend" id="legend" hidden>

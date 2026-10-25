@@ -2,7 +2,10 @@ import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { clamp, L, D, T, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
-  deckZ, HB, section, strakeName, strakeAt, ZONE_LABELS, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
+  deckZ, HB, section, girthOf, strakeName, strakeAt, ZONE_LABELS, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
+import { CRITERIA, LAYER_LABEL, LEVEL_LABEL, judge, formatValue } from './data/criteria.js';
+import { heatOf, heatRGB, heatAlpha, heatCss, buildIndex, idw, nearest } from './heatmap.js';
+import { createUiState } from './uiState.js';
 import { SimulatorSource } from './data/simulator.js';
 import { createStore } from './data/store.js';
 import { findDefectPhotos } from './data/photos.js';
@@ -23,6 +26,8 @@ $('#dockSel').addEventListener('change',()=>toast('도킹 이력 비교는 측�
 
 /* ---------- data layer: every panel draws from this store (SPEC 3) ---------- */
 const storeReady=findDefectPhotos().then(photos=>{const store=createStore(new SimulatorSource({photos}));store.connect();logDataSummary(store);return store;});
+/* selected layer + selected measurement, shared by all panels (SPEC 4.3, 4.5) */
+const ui=createUiState();
 
 /* ---------- robot scan path (example run, starboard side) ---------- */
 const robot={pts:[],cum:[],s:0,idx:0,paused:reduce,hold:0,speed:3.6};
@@ -87,10 +92,10 @@ controls.enableDamping=true;controls.dampingFactor=0.08;controls.minDistance=30;
 const PRESETS={iso:{p:[240,125,275],t:[0,8,0]},side:{p:[0,14,600],t:[0,12,0]},plan:{p:[0,640,0.5],t:[0,0,0]},front:{p:[560,18,0.5],t:[0,14,0]},bottom:{p:[150,-340,170],t:[0,4,0]}};
 camera.position.set(...PRESETS.iso.p);controls.target.set(...PRESETS.iso.t);controls.update();
 
-scene.add(new THREE.HemisphereLight(0xb8c7e6,0x0a0f1a,0.62));
+scene.add(new THREE.HemisphereLight(0xb8c7e6,0x5a6478,0.62));   // lit ground colour so the bottom and its heatmap stay readable
 const key=new THREE.DirectionalLight(0xffffff,0.85);key.position.set(220,320,260);scene.add(key);
-const rim=new THREE.DirectionalLight(0xF89B6C,0.38);rim.position.set(-320,140,-220);scene.add(rim);
-const fill=new THREE.DirectionalLight(0x8fa6d6,0.25);fill.position.set(-80,-200,120);scene.add(fill);
+const rim=new THREE.DirectionalLight(0xC9D3E6,0.38);rim.position.set(-320,140,-220);scene.add(rim);
+const fill=new THREE.DirectionalLight(0xd5dcea,0.45);fill.position.set(-80,-200,120);scene.add(fill);
 
 const clipPlane=new THREE.Plane(new V3(-1,0,0),0);
 const clipMats=[];
@@ -100,18 +105,21 @@ function cm(m){clipMats.push(m);return m;}
 const nV=(NX+1)*G;const pos=new Float32Array(nV*3),girth=new Float32Array(nV);
 const colReal=new Float32Array(nV*3),colZone=new Float32Array(nV*3),colBp=new Float32Array(nV*3);
 const ZC=[0xF37321,0xF89B6C,0xFBB584,0x000000,0x3C4E70,0xB5531A,0x8F3F13].map(h=>new THREE.Color(h));
-const cAF=new THREE.Color(0xA9441A),cBoot=new THREE.Color(0x0d0e11),cTop=new THREE.Color(0x1d2638),cBp=new THREE.Color(0x0c1528);
+const cHull=new THREE.Color(0xD3D8DF),cBp=new THREE.Color(0x0c1528);   // real mode: light achromatic hull (SPEC 4.4)
 for(let i=0;i<=NX;i++){const s=stSec[i],X=stX[i];for(let j=0;j<G;j++){const k=i*G+j;const Z=s.Zs[j];
   pos[k*3]=X-XC;pos[k*3+1]=Z;pos[k*3+2]=s.Ys[j];girth[k]=s.gs[j];
-  const cr=Z<T-1.2?cAF:Z<T+1.6?cBoot:cTop;cr.toArray(colReal,k*3);ZC[zoneOf(X,Z)].toArray(colZone,k*3);cBp.toArray(colBp,k*3);}}
+  cHull.toArray(colReal,k*3);ZC[zoneOf(X,Z)].toArray(colZone,k*3);cBp.toArray(colBp,k*3);}}
 const idx=[];for(let i=0;i<NX;i++)for(let j=0;j<G-1;j++){const a=i*G+j,b=(i+1)*G+j,c=a+1,d=b+1;idx.push(a,b,c,b,d,c);}
 const hullGeo=new THREE.BufferGeometry();
 hullGeo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-const colAttr=new THREE.BufferAttribute(colReal.slice(),3);hullGeo.setAttribute('color',colAttr);
 hullGeo.setIndex(idx);hullGeo.computeVertexNormals();hullGeo.computeBoundingSphere();
-const hullMat=cm(new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.6,metalness:0.18,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1}));
+// each side shares position/normal/index but has its own colours (the heatmap differs port vs starboard)
+function sideGeo(){const g=new THREE.BufferGeometry();g.setAttribute('position',hullGeo.attributes.position);g.setAttribute('normal',hullGeo.attributes.normal);
+  g.setIndex(hullGeo.index);g.setAttribute('color',new THREE.BufferAttribute(colReal.slice(),3));g.boundingSphere=hullGeo.boundingSphere;return g;}
+const geoS=sideGeo(),geoP=sideGeo();
+const hullMat=cm(new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.7,metalness:0.05,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1}));
 const backMat=cm(new THREE.MeshBasicMaterial({color:0x0a1222,side:THREE.BackSide}));
-const hullS=new THREE.Mesh(hullGeo,hullMat),hullP=new THREE.Mesh(hullGeo,hullMat);hullP.scale.z=-1;
+const hullS=new THREE.Mesh(geoS,hullMat),hullP=new THREE.Mesh(geoP,hullMat);hullP.scale.z=-1;
 hullS.userData.side='S';hullP.userData.side='P';
 const backS=new THREE.Mesh(hullGeo,backMat),backP=new THREE.Mesh(hullGeo,backMat);backP.scale.z=-1;
 const hullGroup=new THREE.Group();hullGroup.add(hullS,hullP,backS,backP);scene.add(hullGroup);
@@ -167,7 +175,7 @@ hullGroup.add(frames,seams,dwl,bpLines);
 const superGroup=new THREE.Group();
 const supMat=cm(new THREE.MeshStandardMaterial({color:0x1a2333,roughness:0.75,metalness:0.15}));
 const supEdgeMat=cm(new THREE.LineBasicMaterial({color:0x3e5070,transparent:true,opacity:0.9}));
-const bandMat=cm(new THREE.MeshStandardMaterial({color:0xF37321,emissive:0x3a1404,roughness:0.5}));
+const bandMat=cm(new THREE.MeshStandardMaterial({color:0x0b0b0b,roughness:0.5}));   // K100: orange is reserved for UI accents
 const supSolids=[];
 function box(x0,x1,z0,z1,w,mat=supMat,yc=0){const g=new THREE.BoxGeometry(x1-x0,z1-z0,w);const m=new THREE.Mesh(g,mat);m.position.set((x0+x1)/2-XC,(z0+z1)/2,yc);superGroup.add(m);supSolids.push(m);
   const e=new THREE.LineSegments(new THREE.EdgesGeometry(g),supEdgeMat);e.position.copy(m.position);superGroup.add(e);return m;}
@@ -220,7 +228,7 @@ function placeRobot(){const rs=robotState();const Y=HB(rs.X,rs.Z);
 const ringMat=new THREE.MeshBasicMaterial({color:0xF37321});
 let ringMesh=null;
 const hoverRing=(()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(G*2*3),3));const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xF89B6C,transparent:true,opacity:0.9,depthTest:false}));l.renderOrder=5;l.visible=false;scene.add(l);return l;})();
-const hoverDot=new THREE.Mesh(new THREE.SphereGeometry(0.45,14,10),new THREE.MeshBasicMaterial({color:0xFBB584,depthTest:false}));hoverDot.renderOrder=6;hoverDot.visible=false;scene.add(hoverDot);
+const hoverDot=new THREE.Mesh(new THREE.SphereGeometry(0.45,14,10),new THREE.MeshBasicMaterial({color:0x000000,depthTest:false}));hoverDot.renderOrder=6;hoverDot.visible=false;scene.add(hoverDot);
 function ringPoints(X,off){const s=section(X);const pts=[];
   for(let j=G-1;j>=0;j--)pts.push(new V3(X-XC,s.Zs[j],-(s.Ys[j]+off)));
   for(let j=1;j<G;j++)pts.push(new V3(X-XC,s.Zs[j],s.Ys[j]+off));
@@ -246,18 +254,83 @@ hooks.onHover.push((X,src)=>{
 /* modes, layers, cut */
 function setMode(m){state.mode=m;
   document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===m)));
-  colAttr.array.set(m==='zone'?colZone:(m==='bp'||m==='xray')?colBp:colReal);colAttr.needsUpdate=true;
-  const xr=m==='xray',bp=m==='bp'||xr;
-  hullMat.transparent=xr;hullMat.opacity=xr?0.13:1;hullMat.depthWrite=!xr;hullMat.roughness=bp?0.95:0.6;hullMat.needsUpdate=true;
+  const xr=m==='xray',bp=m==='bp'||xr,real=m==='real';
+  hullMat.transparent=xr;hullMat.opacity=xr?0.13:1;hullMat.depthWrite=!xr;hullMat.roughness=bp?0.95:0.7;hullMat.needsUpdate=true;
   backS.visible=backP.visible=!xr;
-  deckMat.color.setHex(bp?0x0c1528:0x252e40);deckMat.transparent=xr;deckMat.opacity=xr?0.1:1;deckMat.depthWrite=!xr;
-  trMat.color.setHex(bp?0x0c1528:m==='zone'?0x3C4E70:0x1d2638);trMat.transparent=xr;trMat.opacity=xr?0.12:1;trMat.depthWrite=!xr;
+  deckMat.color.setHex(bp?0x0c1528:real?0xAAB2BD:0x252e40);deckMat.transparent=xr;deckMat.opacity=xr?0.1:1;deckMat.depthWrite=!xr;
+  trMat.color.setHex(bp?0x0c1528:real?0xC4CAD2:0x3C4E70);trMat.transparent=xr;trMat.opacity=xr?0.12:1;trMat.depthWrite=!xr;
+  supMat.color.setHex(real?0xC9CED6:0x1a2333);supEdgeMat.color.setHex(real?0x5F6A7C:0x3e5070);
   bpLines.visible=bp;
-  frameMat.opacity=m==='real'?0.22:m==='zone'?0.32:0.5;seamMat.opacity=m==='real'?0.16:m==='zone'?0.2:0.35;
+  // lines: dark slate on the light hull, peach on the dark modes
+  frameMat.color.setHex(real?0x5C687D:0xFBB584);frameMat.opacity=real?0.3:m==='zone'?0.32:0.5;
+  frameMajMat.color.setHex(real?0x34415A:0xF89B6C);
+  seamMat.color.setHex(real?0x5C687D:0xFBB584);seamMat.opacity=real?0.26:m==='zone'?0.2:0.35;
+  sheerMat.color.setHex(real?0x34415A:0xFBB584);sheerMat.opacity=real?0.7:0.55;
+  dwlMat.color.setHex(real?0x2F5597:0x7FA6E8);
   supSolids.forEach(s=>s.visible=!bp);
-  $('#legend').hidden=m!=='zone';
+  $('#legend').hidden=m!=='zone';$('#heatLegend').hidden=m==='zone';
+  paintHull();
 }
 document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
+
+/* heatmap: IDW of the current layer's judgement over the shell, abnormal areas only (SPEC 4.4).
+   Not shown in 'zone' mode, which colours the hull by measurement zone instead. */
+const heatS=new Float32Array(nV),heatP=new Float32Array(nV);
+let store=null,heatIx=buildIndex([]),heatT=null;
+const recU=new WeakMap();   // record -> signed girth u (port +)
+function uOf(r){let u=recU.get(r);if(u===undefined){u=girthOf(section(r.X),r.Y,r.Z)*(r.side==='P'?1:-1);recU.set(r,u);}return u;}
+function rebuildHeat(){
+  const layer=ui.layer;
+  heatIx=buildIndex((store?store.records:[]).map(r=>({X:r.X,u:uOf(r),h:heatOf(r,layer),r})));
+  for(let i=0;i<=NX;i++){const X=stX[i];for(let j=0;j<G;j++){const k=i*G+j,g=girth[k];heatS[k]=idw(heatIx,X,-g);heatP[k]=idw(heatIx,X,g);}}
+  paintHull();
+}
+function scheduleHeat(){if(heatT)return;heatT=setTimeout(()=>{heatT=null;rebuildHeat();},100);}
+function paintHull(){
+  const m=state.mode,base=m==='zone'?colZone:(m==='bp'||m==='xray')?colBp:colReal,show=m!=='zone';
+  [[geoS,heatS],[geoP,heatP]].forEach(([g,h])=>{const attr=g.attributes.color,c=attr.array;
+    for(let k=0;k<nV;k++){const o=k*3;let r=base[o],gr=base[o+1],b=base[o+2];
+      const a=show?heatAlpha(h[k]):0;
+      if(a>0){const hc=heatRGB(h[k]);r+=(hc[0]/255-r)*a;gr+=(hc[1]/255-gr)*a;b+=(hc[2]/255-b)*a;}
+      c[o]=r;c[o+1]=gr;c[o+2]=b;}
+    attr.needsUpdate=true;});
+}
+const LEGEND={
+  dft:{t:'도막 두께 · 현재 / 설계',w:`주의 · ${CRITERIA.dft.warn*100}% 미만`,c:`심각 · ${CRITERIA.dft.crit*100}% 미만`},
+  plate:{t:'강판 두께 · 원두께 대비 감소율',w:`주의 · ${CRITERIA.plate.warn*100}% 이상`,c:`심각 · ${CRITERIA.plate.crit*100}% 이상`},
+  defect:{t:'도막 손상 · 종류 / 면적',w:'주의 · 스크래치',c:`심각 · 떨어짐, ${CRITERIA.defect.critArea} m² 이상`}
+};
+$('#heatRamp').style.background=`linear-gradient(90deg,${heatCss()})`;
+function syncLayer(){const l=ui.layer;
+  document.querySelectorAll('[data-layer]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.layer===l)));
+  $('#heatTtl').textContent=LEGEND[l].t;$('#heatWarn').textContent=LEGEND[l].w;$('#heatCrit').textContent=LEGEND[l].c;}
+document.querySelectorAll('[data-layer]').forEach(b=>b.addEventListener('click',()=>ui.setLayer(b.dataset.layer)));
+
+/* selected measurement: K100 / white bullseye on the shell, distinct from the heatmap and the UI orange */
+const selMarker=new THREE.Group();
+{const mat=c=>new THREE.MeshBasicMaterial({color:c,side:THREE.DoubleSide,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
+  const ring=(r0,r1,c)=>{const m=new THREE.Mesh(new THREE.RingGeometry(r0,r1,40),mat(c));m.renderOrder=4;return m;};
+  const dot=new THREE.Mesh(new THREE.CircleGeometry(0.4,24),mat(0xffffff));dot.renderOrder=4;
+  selMarker.add(ring(1.2,1.65,0xffffff),ring(0.65,1.2,0x000000),dot);}
+selMarker.visible=false;scene.add(selMarker);
+function placeMarker(r){
+  if(!r){selMarker.visible=false;return;}
+  // outward normal of the nearest shell vertex (three z = -Y, port mesh is mirrored)
+  const i=clamp(Math.round(r.X/XMAX*NX),0,NX),s=stSec[i];let j=0,bd=1e9;
+  for(let q=0;q<G;q++){const d=(s.Ys[q]-Math.abs(r.Y))**2+(s.Zs[q]-r.Z)**2;if(d<bd){bd=d;j=q;}}
+  const n=hullGeo.attributes.normal,k=i*G+j;
+  const nv=new V3(n.getX(k),n.getY(k),n.getZ(k)*(r.Y<0?1:-1)).normalize();
+  selMarker.position.set(r.X-XC,r.Z,-r.Y).addScaledVector(nv,0.2);
+  selMarker.quaternion.setFromUnitVectors(new V3(0,0,1),nv);selMarker.visible=true;
+}
+ui.subscribe(k=>{
+  if(k==='layer'){syncLayer();rebuildHeat();tip.hidden=true;}
+  if(k==='select'){const r=store&&store.get(ui.selId);placeMarker(r);if(r)selectFR(r.fr);}
+});
+storeReady.then(s=>{store=s;
+  s.subscribe(k=>{if(!k.has('records'))return;scheduleHeat();placeMarker(ui.selId!=null?s.get(ui.selId):null);});
+  rebuildHeat();
+});
 const lay=(id,fn)=>{const el=$(id);el.addEventListener('change',()=>fn(el.checked));fn(el.checked);};
 lay('#lyFrames',on=>{frames.visible=on;frLabels.forEach(l=>l.el.hidden=!on);});
 lay('#lySeams',on=>seams.visible=on);
@@ -280,6 +353,8 @@ $('#btnFull').addEventListener('click',()=>{const el=$('#pane3d');try{if(documen
 
 /* picking */
 const ray=new THREE.Raycaster();const ndc=new THREE.Vector2();let pendingMove=null,lastHit=null,downAt=null;
+const tri=new THREE.Triangle(),bary=new V3(),vA=new V3(),vB=new V3(),vC=new V3();
+const NEAR_D=3.0;   // m: a hover/click within this surface distance of a measurement point refers to it
 const tip=$('#tip');
 function pick(e){
   const r=renderer.domElement.getBoundingClientRect();ndc.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height)*2+1);
@@ -287,13 +362,17 @@ function pick(e){
   const hits=ray.intersectObjects([hullS,hullP],false).filter(h=>!state.cut||h.point.x<=clipPlane.constant);
   if(!hits.length){lastHit=null;tip.hidden=true;hoverDot.visible=false;if(state.hoverSrc==='3d')setHover(null,'3d');$('#stCursor').textContent='—';return;}
   const h=hits[0],p=h.point;const loc=h.object.worldToLocal(p.clone());
-  let best=h.face.a,bd=1e9;[h.face.a,h.face.b,h.face.c].forEach(k=>{const d=(pos[k*3]-loc.x)**2+(pos[k*3+1]-loc.y)**2+(pos[k*3+2]-loc.z)**2;if(d<bd){bd=d;best=k;}});
-  const X=p.x+XC,Z=p.y,Y=-p.z,fr=Math.round(X/FS),side=h.object.userData.side;
-  const st=strakeName(girth[best]);
-  lastHit={fr,X};
-  tip.innerHTML=`<div class="t1">FR ${fr} <em>· 외판열 ${st}(${side})</em></div><div class="t2">${ZONE_LABELS[zoneOf(X,Z)]}</div><div class="t3">X ${fmt(X)}  Y ${fmt(Y)}  Z ${fmt(Z)} m</div>`;
+  const f=h.face;tri.set(vA.fromArray(pos,f.a*3),vB.fromArray(pos,f.b*3),vC.fromArray(pos,f.c*3)).getBarycoord(loc,bary);
+  const g=bary.x*girth[f.a]+bary.y*girth[f.b]+bary.z*girth[f.c];
+  const X=p.x+XC,Z=p.y,Y=-p.z,fr=Math.round(X/FS),side=h.object.userData.side,u=side==='P'?g:-g;
+  const st=strakeName(g),near=nearest(heatIx,X,u,NEAR_D),rec=near?near.r:null;
+  lastHit={fr,X,rec};
+  let val='<div class="none">측정값 없음</div>';
+  if(rec){const lv=judge(rec,ui.layer).level;
+    val=`<div class="tv"><b>${formatValue(rec,ui.layer)}</b><span class="lv lv${lv}">${LEVEL_LABEL[lv]}</span></div>`;}
+  tip.innerHTML=`<div class="t1">FR ${fr} <em>· 외판열 ${st}(${side})</em></div><div class="t2">${ZONE_LABELS[zoneOf(X,Z)]} · ${LAYER_LABEL[ui.layer]}</div>${val}<div class="t3">X ${fmt(X)}  Y ${fmt(Y)}  Z ${fmt(Z)} m</div>`;
   tip.hidden=false;const pw=r.width;tip.style.left=(e.clientX-r.left)+'px';tip.style.top=(e.clientY-r.top)+'px';
-  tip.style.transform=(e.clientX-r.left)>pw-230?'translate(calc(-100% - 14px),14px)':'translate(14px,14px)';
+  tip.style.transform=(e.clientX-r.left)>pw-260?'translate(calc(-100% - 14px),14px)':'translate(14px,14px)';
   hoverDot.position.copy(p);hoverDot.visible=true;
   setHover(X,'3d');
   $('#stCursor').textContent=`FR ${fr} · 외판열 ${st}(${side}) · X ${fmt(X)}  Y ${fmt(Y)}  Z ${fmt(Z)} m`;
@@ -302,7 +381,7 @@ const cvs=renderer.domElement;
 cvs.addEventListener('pointermove',e=>{pendingMove=e;});
 cvs.addEventListener('pointerleave',()=>{pendingMove=null;tip.hidden=true;hoverDot.visible=false;lastHit=null;if(state.hoverSrc==='3d')setHover(null,'3d');});
 cvs.addEventListener('pointerdown',e=>{downAt={x:e.clientX,y:e.clientY};tip.hidden=true;});
-cvs.addEventListener('pointerup',e=>{if(downAt&&Math.hypot(e.clientX-downAt.x,e.clientY-downAt.y)<4){pick(e);if(lastHit)selectFR(lastHit.fr);}downAt=null;});
+cvs.addEventListener('pointerup',e=>{if(downAt&&Math.hypot(e.clientX-downAt.x,e.clientY-downAt.y)<4){pick(e);if(lastHit){if(lastHit.rec)ui.select(lastHit.rec.id);else selectFR(lastHit.fr);}}downAt=null;});
 
 /* gizmo */
 const gz=$('#gizmo'),gctx=gz.getContext('2d');
@@ -339,11 +418,12 @@ function loop(now){
   if(!reduce){const ph=(now/1000)%1.6/1.6;rbRing.scale.setScalar(1+ph*0.9);rbRing.material.opacity=0.6*(1-ph);}
   if(pendingMove){pick(pendingMove);pendingMove=null;}
   if(frame%10===0)updateRobotStatus();
+  if(selMarker.visible)selMarker.scale.setScalar(clamp(camera.position.distanceTo(selMarker.position)/110,1,4));
   frLabels.forEach(l=>{if(!l.el.hidden)place(l.el,l.p);});place(selLabel,selLabelPos);
   renderer.render(scene,camera);drawGizmo();
   requestAnimationFrame(loop);
 }
-setMode('real');selectFR(state.selFR);updateRobotStatus();
+syncLayer();setMode('real');selectFR(state.selFR);updateRobotStatus();
 if(window.innerWidth<820)$('#layers').open=false;
 requestAnimationFrame(loop);
 })();

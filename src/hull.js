@@ -8,7 +8,7 @@ export const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);
 
 export const L=289, B=46.4, D=26.5, T=11.5, R=2.6, FS=0.85;
 export const XMAX=L+9.6, XC=XMAX/2, FRMAX=Math.floor(XMAX/FS);
-export const NX=300, NB=6, NS=48, G=NB+1+NS;
+export const NX=300, NB=12, NS=48, G=NB+1+NS;
 export const KEEL_HALF=1.6, STRAKE_W=3.2, LETTERS="ABCDEFGHJLMNPQRSTUV";
 export const WLS=[2,4,6,8,14,18,22];
 
@@ -55,6 +55,14 @@ export function atGirth(s,g){
   const valid=k=>k<=NB?s.yb>0.02:s.Ys[k]>0.02;if(!valid(j)||!valid(j+1))return null;
   const t=(g-s.gs[j])/((s.gs[j+1]-s.gs[j])||1);
   return {Y:s.Ys[j]+(s.Ys[j+1]-s.Ys[j])*t,Z:s.Zs[j]+(s.Zs[j+1]-s.Zs[j])*t,bottom:j<NB};
+}
+/* girth of the shell point nearest to (|Y|, Z) on section s */
+export function girthOf(s,Y,Z){
+  const y=Math.abs(Y);let best=0,bd=1e9;
+  for(let j=0;j<G-1;j++){const ay=s.Ys[j],az=s.Zs[j],dy=s.Ys[j+1]-ay,dz=s.Zs[j+1]-az,l2=dy*dy+dz*dz||1e-9;
+    const t=clamp(((y-ay)*dy+(Z-az)*dz)/l2,0,1),d=(ay+dy*t-y)**2+(az+dz*t-Z)**2;
+    if(d<bd){bd=d;best=s.gs[j]+(s.gs[j+1]-s.gs[j])*t;}}
+  return best;
 }
 /* girth from keel CL to the point at height Z on section s */
 export function girthAtZ(s,Z){

@@ -19,6 +19,7 @@ export const CRITERIA={
 export const PRIORITY={compound:1000,level:[0,100,200],degree:100};
 
 export const ACTION={repaint:'재도장',local:'국부 보수',steel:'강판 교체·보강'};
+export const DEFECT_LABEL={flaking:'도막 떨어짐',scratch:'스크래치'};
 
 /* 이상 정도 0–1: 정상 경계 0, 심각 경계 0.5, worst 1 (x가 클수록 나쁨) */
 function degreeOf(x,warn,crit,worst){
@@ -29,6 +30,13 @@ function degreeOf(x,warn,crit,worst){
 
 export function dftRatio(r){return r.dft/r.dftDesign;}
 export function plateLoss(r){return (r.plateOrig-r.plate)/r.plateOrig;}
+
+/* 화면 표시용 측정값 / 기준값 */
+export function formatValue(r,layer){
+  if(layer==='dft')return `${r.dft} / ${r.dftDesign} µm (${Math.round(dftRatio(r)*100)}%)`;
+  if(layer==='plate')return `${r.plate.toFixed(1)} / ${r.plateOrig.toFixed(1)} mm (−${(plateLoss(r)*100).toFixed(1)}%)`;
+  return r.defect?`${DEFECT_LABEL[r.defect]} ${r.defectArea} m²`:'손상 없음';
+}
 
 /* 한 레코드의 레이어별 판정: {level, degree} */
 export function judge(r,layer){
