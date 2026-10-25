@@ -53,7 +53,7 @@ export function createKpiPanel(root,store,ui){
         <span class="rk">${i+1}</span>
         <div class="zb">
           <div class="zl"><b>${fr}</b><span>${st} · ${SIDE[z.side]}</span><span class="lv lv${z.level}">${LEVEL_LABEL[z.level]}</span></div>
-          <div class="zv"><b>${esc(v.v)}</b><i>${v.u}</i><span>${esc(v.ref)}</span></div>
+          <div class="zv"><b>${esc(v.v)}</b><i>${v.u}</i><span${layer==='defect'?' class="tx"':''}>${esc(v.ref)}</span></div>
           <div class="zm"><span>${esc(z.zone)} · ${z.count}점</span>${z.compound?'<span class="cx">복합</span>':''}<span class="act">${esc(z.action)}</span></div>
         </div></li>`;}).join('');
   }

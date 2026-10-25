@@ -9,6 +9,7 @@ import { ROBOT_MARGIN } from './data/scanPath.js';
 import { createUiState } from './uiState.js';
 import { createKpiPanel } from './kpi.js';
 import { createSideShell } from './sideShell.js';
+import { createDetailPanel } from './detail.js';
 import { SimulatorSource } from './data/simulator.js';
 import { createStore } from './data/store.js';
 import { findDefectPhotos } from './data/photos.js';
@@ -390,6 +391,7 @@ function setSpeed(k){if(store)store.setSpeed(k);document.querySelectorAll('[data
 document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>setSpeed(+b.dataset.speed)));
 storeReady.then(s=>{store=s;buildPath(s.plan);setSpeed(10);
   createKpiPanel($('#paneKpi .pane-body'),s,ui);createSideShell($('#paneShell .pane-body'),s,ui);
+  createDetailPanel($('#paneDetail .pane-body'),s,ui,$('#paneDetail .pane-title'));
   s.subscribe(k=>{
     if(k.has('records')){scheduleHeat();placeMarker(ui.selId!=null?s.get(ui.selId):null);}
     if(k.has('state')||k.has('records'))syncMap();

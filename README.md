@@ -18,6 +18,7 @@ Node.js 18 이상 필요.
 - `src/heatmap.js` — 히트맵 보간(IDW)과 색상, `src/uiState.js` — 선택한 레이어·측정점(모든 패널이 구독)
 - `src/kpi.js` — KPI 패널(요약, 보수 구역 우선순위 목록)
 - `src/sideShell.js` — 보조 시각화 1: Side Shell 전개도(Canvas)
+- `src/detail.js` — 보조 시각화 2: 두께 단면 비교(SVG), 손상 사진
 - `src/data/` — 데이터 계층
   - `robotSource.js` 데이터 소스 인터페이스(+ WebSocket 골격), `simulator.js` 시뮬레이터
   - `scanPath.js` 외판 전체 순회 경로, `synth.js` 예시 측정값 생성

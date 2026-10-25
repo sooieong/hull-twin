@@ -160,6 +160,33 @@ button,select,input{font:inherit;color:inherit}
 .ss-legend .d1{background:#FFB224}
 .ss-legend .d2{background:#B4161B;margin-left:4px}
 
+/* ---------- detail ---------- */
+.pane-detail .pane-body{display:flex;flex-direction:column}
+.dt{display:flex;flex-direction:column;flex:1;min-height:0;padding:8px 12px 10px;gap:6px}
+.dt-head{flex:none;display:flex;flex-direction:column;gap:2px;min-width:0}
+.dt-head .eyebrow{font-size:10.5px}
+.dt-title{display:flex;align-items:center;gap:7px;min-width:0}
+.dt-title b{font-size:15px;font-weight:600;white-space:nowrap}
+.dt-title .lv{font-size:11px}
+.dt-cx{padding:0 6px;border-radius:4px;border:1px solid var(--text-2);color:var(--text);font-size:11px;line-height:16px}
+.dt-loc{font-family:var(--font-mono);font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dt-fig{flex:1;min-height:0;position:relative}
+.dt-fig svg{position:absolute;inset:0;display:block}
+.dt-media{flex:1;min-height:0;display:flex;border-radius:7px;overflow:hidden;background:var(--surface-2)}
+.dt-img{flex:1;display:block;min-height:0}
+.dt-img img{width:100%;height:100%;object-fit:cover;display:block}
+.dt-cards{flex:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.dt-card{display:flex;flex-direction:column;justify-content:space-between;gap:1px;padding:6px 8px;border-radius:6px;background:var(--surface-2);border:1px solid var(--line);min-width:0}
+.dt-card span{font-size:10.5px;line-height:1.25;color:var(--text-2)}
+.dt-card b{font-family:var(--font-mono);font-weight:500;font-size:13.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dt-card b.tx{font-family:var(--font-ui);font-weight:600;font-size:12.5px;line-height:1.25;white-space:normal}
+.dt-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:16px;text-align:center;
+  border:1px dashed var(--line-strong);border-radius:7px;margin:10px;color:var(--text-2)}
+.dt-media .dt-state{margin:0;border:0}
+.dt-state svg{width:30px;height:30px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;margin-bottom:2px}
+.dt-state b{font-size:13px;color:var(--text);font-weight:600}
+.dt-state span{font-size:11.5px;color:var(--muted)}
+
 /* ---------- KPI ---------- */
 .pane-kpi .pane-body{display:flex;flex-direction:column}
 .kpi{display:flex;flex-direction:column;min-height:0;flex:1}
@@ -196,6 +223,7 @@ button,select,input{font:inherit;color:inherit}
 .z .zv b{font-family:var(--font-label);font-weight:600;font-size:22px;line-height:1.1;color:var(--text);font-variant-numeric:tabular-nums}
 .z .zv i{font-style:normal;font-size:11.5px;color:var(--text-2)}
 .z .zv span{font-family:var(--font-mono);font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
+.z .zv span.tx{font-family:var(--font-ui);font-size:11.5px;color:var(--text-2)}
 .z .zm{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px;font-size:11px;color:var(--muted);white-space:nowrap;min-width:0}
 .z .zm .cx{padding:0 6px;border-radius:4px;border:1px solid var(--text-2);color:var(--text);line-height:16px}
 .z .zm .act{margin-left:auto;color:var(--text)}
