@@ -16,10 +16,11 @@ Node.js 18 이상 필요.
 - `src/main.js` — 3D 뷰어(Three.js), 화면 연동
 - `src/hull.js` — 예시 선형 정의(형상, 외판열, 구역, 킬 블록)
 - `src/heatmap.js` — 히트맵 보간(IDW)과 색상, `src/uiState.js` — 선택한 레이어·측정점(모든 패널이 구독)
+- `src/kpi.js` — KPI 패널(요약, 보수 구역 우선순위 목록)
 - `src/data/` — 데이터 계층
   - `robotSource.js` 데이터 소스 인터페이스(+ WebSocket 골격), `simulator.js` 시뮬레이터
   - `scanPath.js` 외판 전체 순회 경로, `synth.js` 예시 측정값 생성
-  - `criteria.js` 판정 기준·보수 우선순위, `store.js` 화면들이 구독하는 저장소
+  - `criteria.js` 판정 기준·보수 우선순위, `zones.js` 보수 구역 묶기, `store.js` 화면들이 구독하는 저장소
   - `photos.js` `public/images/defects/` 손상 사진 찾기
 
 ## 참고

@@ -7,6 +7,7 @@ import { CRITERIA, LAYER_LABEL, LEVEL_LABEL, judge, formatValue } from './data/c
 import { HEAT, heatOf, heatRGB, heatAlpha, heatCss, buildIndex, addToIndex, idw, coverage, nearest } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
 import { createUiState } from './uiState.js';
+import { createKpiPanel } from './kpi.js';
 import { SimulatorSource } from './data/simulator.js';
 import { createStore } from './data/store.js';
 import { findDefectPhotos } from './data/photos.js';
@@ -389,6 +390,7 @@ $('#mapBtn').addEventListener('click',()=>{if(!store)return;if(store.mapState===
 function setSpeed(k){if(store)store.setSpeed(k);document.querySelectorAll('[data-speed]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.speed===k)));}
 document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>setSpeed(+b.dataset.speed)));
 storeReady.then(s=>{store=s;buildPath(s.plan);setSpeed(10);
+  createKpiPanel($('#paneKpi .pane-body'),s,ui);
   s.subscribe(k=>{
     if(k.has('records')){scheduleHeat();placeMarker(ui.selId!=null?s.get(ui.selId):null);}
     if(k.has('state')||k.has('records'))syncMap();

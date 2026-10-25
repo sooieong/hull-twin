@@ -14,9 +14,10 @@ export const CRITERIA={
   defect:{critArea:0.5,worstArea:1.5}      // m²: 스크래치는 주의, 도막 떨어짐 또는 critArea 이상은 심각
 };
 
-/* 우선순위 점수 = 복합 가산 + 판정 단계 점수 + 이상 정도(0–1) × degree
-   복합(같은 지점의 도막 이상 + 강판 이상)은 compound 가산으로 항상 맨 위에 온다. */
-export const PRIORITY={compound:1000,level:[0,100,200],degree:100};
+/* 우선순위 점수 = 판정 단계 점수 + 복합 가산 + 이상 정도(0–1) × degree
+   심각이 항상 주의보다 위, 같은 단계 안에서는 복합(같은 지점의 도막 이상 + 강판 이상)이 위에 온다.
+   (level 간격 > compound + degree 이어야 이 순서가 유지된다) */
+export const PRIORITY={level:[0,1000,2000],compound:500,degree:100};
 
 export const ACTION={repaint:'재도장',local:'국부 보수',steel:'강판 교체·보강'};
 export const DEFECT_LABEL={flaking:'도막 떨어짐',scratch:'스크래치'};
@@ -63,8 +64,8 @@ export function actionFor(r,layer,level,compound){
   return level===CRIT?ACTION.repaint:ACTION.local;
 }
 
-function score(level,degree,compound){return level===OK?0:(compound?PRIORITY.compound:0)+PRIORITY.level[level]+degree*PRIORITY.degree;}
-export function priority(r,layer){const {level,degree}=judge(r,layer);return score(level,degree,isCompound(r));}
+export function scoreOf(level,degree,compound){return level===OK?0:PRIORITY.level[level]+(compound?PRIORITY.compound:0)+degree*PRIORITY.degree;}
+export function priority(r,layer){const {level,degree}=judge(r,layer);return scoreOf(level,degree,isCompound(r));}
 
 /* 레이어 기준 이상 항목을 우선순위 내림차순으로: [{r, level, degree, compound, score, action}] */
 export function rank(records,layer){
@@ -72,7 +73,7 @@ export function rank(records,layer){
   for(const r of records){
     const {level,degree}=judge(r,layer);if(level===OK)continue;
     const compound=isCompound(r);
-    out.push({r,level,degree,compound,score:score(level,degree,compound),action:actionFor(r,layer,level,compound)});
+    out.push({r,level,degree,compound,score:scoreOf(level,degree,compound),action:actionFor(r,layer,level,compound)});
   }
   return out.sort((a,b)=>b.score-a.score);
 }
