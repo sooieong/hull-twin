@@ -2,8 +2,9 @@ import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { clamp, smooth, L, B, D, T, R, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
-  deckZ, keelZ, HB, section, atGirth, strakeLower, recordU, strakeName, ZONE_LABELS, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
-import { CRITERIA, LAYER_LABEL, LEVEL_LABEL, judge, formatValue } from './data/criteria.js';
+  deckZ, keelZ, HB, section, atGirth, strakeLower, recordU, strakeName, ZONES, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
+import { CRITERIA, judge } from './data/criteria.js';
+import { LAYER_LABEL, LEVEL_LABEL, DEFECT_LABEL, value, loc, side as sideName, coords, metres, num, progress, dateTime } from './format.js';
 import { HEAT, heatOf, heatRGB, heatAlpha, heatCss, buildIndex, addToIndex, idw, coverage, nearest } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
 import { createUiState } from './uiState.js';
@@ -21,7 +22,6 @@ import { logDataSummary } from './data/report.js';
 "use strict";
 const $=s=>document.querySelector(s);
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
-const fmt=(n,d=2)=>n.toFixed(d);
 const lsGet=k=>{try{return localStorage.getItem(k);}catch(_){return null;}},lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(_){}};
 
 /* ---------- toast + placeholders ---------- */
@@ -40,9 +40,9 @@ const hooks={onSelect:[],onHover:[]};
 function selectFR(fr){
   fr=clamp(Math.round(fr),0,FRMAX);state.selFR=fr;const X=fr*FS;const s=section(X);
   const fi=$('#secFr');if(document.activeElement!==fi)fi.value=fr;$('#secMiniFr').textContent=fr;$('#secZone').textContent=regionOf(X);
-  $('#secX').textContent=fmt(X)+' m';
-  const hb=HB(X,T);$('#secHb').textContent=hb>0?fmt(hb)+' m':'—';
-  const g=s.gs[G-1];$('#secG').textContent=fmt(g,1)+' m';
+  $('#secX').textContent=metres(X);
+  const hb=HB(X,T);$('#secHb').textContent=hb>0?metres(hb):'—';
+  const g=s.gs[G-1];$('#secG').textContent=metres(g,1);
   const n=g<KEEL_HALF?0:Math.min(LETTERS.length-1,Math.floor((g-KEEL_HALF)/STRAKE_W));
   $('#secS').textContent=n>0?`K, A–${LETTERS[n]} (${n+2}열)`:'K';
   const sl=$('#secSlider');if(+sl.value!==fr)sl.value=fr;
@@ -276,8 +276,8 @@ const labelsEl=$('#labels');const frLabels=[];
 for(let n=0;n<=FRMAX;n+=50){const el=document.createElement('div');el.className='lbl3d';el.textContent='FR '+n;labelsEl.appendChild(el);const X=n*FS;const Z=deckZ(X);frLabels.push({el,p:new V3(X-XC,Z+2.2,HB(X,Z)+0.5)});}
 const selLabel=document.createElement('div');selLabel.className='lbl3d sel';labelsEl.appendChild(selLabel);let selLabelPos=new V3();
 // staggered along the ship so the stacked bands do not overlap in the side view
-const zoneLabels=[['선저부',0.3*L,0,B/4],['빌지부',0.34*L,1.2],['선측 수선 아래',0.42*L,(R+0.6+T-1.2)/2],['흘수선 부근',0.52*L,T+0.2],
-  ['건현부',0.6*L,(T+1.6+D)/2],['선수부',0.95*L,T],['선미부',0.04*L,T+4]].map(([t,X,Z,Y])=>{
+const zoneLabels=[[0.3*L,0,B/4],[0.34*L,1.2],[0.42*L,(R+0.6+T-1.2)/2],[0.52*L,T+0.2],[0.6*L,(T+1.6+D)/2],[0.95*L,T],[0.04*L,T+4]].map(([X,Z,Y],i)=>{
+  const t=ZONES[i];   // same order as hull.ZONES
   const el=document.createElement('div');el.className='lbl3d zl';el.textContent=t;el.hidden=true;labelsEl.appendChild(el);
   return {el,p:new V3(X-XC,Z,Y!=null?Y:HB(X,Z)+0.4)};});
 
@@ -336,7 +336,7 @@ function paintHull(){
 const LEGEND={
   dft:{t:'도막 두께 · 현재 / 설계',w:`주의 · ${CRITERIA.dft.warn*100}% 미만`,c:`심각 · ${CRITERIA.dft.crit*100}% 미만`},
   plate:{t:'강판 두께 · 원두께 대비 감소율',w:`주의 · ${CRITERIA.plate.warn*100}% 이상`,c:`심각 · ${CRITERIA.plate.crit*100}% 이상`},
-  defect:{t:'도막 손상 · 종류 / 면적',w:'주의 · 스크래치',c:`심각 · 떨어짐, ${CRITERIA.defect.critArea} m² 이상`}
+  defect:{t:'도막 손상 · 종류 / 면적',w:`주의 · ${DEFECT_LABEL.scratch}`,c:`심각 · ${DEFECT_LABEL.flaking}, ${CRITERIA.defect.critArea} m² 이상`}
 };
 $('#heatRamp').style.background=`linear-gradient(90deg,${heatCss()})`;
 function syncLayer(){const l=ui.layer;
@@ -375,20 +375,19 @@ ui.subscribe((k,o)=>{
 /* mapping state (SPEC 10.1, 10.2)
    mapping: heatmap fills in behind the robot · paused: heatmap, robot and path stay where they are ·
    done: whole ship + all results, robot and path hidden; "다시 매핑" only in the ⋯ menu */
-const fmtTime=ts=>{const d=new Date(ts),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}.${p(d.getMonth()+1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;};
-const poseText=p=>`FR ${p.fr} · 외판열 ${p.strake}(${p.side}) · X ${fmt(p.X)}  Y ${fmt(p.Y)}  Z ${fmt(p.Z)} m`;
+const poseText=p=>`${loc(p.fr,p.strake,p.side)} · ${coords(p.X,p.Y,p.Z)}`;
 let mapMode=null,robotSeen=false;
 function syncMap(){
-  const st=store.mapState,active=st==='mapping'||st==='paused',pct=Math.floor(store.progress*100);
+  const st=store.mapState,active=st==='mapping'||st==='paused',pct=progress(store.progress);
   const ms=$('#mapState');ms.classList.toggle('on',st==='mapping');ms.classList.toggle('paused',st==='paused');ms.classList.toggle('done',st==='done');
-  $('#mapStateTxt').textContent=st==='mapping'?`매핑 중 ${pct}%`:st==='paused'?`매핑 중지 · ${pct}%`:'매핑 완료';
+  $('#mapStateTxt').textContent=st==='mapping'?`매핑 중 · ${pct}`:st==='paused'?`매핑 중지 · ${pct}`:'매핑 완료';
   const btn=$('#mapBtn');btn.hidden=!active;btn.textContent=st==='mapping'?'매핑 중지':'이어서 매핑';btn.classList.toggle('secondary',st==='mapping');
   $('.map-more').hidden=!(st==='paused'||st==='done');
   $('#speedSeg').hidden=!active;   // replay speed only matters while a run is going or paused
   const again=st==='paused'?'처음부터 다시':'다시 매핑';$('#mapRestart').textContent=again;$('#mapConfirm').textContent=again;
   $('#stRobotWrap').classList.toggle('idle',st!=='mapping');
-  if(st==='done')$('#stRobot').textContent=`매핑 완료 · 측정점 ${store.records.length.toLocaleString()}개 · 마지막 측정 ${store.lastTs?fmtTime(store.lastTs):'—'}`;
-  if(st==='paused')$('#stRobot').textContent=store.pose?`중지됨 · ${poseText(store.pose)} · 진행 ${pct}%`:`중지됨 · 진행 ${pct}%`;
+  if(st==='done')$('#stRobot').textContent=`매핑 완료 · 측정점 ${num(store.records.length)}개 · 마지막 측정 ${store.lastTs?dateTime(store.lastTs):'—'}`;
+  if(st==='paused')$('#stRobot').textContent=store.pose?`매핑 중지 · ${poseText(store.pose)} · 진행 ${pct}`:`매핑 중지 · 진행 ${pct}`;
   if(!active||!store.pose){robotWrap.visible=false;robotSeen=false;}
   pathGroup.visible=active&&lyRobotOn;
   if(st!==mapMode){
@@ -403,9 +402,9 @@ function syncMap(){
 function onPose(p){
   follow.raw=followAngle(p);
   setRobotTarget(p,!robotSeen);robotSeen=true;robotWrap.visible=true;showPathAt(p.k);
-  const pct=Math.floor(p.progress*100);
-  $('#mapStateTxt').textContent=`매핑 중 ${pct}%`;
-  $('#stRobot').textContent=`RBT-01 매핑 중 · FR ${p.fr} · 외판열 ${p.strake} · ${p.side==='P'?'좌현':'우현'} · X ${fmt(p.X)}  Y ${fmt(p.Y)}  Z ${fmt(p.Z)} m · 진행 ${pct}%`;
+  const pct=progress(p.progress);
+  $('#mapStateTxt').textContent=`매핑 중 · ${pct}`;
+  $('#stRobot').textContent=`RBT-01 매핑 중 · ${poseText(p)} · 진행 ${pct}`;
 }
 $('#mapBtn').addEventListener('click',()=>{if(!store)return;if(store.mapState==='mapping')store.pause();else if(store.mapState==='paused')store.resume();});
 // ⋯ menu: restart from the beginning, confirmed inside the menu (no browser confirm)
@@ -560,21 +559,21 @@ function pick(e){
   ray.setFromCamera(ndc,camera);
   const hits=ray.intersectObjects([hullS,hullP],false).filter(h=>!state.cut||h.point.x<=clipPlane.constant);
   if(!hits.length){lastHit=null;tip.hidden=true;hoverDot.visible=false;if(state.hoverSrc==='3d')setHover(null,'3d');$('#stCursor').textContent='—';return;}
-  const h=hits[0],p=h.point;const loc=h.object.worldToLocal(p.clone());
-  const f=h.face;tri.set(vA.fromArray(pos,f.a*3),vB.fromArray(pos,f.b*3),vC.fromArray(pos,f.c*3)).getBarycoord(loc,bary);
+  const h=hits[0],p=h.point;const lp=h.object.worldToLocal(p.clone());
+  const f=h.face;tri.set(vA.fromArray(pos,f.a*3),vB.fromArray(pos,f.b*3),vC.fromArray(pos,f.c*3)).getBarycoord(lp,bary);
   const g=bary.x*girth[f.a]+bary.y*girth[f.b]+bary.z*girth[f.c];
   const X=p.x+XC,Z=p.y,Y=-p.z,fr=Math.round(X/FS),side=h.object.userData.side,u=side==='P'?g:-g;
   const st=strakeName(g),near=nearest(heatIx,X,u,NEAR_D),rec=near?near.r:null;
   lastHit={fr,X,rec};
   let val='<div class="none">측정값 없음</div>';
   if(rec){const lv=judge(rec,ui.layer).level;
-    val=`<div class="tv"><b>${formatValue(rec,ui.layer)}</b><span class="lv lv${lv}">${LEVEL_LABEL[lv]}</span></div>`;}
-  tip.innerHTML=`<div class="t1">FR ${fr} <em>· 외판열 ${st}(${side})</em></div><div class="t2">${ZONE_LABELS[zoneOf(X,Z)]} · ${LAYER_LABEL[ui.layer]}</div>${val}<div class="t3">X ${fmt(X)}  Y ${fmt(Y)}  Z ${fmt(Z)} m</div>`;
+    val=`<div class="tv"><b>${value(rec,ui.layer)}</b><span class="lv lv${lv}">${LEVEL_LABEL[lv]}</span></div>`;}
+  tip.innerHTML=`<div class="t1">FR ${fr} <em>· ${st} · ${sideName(side)}</em></div><div class="t2">${ZONES[zoneOf(X,Z)]} · ${LAYER_LABEL[ui.layer]}</div>${val}<div class="t3">${coords(X,Y,Z)}</div>`;
   tip.hidden=false;const pw=r.width;tip.style.left=(e.clientX-r.left)+'px';tip.style.top=(e.clientY-r.top)+'px';
   tip.style.transform=(e.clientX-r.left)>pw-260?'translate(calc(-100% - 14px),14px)':'translate(14px,14px)';
   hoverDot.position.copy(p);hoverDot.visible=true;
   setHover(X,'3d');
-  $('#stCursor').textContent=`FR ${fr} · 외판열 ${st}(${side}) · X ${fmt(X)}  Y ${fmt(Y)}  Z ${fmt(Z)} m`;
+  $('#stCursor').textContent=`${loc(fr,st,side)} · ${coords(X,Y,Z)}`;
 }
 const cvs=renderer.domElement;
 cvs.addEventListener('pointermove',e=>{pendingMove=e;});

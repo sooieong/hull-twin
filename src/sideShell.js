@@ -4,10 +4,13 @@
    로봇 경로(우현 갑판 → 킬 → 좌현 갑판)가 위에서 아래로 진행한다.
    표시: 외판열 경계와 문자, 프레임 눈금(50 단위), 흘수선·빌지 경계, 킬 블록 측정 불가 구역,
          현재 레이어의 이상 지점, 선택 지점, 매핑 중 로봇 위치. 지점을 누르면 메인과 똑같이 선택된다.
+   매핑 중(중지 포함) 아직 이상 지점이 없으면 공통 빈 상태 안내(emptyState.js)를 도면 위에 겹쳐 보여준다.
    ========================================================= */
 import { T, R, FS, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, section, girthAtZ, strakeName, signedGirth, recordU,
   KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
-import { OK, judge, LAYER_LABEL, LEVEL_LABEL, formatValue } from './data/criteria.js';
+import { OK, judge } from './data/criteria.js';
+import { LAYER_LABEL, LEVEL_LABEL, value, recLoc, loc } from './format.js';
+import { mappingState } from './emptyState.js';
 import { heatOf, heatRGB, buildIndex, nearest } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
 
@@ -25,8 +28,8 @@ const G_MAX=Math.max(...F.map(f=>f.g));
 let nStrakes=0;while(nStrakes<LETTERS.length&&KEEL_HALF+STRAKE_W*nStrakes<G_MAX)nStrakes++;
 
 export function createSideShell(body,store,ui){
-  body.innerHTML='<canvas class="ss-cv" aria-label="Side Shell 전개도: 가로 프레임 번호, 세로 외판열. 위 우현, 아래 좌현. 이상 지점을 누르면 선택합니다."></canvas><div class="ss-read" aria-live="polite"></div>';
-  const cv=body.querySelector('canvas'),ctx=cv.getContext('2d'),read=body.querySelector('.ss-read');
+  body.innerHTML='<canvas class="ss-cv" aria-label="Side Shell 전개도: 가로 프레임 번호, 세로 외판열. 위 우현, 아래 좌현. 이상 지점을 누르면 선택합니다."></canvas><div class="ss-read" aria-live="polite"></div><div class="ss-empty" hidden></div>';
+  const cv=body.querySelector('canvas'),ctx=cv.getContext('2d'),read=body.querySelector('.ss-read'),emptyEl=body.querySelector('.ss-empty');
   const base=document.createElement('canvas'),bctx=base.getContext('2d');
   let w=0,h=0,dpr=1,dots=[],allIx=buildIndex([]),robot=null,raf=0,timer=null;
 
@@ -69,10 +72,8 @@ export function createSideShell(body,store,ui){
     const bandPx=py(STRAKE_W)-py(0),every=bandPx<9?2:1;
     c.fillText('K',M.l-6,py(0));
     for(let k=0;k<nStrakes;k+=every){const g=KEEL_HALF+STRAKE_W*(k+0.5);[-1,1].forEach(sd=>c.fillText(LETTERS[k],M.l-6,py(sd*g)));}
-    c.textAlign='left';c.font=`600 11px ${LBL}`;c.fillStyle=C.text;
-    c.fillText('S',w-M.r+8,py(-G_MAX/2));c.fillText('P',w-M.r+8,py(G_MAX/2));
-    c.font=`9px "IBM Plex Sans KR",sans-serif`;c.fillStyle=C.muted;
-    c.fillText('우현',w-M.r+4,py(-G_MAX/2)+13);c.fillText('좌현',w-M.r+4,py(G_MAX/2)+13);
+    c.textAlign='left';c.font=`500 10px "IBM Plex Sans KR",sans-serif`;c.fillStyle=C.text;
+    c.fillText('우현',w-M.r+4,py(-G_MAX/2));c.fillText('좌현',w-M.r+4,py(G_MAX/2));
     c.font=`9px ${MONO}`;c.fillStyle=C.muted;c.fillText('C.L.',w-M.r+6,py(0)-8);
     c.font=`500 9px ${MONO}`;c.fillStyle=C.dwl;c.textAlign='left';
     const fw=Math.round(FRMAX*0.97);c.fillText('DWL',px(fw)-22,py(-F[fw].wl)-6);
@@ -102,7 +103,7 @@ export function createSideShell(body,store,ui){
       ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.beginPath();
       ctx.moveTo(x,M.t);ctx.lineTo(x,h-M.b);ctx.moveTo(M.l,y);ctx.lineTo(w-M.r,y);ctx.stroke();ctx.setLineDash([]);
       [[7.5,'#fff'],[5.5,'#000'],[2.2,'#fff']].forEach(([rad,col])=>{ctx.fillStyle=col;ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);ctx.fill();});
-      const label=`FR ${sel.fr} · ${sel.strake}(${sel.side})`;ctx.font=`600 11px ${LBL}`;
+      const label=recLoc(sel);ctx.font=`600 11px ${LBL}`;
       const tw=ctx.measureText(label).width+10,lx=Math.min(Math.max(M.l,x-tw/2),w-M.r-tw),ly=y-11<M.t+14?y+11:y-25;
       ctx.fillStyle='rgba(3,6,12,.9)';ctx.fillRect(lx,ly,tw,15);ctx.strokeStyle='#fff';ctx.strokeRect(lx+.5,ly+.5,tw-1,14);
       ctx.fillStyle='#fff';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(label,lx+5,ly+8);}
@@ -132,20 +133,26 @@ export function createSideShell(body,store,ui){
   cv.addEventListener('pointermove',e=>{
     const t=hit(e);cv.style.cursor=t.dot?'pointer':'crosshair';
     if(!t.inside){read.textContent='';return;}
-    const r=t.dot&&t.dot.r,pos=r?`FR ${r.fr} · ${r.strake}(${r.side})`:`FR ${Math.round(t.fr)} · ${strakeName(Math.abs(t.u))}(${t.u<0?'S':'P'})`;
-    read.textContent=t.dot?`${pos} · ${LAYER_LABEL[ui.layer]} ${formatValue(t.dot.r,ui.layer)} · ${LEVEL_LABEL[t.dot.level]}`:pos;
+    const r=t.dot&&t.dot.r,pos=r?recLoc(r):loc(Math.round(t.fr),strakeName(Math.abs(t.u)),t.u<0?'S':'P');
+    read.textContent=t.dot?`${pos} · ${LAYER_LABEL[ui.layer]} ${value(t.dot.r,ui.layer)} · ${LEVEL_LABEL[t.dot.level]}`:pos;
   });
   cv.addEventListener('pointerleave',()=>{read.textContent='';cv.style.cursor='';});
   cv.addEventListener('click',e=>{const t=hit(e);if(t.rec)ui.select(t.rec.id,{fly:true});});
 
-  const refresh=()=>{rebuildDots();draw();};
+  /* mapping notice while no anomaly has been found yet (the drawing stays visible behind it) */
+  function syncEmpty(){
+    const html=dots.length?null:mappingState(store,'이상 위치');
+    emptyEl.hidden=!html;if(html&&emptyEl.innerHTML!==html)emptyEl.innerHTML=html;
+  }
+  const refresh=()=>{rebuildDots();draw();syncEmpty();};
   store.subscribe(k=>{
-    if(k.has('state')){clearTimeout(timer);timer=null;rebuildDots();}
+    if(k.has('state')){clearTimeout(timer);timer=null;rebuildDots();syncEmpty();}
     else if(k.has('records')&&!timer)timer=setTimeout(()=>{timer=null;refresh();},200);
     if(k.has('pose')||k.has('state')){
       const p=store.mapState==='mapping'||store.mapState==='paused'?store.pose:null;
       robot=p?{X:p.X,u:signedGirth(p.X,p.Y,p.Z,p.side)}:null;
       if(robot&&!raf)raf=requestAnimationFrame(animate);else if(!robot)draw();
+      if(!dots.length)syncEmpty();
     }
   });
   ui.subscribe(k=>{if(k==='layer')refresh();if(k==='select')draw();});

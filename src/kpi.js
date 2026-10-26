@@ -7,29 +7,27 @@
    레이어 전환·매핑 진행에 따라 갱신되고, 항목을 누르면 구역에서 가장 나쁜 점이 선택된다.
    ========================================================= */
 import { FS, STRAKE_W } from './hull.js';
-import { CRIT, WARN, LAYER_LABEL, LEVEL_LABEL, DEFECT_LABEL } from './data/criteria.js';
+import { CRIT, WARN } from './data/criteria.js';
+import { LAYER_LABEL, LEVEL_LABEL, DEFECT_LABEL, THICK, thickNum, dropNum, areaNum, zoneLoc, side, span, progress } from './format.js';
 import { groupZones } from './data/zones.js';
 import { SAMPLE_EVERY } from './data/scanPath.js';
+import { emptyState, mappingState } from './emptyState.js';
 
 const AREA_PER_POINT=SAMPLE_EVERY*FS*STRAKE_W;   // 측정점 하나가 대표하는 외판 면적 (m²)
-const SIDE={S:'우현',P:'좌현',PS:'좌우현'};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 /* 오른쪽 큰 값: 이전 도킹 대비 감소량 (도막 µm, 강판 mm) · 도막 손상은 손상 면적. 아래 작은 줄: 현재값 / 기준값 */
-const MINUS='−';
 function valueParts(r,layer){
-  if(layer==='defect')return {v:r.defectArea.toFixed(2),u:'m²',sub:DEFECT_LABEL[r.defect]||''};
-  const dp=layer==='plate'?1:0,f=v=>v.toFixed(dp);
-  const [prev,cur,ref,refLabel,u]=layer==='plate'?[r.platePrev,r.plate,r.plateOrig,'원두께','mm']:[r.dftPrev,r.dft,r.dftDesign,'설계','µm'];
-  const d=+(prev-cur).toFixed(dp);
-  return {v:d>0?MINUS+f(d):d<0?'+'+f(-d):f(0),u,sub:`현재 ${f(cur)} / ${refLabel} ${f(ref)}`};
+  if(layer==='defect')return {v:`≈ ${areaNum(r.defectArea)}`,u:'m²',sub:DEFECT_LABEL[r.defect]||''};
+  const [prev,cur,ref]=layer==='plate'?[r.platePrev,r.plate,r.plateOrig]:[r.dftPrev,r.dft,r.dftDesign];
+  return {v:dropNum(prev,cur,layer),u:THICK[layer].unit,sub:`현재 ${thickNum(cur,layer)} / ${THICK[layer].ref} ${thickNum(ref,layer)}`};
 }
 const DROP_HEAD={dft:'이전 대비 감소',plate:'이전 대비 감소',defect:'손상 면적'};
 
 export function createKpiPanel(root,store,ui){
   root.innerHTML=`<div class="kpi">
     <div class="kpi-sum">
-      <div class="tile t-prog"><span class="k">측정 진행률</span><span class="n"><b data-k="prog">0</b><i>%</i></span>
+      <div class="tile t-prog"><span class="k">측정 진행률</span><span class="n"><b data-k="prog">0%</b></span>
         <span class="bar" role="progressbar" aria-label="측정 진행률" aria-valuemin="0" aria-valuemax="100"><i></i></span><small data-k="progSub"></small></div>
       <div class="tile t-top"><span class="k">최우선 보수</span><span class="n"><b data-k="top">0</b><i>구역</i></span><small>도막·강판 복합</small></div>
       <div class="tile t-crit"><span class="k">심각</span><span class="n"><b data-k="crit">0</b><i>구역</i></span></div>
@@ -40,29 +38,31 @@ export function createKpiPanel(root,store,ui){
   </div>`;
   const $k=k=>root.querySelector(`[data-k="${k}"]`),list=root.querySelector('.kpi-list');
   const layerChip=root.closest('.pane').querySelector('.kpi-lay'),bar=root.querySelector('.bar');
-  const measurable=store.plan.samples.filter(s=>!s.blocked).length,totalArea=Math.round(measurable*AREA_PER_POINT).toLocaleString();
+  const measurable=store.plan.samples.filter(s=>!s.blocked).length,totalArea=areaNum(measurable*AREA_PER_POINT);
   let zones=[],timer=null,lastHtml='';
 
   function render(){
     const layer=ui.layer,R=store.records;
     zones=groupZones(R,layer);
-    const prog=Math.floor(R.length/measurable*100);
-    $k('prog').textContent=prog;bar.firstChild.style.width=prog+'%';bar.setAttribute('aria-valuenow',prog);
-    $k('progSub').textContent=`≈ ${Math.round(R.length*AREA_PER_POINT).toLocaleString()} / ${totalArea} m²`;
+    // same progress as the header and the mapping notice (robot path); the measured area comes from the points
+    const prog=progress(store.progress);
+    $k('prog').textContent=prog;bar.firstChild.style.width=prog;bar.setAttribute('aria-valuenow',parseInt(prog,10));
+    $k('progSub').textContent=`≈ ${areaNum(R.length*AREA_PER_POINT)} / ${totalArea} m²`;
     $k('top').textContent=zones.filter(z=>z.compound).length;
     $k('crit').textContent=zones.filter(z=>z.level===CRIT).length;
     $k('warn').textContent=zones.filter(z=>z.level===WARN).length;
     if(layerChip)layerChip.textContent=LAYER_LABEL[layer];
     $k('dropHead').textContent=DROP_HEAD[layer];
-    const html=!zones.length?`<li class="empty">${store.mapState==='mapping'||store.mapState==='paused'?'아직 발견된 이상 구역이 없습니다':'이상 구역이 없습니다'}</li>`
+    // nothing to list: the shared notice (mapping / paused), or after a finished run with nothing abnormal
+    const empty=zones.length?null:mappingState(store,'보수 대상')||emptyState('탐지된 이상이 없습니다');
+    list.classList.toggle('is-empty',!!empty);
+    const html=empty?`<li class="kpi-empty">${empty}</li>`
       :zones.map((z,i)=>{
       const r=z.worst,v=valueParts(r,layer);
-      const fr=z.frMin===z.frMax?`FR ${z.frMin}`:`FR ${z.frMin}–${z.frMax}`;
-      const st=z.strakeMin===z.strakeMax?z.strakeMin:`${z.strakeMin}–${z.strakeMax}`;
-      return `<li class="z lvl${z.level}" data-id="${r.id}" tabindex="0" role="button" aria-label="${i+1}순위 ${fr} ${st} ${SIDE[z.side]} ${LEVEL_LABEL[z.level]}${z.compound?' 도막+강판':''} ${v.v} ${v.u}">
+      return `<li class="z lvl${z.level}" data-id="${r.id}" tabindex="0" role="button" aria-label="${i+1}순위 ${zoneLoc(z)} ${LEVEL_LABEL[z.level]}${z.compound?' 도막+강판':''} ${v.v} ${v.u}">
         <span class="rk">${i+1}</span>
         <div class="zb">
-          <div class="zl"><b>${fr}</b><span>${st} · ${SIDE[z.side]}</span></div>
+          <div class="zl"><b>FR ${span(z.frMin,z.frMax)}</b><span>· ${span(z.strakeMin,z.strakeMax)} · ${side(z.side)}</span></div>
           <div class="zm"><span class="lv lv${z.level}">${LEVEL_LABEL[z.level]}</span>${z.compound?'<span class="cx">도막+강판</span>':''}<span class="zn">${esc(z.zone)}</span></div>
           <div class="act">→ ${esc(z.action)}</div>
         </div>
@@ -88,7 +88,8 @@ export function createKpiPanel(root,store,ui){
   list.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(e.target);}});
 
   // mapping start/stop: redraw at once; the stream of new measurements while mapping: throttled
-  store.subscribe(k=>{if(k.has('state')){clearTimeout(timer);timer=null;render();onState();}else if(k.has('records'))schedule();});
+  // pose: the progress tile and the mapping notice follow the robot
+  store.subscribe(k=>{if(k.has('state')){clearTimeout(timer);timer=null;render();onState();}else if(k.has('records')||k.has('pose'))schedule();});
   ui.subscribe((k,o)=>{
     if(k==='layer'){render();list.scrollTop=0;if(store.mapState==='done')selectTop();else syncSel(false);}
     if(k==='select')syncSel(!(o&&o.auto));});

@@ -237,19 +237,22 @@ button,select,input{font:inherit;color:inherit}
 .dt-card span{font-size:10.5px;line-height:1.25;color:var(--text-2)}
 .dt-card b{font-family:var(--font-mono);font-weight:500;font-size:13.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dt-card b.tx{font-family:var(--font-ui);font-weight:600;font-size:12.5px;line-height:1.25;white-space:normal}
-.dt-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:16px;text-align:center;
-  border:1px dashed var(--line-strong);border-radius:7px;margin:10px;color:var(--text-2)}
-.dt-media .dt-state{margin:0;border:0}
-.dt-state svg{width:30px;height:30px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;margin-bottom:2px}
-.dt-state b{font-size:13px;color:var(--text);font-weight:600}
-.dt-state span{font-size:11.5px;color:var(--muted)}
-.dt-state.live b{font-size:15px}
-.dt-live{display:flex;gap:6px;margin-bottom:8px}
-.dt-live i{width:7px;height:7px;border-radius:50%;background:var(--ho-orange);animation:dtBlink 1.2s infinite ease-in-out both}
-.dt-live i:nth-child(2){animation-delay:.2s}
-.dt-live i:nth-child(3){animation-delay:.4s}
-.dt-state.paused .dt-live i{animation:none;background:var(--muted)}
-@keyframes dtBlink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+/* shared empty state (emptyState.js): KPI list, detail, side shell — same size, colours, centred, same dots */
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:16px;text-align:center;
+  border:1px dashed var(--line-strong);border-radius:7px;margin:10px;color:var(--text-2);min-height:0}
+.dt-media .empty-state{margin:0;border:0}
+.empty-state svg{width:30px;height:30px;fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;margin-bottom:2px}
+.empty-state b{font-size:14px;color:var(--text);font-weight:600}
+.empty-state span{font-size:11.5px;color:var(--muted)}
+.es-dots{display:flex;gap:6px;margin-bottom:8px}
+.es-dots i{width:7px;height:7px;border-radius:50%;background:var(--ho-orange);animation:esBlink 1.2s infinite ease-in-out both}
+.es-dots i:nth-child(2){animation-delay:.2s}
+.es-dots i:nth-child(3){animation-delay:.4s}
+.empty-state.paused .es-dots i{animation:none;background:var(--muted)}
+@keyframes esBlink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+.ss-empty{position:absolute;inset:0;z-index:3;display:flex;pointer-events:none}
+.ss-empty[hidden]{display:none}
+.ss-empty .empty-state{background:rgba(10,17,32,.84)}   /* the drawing stays faintly visible behind */
 
 /* ---------- KPI ---------- */
 .pane-kpi .pane-body{display:flex;flex-direction:column}
@@ -272,7 +275,8 @@ button,select,input{font:inherit;color:inherit}
 .kpi-lay~.pane-ctl{margin-left:0}
 .kpi-head{display:flex;justify-content:space-between;gap:8px;padding:4px 14px 6px;flex:none;font-size:11.5px;color:var(--muted)}
 .kpi-list{list-style:none;margin:0;padding:0 8px 10px 10px;overflow-y:auto;min-height:0;flex:1;scrollbar-width:thin}
-.kpi-list .empty{padding:24px 8px;text-align:center;color:var(--muted);font-size:12px}
+.kpi-list.is-empty{display:flex;flex-direction:column;padding:0}
+.kpi-empty{flex:1;display:flex;min-height:0}
 /* list rows: no judgement band; judgement = chip + reduction colour; selection = orange border */
 .z{display:flex;align-items:center;gap:8px;padding:9px 10px 9px 6px;border-radius:8px;background:var(--surface-2);border:1px solid var(--line);cursor:pointer}
 .z+.z{margin-top:6px}
@@ -331,4 +335,4 @@ button,select,input{font:inherit;color:inherit}
   .statusbar{height:auto;padding-block:6px;flex-wrap:wrap;gap:6px 16px}
   .statusbar .right{margin-left:0}
 }
-@media (prefers-reduced-motion:reduce){.map-state.on i,.dt-live i{animation:none}}
+@media (prefers-reduced-motion:reduce){.map-state.on i,.es-dots i{animation:none}}

@@ -31,16 +31,7 @@ function degreeOf(x,warn,crit,worst){
 
 export function dftRatio(r){return r.dft/r.dftDesign;}
 export function plateLoss(r){return (r.plateOrig-r.plate)/r.plateOrig;}
-/* 표시용 %: 내림. 반올림하면 79.6%가 "80%"로 보여 "80% 미만 = 주의" 판정과 어긋난다 */
-export function ratioPct(r){return `${Math.floor(dftRatio(r)*100+1e-9)}%`;}
-export function lossPct(r){return `${(Math.floor(plateLoss(r)*1000+1e-9)/10).toFixed(1)}%`;}
-
-/* 화면 표시용 측정값 / 기준값 */
-export function formatValue(r,layer){
-  if(layer==='dft')return `${r.dft} / ${r.dftDesign} µm (${ratioPct(r)})`;
-  if(layer==='plate')return `${r.plate.toFixed(1)} / ${r.plateOrig.toFixed(1)} mm (−${lossPct(r)})`;
-  return r.defect?`${DEFECT_LABEL[r.defect]} ${r.defectArea} m²`:'손상 없음';
-}
+/* 표시 형식(측정값 / 기준값, 비율 %)은 format.js */
 
 /* 한 레코드의 레이어별 판정: {level, degree} */
 export function judge(r,layer){

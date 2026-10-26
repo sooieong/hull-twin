@@ -1,10 +1,10 @@
 /* =========================================================
    진단 보고서 데이터 (SPEC 6): 화면에서 고른 레이어와 상관없이 전체 측정 데이터로 계산한다.
    ========================================================= */
-import { FS, STRAKE_W, KEEL_HALF, LETTERS, XMAX, NX, G, stSec, section, strakeLower, ZONES, ZONE_LABELS } from '../hull.js';
-import { LAYERS, OK, WARN, CRIT, CRITERIA, judge, dftRatio, plateLoss, isCompound, scoreOf, DEFECT_LABEL } from '../data/criteria.js';
+import { FS, STRAKE_W, KEEL_HALF, LETTERS, XMAX, NX, G, stSec, section, strakeLower, ZONES } from '../hull.js';
+import { LAYERS, OK, WARN, CRIT, CRITERIA, ACTION, judge, dftRatio, plateLoss, isCompound, scoreOf } from '../data/criteria.js';
+import { DEFECT_LABEL, recLocZone, designRatio, lossRatio, area, pct as pctText } from '../format.js';
 import { groupZones } from '../data/zones.js';
-import { zoneText } from '../data/report.js';
 import { SAMPLE_EVERY } from '../data/scanPath.js';
 import { PREV_DOCK } from '../sectionSvg.js';
 
@@ -17,11 +17,7 @@ export const REPORT_CONST={
 };
 export const SHIP={name:'174K LNG Carrier',hull:'H-2491',docking:'2026.10 정기 리도킹',dock:'2번 도크',robot:'RBT-01',prevDock:PREV_DOCK};
 
-export const zoneLabel=z=>ZONE_LABELS[ZONES.indexOf(z)]||z;
-export const pointLoc=r=>`FR ${r.fr} · ${r.strake}(${r.side}) · ${zoneLabel(r.zone)}`;
-export { zoneText };
 const pct=(n,d)=>d?n/d*100:0;
-const down1=x=>Math.floor(x*10+1e-9)/10;
 
 /* 측정점 하나가 대표하는 외판 면적 (m²) = 측정 간격 × 그 자리 외판열 폭 (K는 반폭, 맨 위 외판열은 갑판까지만) */
 const girthCache=new Map();
@@ -45,22 +41,22 @@ export function buildReportData(store,now=new Date()){
   for(const l of LAYERS){const c=[0,0,0];R.forEach(r=>c[lv(r,l)]++);layers[l]={counts:c,total:R.length};}
   const byRatio=[...R].sort((a,b)=>dftRatio(a)-dftRatio(b)),byLoss=[...R].sort((a,b)=>plateLoss(b)-plateLoss(a));
   const defects=R.filter(r=>r.defect).sort((a,b)=>{const ja=judge(a,'defect'),jb=judge(b,'defect');return scoreOf(jb.level,jb.degree,isCompound(b))-scoreOf(ja.level,ja.degree,isCompound(a));});
-  layers.dft.worst={label:'최소 도막',value:`${Math.floor(dftRatio(byRatio[0])*100)}%`,where:pointLoc(byRatio[0])};
-  layers.plate.worst={label:'최대 강판 감소율',value:`${down1(plateLoss(byLoss[0])*100).toFixed(1)}%`,where:pointLoc(byLoss[0])};
+  layers.dft.worst={label:'최소 도막',value:designRatio(byRatio[0]),where:recLocZone(byRatio[0])};
+  layers.plate.worst={label:'최대 강판 감소율',value:lossRatio(byLoss[0]),where:recLocZone(byLoss[0])};
   const bigDefect=[...defects].sort((a,b)=>b.defectArea-a.defectArea)[0];
-  layers.defect.worst=bigDefect?{label:'최대 손상',value:`${bigDefect.defectArea} m²`,where:`${DEFECT_LABEL[bigDefect.defect]} · ${pointLoc(bigDefect)}`}:{label:'최대 손상',value:'없음',where:''};
+  layers.defect.worst=bigDefect?{label:'최대 손상',value:area(bigDefect.defectArea),where:`${DEFECT_LABEL[bigDefect.defect]} · ${recLocZone(bigDefect)}`}:{label:'최대 손상',value:'없음',where:''};
 
   /* --- repair zones (all layers) and quantities --- */
   const zonesAll=groupZones(R,'all');
   const repaintPts=R.filter(r=>lv(r,'dft')===CRIT||lv(r,'defect')===CRIT);
   const repaintArea=sumArea(repaintPts);
   const paintL=repaintPts.reduce((s,r)=>s+areaOf(r)*r.dftDesign*1e-6*1000/C.solids,0);
-  const steelZones=zonesAll.filter(z=>z.action==='강판 교체·보강'),localZones=zonesAll.filter(z=>z.action==='국부 보수');
+  const steelZones=zonesAll.filter(z=>z.action===ACTION.steel),localZones=zonesAll.filter(z=>z.action===ACTION.local);
   const compoundZones=zonesAll.filter(z=>z.compound);
   const headline={top:compoundZones.length,steel:steelZones.length,repaint:Math.round(repaintArea)};
 
   /* --- per-zone tables --- */
-  const zoneRows=f=>ZONES.map(z=>{const rs=R.filter(r=>r.zone===z);return {zone:zoneLabel(z),n:rs.length,...f(rs)};}).filter(row=>row.n>0);
+  const zoneRows=f=>ZONES.map(z=>{const rs=R.filter(r=>r.zone===z);return {zone:z,n:rs.length,...f(rs)};}).filter(row=>row.n>0);
   const dftZones=zoneRows(rs=>{const v=rs.map(dftRatio);const w=rs.filter(r=>lv(r,'dft')===WARN).length,c=rs.filter(r=>lv(r,'dft')===CRIT).length;
     return {avg:v.reduce((a,b)=>a+b,0)/v.length*100,min:Math.min(...v)*100,warn:w,crit:c,area:sumArea(rs.filter(r=>lv(r,'dft')===CRIT))};});
   const plateZones=zoneRows(rs=>{const v=rs.map(plateLoss);return {avg:v.reduce((a,b)=>a+b,0)/v.length*100,max:Math.max(...v)*100,
@@ -79,11 +75,11 @@ export function buildReportData(store,now=new Date()){
   const share=(rs)=>{const c={};rs.forEach(r=>c[r.zone]=(c[r.zone]||0)+1);return Object.entries(c).sort((a,b)=>b[1]-a[1]);};
   const findings=[];
   const dAb=R.filter(r=>lv(r,'dft')>OK),pAb=R.filter(r=>lv(r,'plate')>OK);
-  if(dAb.length){const [z,n]=share(dAb)[0];findings.push(`${zoneLabel(z)}에 도막 두께 이상 집중 (전체 도막 이상의 ${Math.round(pct(n,dAb.length))}%) · 최소 ${layers.dft.worst.value}`);}
-  if(pAb.length){const [z,n]=share(pAb)[0];findings.push(`${zoneLabel(z)}에 강판 감소 집중 (전체 강판 이상의 ${Math.round(pct(n,pAb.length))}%) · 최대 ${layers.plate.worst.value}, ${byLoss[0]?pointLoc(byLoss[0]):''}`);}
+  if(dAb.length){const [z,n]=share(dAb)[0];findings.push(`${z}에 도막 두께 이상 집중 (전체 도막 이상의 ${pctText(pct(n,dAb.length))}) · 최소 ${layers.dft.worst.value}`);}
+  if(pAb.length){const [z,n]=share(pAb)[0];findings.push(`${z}에 강판 감소 집중 (전체 강판 이상의 ${pctText(pct(n,pAb.length))}) · 최대 ${layers.plate.worst.value}, ${byLoss[0]?recLocZone(byLoss[0]):''}`);}
   if(defects.length){const sh=share(defects),top2=sh.slice(0,2),n2=top2.reduce((a,[,n])=>a+n,0);
-    findings.push(`도막 손상 ${defects.length}건 중 ${Math.round(pct(n2,defects.length))}%가 ${top2.map(([z])=>zoneLabel(z)).join('·')}에 분포 · 도막 떨어짐 ${defects.filter(r=>r.defect==='flaking').length}건`);}
-  if(compoundZones.length&&findings.length<3)findings.push(`도막·강판 복합 이상 ${compoundZones.length}곳 — 최우선 보수 대상`);
+    findings.push(`도막 손상 ${defects.length}건 중 ${pctText(pct(n2,defects.length))}가 ${top2.map(([z])=>z).join('·')}에 분포 · ${DEFECT_LABEL.flaking} ${defects.filter(r=>r.defect==='flaking').length}건`);}
+  if(compoundZones.length&&findings.length<3)findings.push(`도막·강판 복합 이상 ${compoundZones.length}구역 — 최우선 보수 대상`);
 
   /* --- coverage --- */
   const blockedS=plan.samples.filter(s=>s.blocked),total=shellArea(),measured=sumArea(R);

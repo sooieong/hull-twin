@@ -41,11 +41,10 @@ export function section(X){
 /* strake bands along the girth (from keel CL): K = 0..KEEL_HALF, then A, B, … each STRAKE_W wide */
 export function strakeName(g){if(g<KEEL_HALF)return 'K';const i=Math.floor((g-KEEL_HALF)/STRAKE_W);return LETTERS[Math.min(i,LETTERS.length-1)];}
 export function strakeLower(i){return i<0?0:KEEL_HALF+STRAKE_W*i;}   // i = -1 for K, 0 for A …
-/* zone codes used in measurement records (spec 3.1) and their display labels */
+/* zone names: stored in measurement records (spec 3.1) and shown as they are everywhere (format.js) */
 export const ZONES=['선저','빌지','선측','흘수선','건현','선수','선미'];
-export const ZONE_LABELS=['선저부','빌지부','선측 수선 아래','흘수선 부근','건현부','선수부','선미부'];
 export function zoneOf(X,Z){const xn=X/L;if(xn>=0.9)return 5;if(xn<0.08)return 6;if(Z<0.15)return 0;if(Z<R+0.6)return 1;if(Z<T-1.2)return 2;if(Z<T+1.6)return 3;return 4;}
-export function regionOf(X){const xn=X/L;if(xn<0.08)return '선미부';if(xn<0.24)return '선미 곡면부';if(xn<0.70)return '평행 중앙부';if(xn<0.9)return '선수 곡면부';return '선수부';}
+export function regionOf(X){const xn=X/L;if(xn<0.08)return '선미';if(xn<0.24)return '선미 곡면부';if(xn<0.70)return '평행 중앙부';if(xn<0.9)return '선수 곡면부';return '선수';}
 export function strakeAt(X,Z){const s=section(X);let j=NB;for(let k=0;k<G-1;k++){if(s.Zs[k]<=Z&&s.Zs[k+1]>=Z&&k>=NB){j=k;break;}}return strakeName(s.gs[j]);}
 
 /* point on the shell at girth g (m from keel CL) of section s; null where the shell is degenerate */

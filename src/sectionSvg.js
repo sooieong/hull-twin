@@ -3,11 +3,10 @@
    이전 도킹 두께 = 점선, 현재 = 실선, 기준값(원두께·설계) = 가는 회색 선, 아래 치수선, 오른쪽 감소량.
    단면은 라벨 자리를 뺀 폭과 높이를 모두 쓰고, 선 굵기·글자는 공간에 맞춰 커진다 (k ≥ 1).
    ========================================================= */
-import { ratioPct, lossPct } from './data/criteria.js';
+import { THICK, thick, thickNum, drop, designRatio, lossRatio } from './format.js';
 
 export const PREV_DOCK='2023.09';   // 이전 도킹 (헤더 도킹 선택 목록과 같은 값)
 const EXAG=1.6;                     // 두께 차이 과장 배율 (그림 전용)
-const MINUS='−';
 
 export const THEME={
   dark:{level:['#8FA3BF','#FFB224','#FF5A4E'],label:'#C9D3E3',muted:'#6F7C93',dim:'#E8EDF6',hatch:'rgba(255,255,255,.12)',
@@ -16,12 +15,13 @@ export const THEME={
     material:{plate:'#C3C9D2',dft:'#EAD3A2'}}
 };
 
-/* 측정점 하나의 단면 모델 */
+/* 측정점 하나의 단면 모델 (cards: 표시용 문자열) */
 export function thickness(r,layer){
-  if(layer==='plate')return {layer,title:'강판 두께',unit:'mm',dp:1,ref:r.plateOrig,prev:r.platePrev,cur:r.plate,refLabel:'원두께',
-    cards:[['원두께',r.plateOrig],[`이전 (${PREV_DOCK})`,r.platePrev],['현재',r.plate,1],['감소율 (원두께 대비)',lossPct(r),1]]};
-  return {layer,title:'도막 두께',unit:'µm',dp:0,ref:r.dftDesign,prev:r.dftPrev,cur:r.dft,refLabel:'설계',
-    cards:[['설계 (NDFT)',r.dftDesign],[`이전 (${PREV_DOCK})`,r.dftPrev],['현재',r.dft,1],['설계 대비',ratioPct(r),1]]};
+  const t=v=>thick(v,layer);
+  if(layer==='plate')return {layer,title:'강판 두께',unit:THICK.plate.unit,ref:r.plateOrig,prev:r.platePrev,cur:r.plate,refLabel:THICK.plate.ref,
+    cards:[['원두께',t(r.plateOrig)],[`이전 (${PREV_DOCK})`,t(r.platePrev)],['현재',t(r.plate),1],['감소율 (원두께 대비)',lossRatio(r),1]]};
+  return {layer,title:'도막 두께',unit:THICK.dft.unit,ref:r.dftDesign,prev:r.dftPrev,cur:r.dft,refLabel:THICK.dft.ref,
+    cards:[['설계 (NDFT)',t(r.dftDesign)],[`이전 (${PREV_DOCK})`,t(r.dftPrev)],['현재',t(r.dft),1],['설계 대비',designRatio(r),1]]};
 }
 
 /* rough text width (px): Hangul ≈ 1 em, other characters ≈ 0.6 em */
@@ -31,9 +31,9 @@ let uid=0;
 /* opts.note=false: no reduction note on the right (small figures; the caption carries it) */
 export function sectionSvg(m,level,W,H,theme=THEME.dark,maxK=2.2,opts={}){
   const note=opts.note!==false;
-  const k=Math.max(1,Math.min(maxK,W/380,H/200)),col=theme.level[level],fmt=v=>v.toFixed(m.dp),pid=`secHatch${++uid}`;
-  const fs=11.5*k,fsDim=13*k,dim=`${fmt(m.cur)} ${m.unit}`,tw=dim.length*fsDim*0.6+14*k;
-  const drop=m.prev-m.cur,dropTxt=drop>=0?`감소 ${MINUS}${fmt(drop)} ${m.unit}`:`증가 +${fmt(-drop)} ${m.unit}`;
+  const k=Math.max(1,Math.min(maxK,W/380,H/200)),col=theme.level[level],fmt=v=>thickNum(v,m.layer),pid=`secHatch${++uid}`;
+  const fs=11.5*k,fsDim=13*k,dim=thick(m.cur,m.layer),tw=dim.length*fsDim*0.6+14*k;
+  const dropTxt=drop(m.prev,m.cur,m.layer);   // −253 µm (signed)
   const rel=v=>Math.min(1.2,Math.max(0.2,1-EXAG*(m.ref-v)/m.ref)),outerRel=Math.max(1,rel(m.prev),rel(m.cur));
   const padL=Math.max(textW(`${m.refLabel} ${fmt(m.ref)}`,10.5*k),textW('이전',fs))+12*k;
   const padR=(note?Math.max(textW(dropTxt,12*k),textW('이전 대비',10.5*k)):0)+textW('이전',fs)+14*k;
@@ -42,7 +42,7 @@ export function sectionSvg(m,level,W,H,theme=THEME.dark,maxK=2.2,opts={}){
   const wp=wOf(m.prev),wc=wOf(m.cur),narrow=wc<tw+16*k,L=w=>cx-w/2,Rt=w=>cx+w/2;   // narrow: dimension text below the line
   const yLab=fs+2,y1=yLab+10*k,top=y1+8*k,bot=Math.max(top+30,H-(narrow?40:30)*k),dimY=bot+16*k;
   const annX=Rt(Math.max(wp,wc,wRef))+8*k,a=6*k,arrow=(x,dir)=>`<path d="M${x} ${dimY}l${-dir*a} ${-a*0.6}v${a*1.2}z" fill="${col}"/>`;
-  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${m.title} 단면: 이전 ${fmt(m.prev)}, 현재 ${fmt(m.cur)} ${m.unit}, ${m.refLabel} ${fmt(m.ref)}">
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${m.title} 단면: 이전 ${thick(m.prev,m.layer)}, 현재 ${dim}, ${m.refLabel} ${thick(m.ref,m.layer)}">
     <defs><pattern id="${pid}" width="${7*k}" height="${7*k}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="${7*k}" stroke="${theme.hatch}" stroke-width="${1.2*k}"/></pattern></defs>
     <rect x="${L(wp)}" y="${top}" width="${wp}" height="${bot-top}" fill="${col}" fill-opacity=".16"/>
     <rect x="${L(wc)}" y="${top}" width="${wc}" height="${bot-top}" fill="${theme.material[m.layer]}"/>
