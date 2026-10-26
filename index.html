@@ -14,17 +14,15 @@
   <header class="topbar">
     <div class="brand">
       <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M2 19h28l-4.5 7.5H7.5z" fill="#F37321"/><path d="M7 19v-8h6v8M15.5 19v-4.5h11V19" fill="none" stroke="#FBB584" stroke-width="1.6"/><path d="M9.5 11V6.5" stroke="#F89B6C" stroke-width="1.6"/></svg>
-      <div><div class="brand-name">Dr.Dock</div><div class="brand-sub">설계 DX</div></div>
+      <div class="brand-name">Dr.Dock</div>
     </div>
-    <nav class="crumbs" aria-label="현재 위치">
-      <span>선체 외판 디지털 트윈</span><span class="sep">/</span>
-      <b>174K LNG Carrier</b><span class="mono">H-2491</span><span class="sep">/</span>
-      <span>정기 리도킹 · 2번 도크</span>
-    </nav>
+    <div class="crumbs" aria-label="선박">
+      <b>174K LNG Carrier</b><span class="mono">H-2491</span>
+    </div>
     <div class="top-right">
       <div class="field"><label for="dockSel">도킹</label>
         <select id="dockSel">
-          <option>2026.10 리도킹 (현재)</option>
+          <option>2026.10 리도킹 · 2번 도크 (현재)</option>
           <option>2023.09 리도킹</option>
           <option>2021.06 신조 인도</option>
         </select>
@@ -35,10 +33,10 @@
         <div class="map-more">
           <button class="icon-btn" id="mapMoreBtn" aria-haspopup="true" aria-expanded="false" aria-controls="mapMenu" aria-label="매핑 메뉴" title="매핑 메뉴">⋯</button>
           <div class="menu" id="mapMenu" hidden>
-            <div class="menu-main"><button class="menu-item" id="mapRestart">다시 매핑</button></div>
+            <div class="menu-main"><button class="menu-item" id="mapRestart">재매핑</button></div>
             <div class="menu-confirm" hidden>
               <p>기존 측정 결과를 지우고 처음부터 매핑합니다</p>
-              <div class="menu-actions"><button class="btn-ghost sm" id="mapCancel">취소</button><button class="btn-primary" id="mapConfirm">다시 매핑</button></div>
+              <div class="menu-actions"><button class="btn-ghost sm" id="mapCancel">취소</button><button class="btn-primary" id="mapConfirm">재매핑</button></div>
             </div>
           </div>
         </div>

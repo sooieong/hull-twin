@@ -374,7 +374,7 @@ ui.subscribe((k,o)=>{
 });
 /* mapping state (SPEC 10.1, 10.2)
    mapping: heatmap fills in behind the robot · paused: heatmap, robot and path stay where they are ·
-   done: whole ship + all results, robot and path hidden; "다시 매핑" only in the ⋯ menu */
+   done: whole ship + all results, robot and path hidden; "재매핑" only in the ⋯ menu */
 const poseText=p=>`${loc(p.fr,p.strake,p.side)} · ${coords(p.X,p.Y,p.Z)}`;
 let mapMode=null,robotSeen=false;
 function syncMap(){
@@ -384,7 +384,7 @@ function syncMap(){
   const btn=$('#mapBtn');btn.hidden=!active;btn.textContent=st==='mapping'?'매핑 중지':'이어서 매핑';btn.classList.toggle('secondary',st==='mapping');
   $('.map-more').hidden=!(st==='paused'||st==='done');
   $('#speedSeg').hidden=!active;   // replay speed only matters while a run is going or paused
-  const again=st==='paused'?'처음부터 다시':'다시 매핑';$('#mapRestart').textContent=again;$('#mapConfirm').textContent=again;
+  const again=st==='paused'?'처음부터 다시':'재매핑';$('#mapRestart').textContent=again;$('#mapConfirm').textContent=again;
   $('#stRobotWrap').classList.toggle('idle',st!=='mapping');
   if(st==='done')$('#stRobot').textContent=`매핑 완료 · 측정점 ${num(store.records.length)}개 · 마지막 측정 ${store.lastTs?dateTime(store.lastTs):'—'}`;
   if(st==='paused')$('#stRobot').textContent=store.pose?`매핑 중지 · ${poseText(store.pose)} · 진행 ${pct}`:`매핑 중지 · 진행 ${pct}`;
