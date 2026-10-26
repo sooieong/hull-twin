@@ -1,5 +1,7 @@
 /* =========================================================
    보조 시각화 2: 상세 (SPEC 5.2, 10.5, 10.6) — 선택한 측정점에 따라 바뀐다.
+   매핑 중(중지 포함)에 고른 지점이 없으면 가장 최근에 측정된 이상 지점(현재 레이어 기준)을 자동으로 보여준다.
+   사용자가 지점을 고르면 그 지점을 계속 보여준다.
    위치·판정 정보는 KPI 목록에 있으므로 여기에는 그림과 수치 카드만 둔다. 어떤 지점인지는 패널 헤더에 작게 표시한다.
    - 도막 두께 · 강판 두께: 단면 비교 그림 (private/두께비교_예시.png 구성)이 남는 높이를 채운다.
      이전 도킹 두께 = 점선, 현재 = 실선, 기준값(원두께·설계) = 가는 회색 선, 아래 치수선, 오른쪽 감소량, 아래 수치 카드 4칸
@@ -16,7 +18,7 @@ const zoneLabel=z=>ZONE_LABELS[ZONES.indexOf(z)]||z;
 const ICON_PHOTO='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-2.5h6L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/><path d="M3 3l18 18"/></svg>';
 const ICON_OK='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m8 12.3 2.7 2.7 5.3-5.6"/></svg>';
 const ICON_PICK='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>';
-const state=(icon,t,s)=>`<div class="dt-state">${icon}<b>${t}</b><span>${s}</span></div>`;
+const state=(icon,t,s)=>`<div class="dt-state">${icon}<b>${t}</b>${s?`<span>${s}</span>`:''}</div>`;
 
 /* photo lightbox: closes on the backdrop, the close button or Esc */
 function createLightbox(){
@@ -38,12 +40,25 @@ export function createDetailPanel(body,store,ui,subEl){
     // numbers in the mono face, words (종류, 판정, 조치) in the UI face so they can wrap
     return `<div class="dt-cards">${list.map(([k,v,hl])=>`<div class="dt-card"><span>${esc(k)}</span><b class="${/^[\d—]/.test(String(v))?'':'tx'}"${hl?` style="color:${LV_COLOR[level]}"`:''}>${esc(v)}</b></div>`).join('')}</div>`;
   }
+  const mapping=()=>store.mapState==='mapping'||store.mapState==='paused';
+  /* latest abnormal measurement of the layer (records are kept in arrival order) */
+  function latestAbnormal(layer){
+    const R=store.records;
+    for(let i=R.length-1;i>=0;i--)if(judge(R[i],layer).level>0)return R[i];
+    return null;
+  }
+  /* the record shown: the user's pick, or while mapping with no pick, the latest abnormal one */
+  const shownRecord=()=>ui.selId!=null?store.get(ui.selId)||null:mapping()?latestAbnormal(ui.layer):null;
+  let last=null;   // {r,layer,mode}: skip identical redraws so the photo/figure does not flicker during mapping
   function render(){
-    const layer=ui.layer,r=ui.selId!=null?store.get(ui.selId):null;
-    subEl.textContent=r?`FR ${r.fr} · ${r.strake}(${r.side})`:'';
-    if(!r){body.innerHTML=ui.selId!=null&&(store.mapState==='mapping'||store.mapState==='paused')
+    const layer=ui.layer,r=shownRecord(),auto=ui.selId==null&&!!r;
+    const mode=r?'r':ui.selId!=null&&mapping()?'pending':'empty';
+    if(last&&last.r===r&&last.layer===layer&&last.mode===mode)return;
+    last={r,layer,mode};
+    subEl.textContent=r?`FR ${r.fr} · ${r.strake}(${r.side})${auto?' · 최근 이상':''}`:'';
+    if(!r){body.innerHTML=mode==='pending'
       ?state(ICON_PICK,'아직 측정되지 않은 지점입니다','로봇이 지나가면 이 지점의 값이 표시됩니다')
-      :state(ICON_PICK,'지점을 선택하세요','메인 히트맵, Side Shell 도면, KPI 목록에서 선택할 수 있습니다');return;}
+      :state(ICON_PICK,'보수 우선순위 목록에서 지점을 선택하세요');return;}
     const {level}=judge(r,layer),action=actionFor(r,layer,level,isCompound(r));
     if(layer==='defect'){
       const has=!!r.defect,caption=has?`${DEFECT_LABEL[r.defect]} · ${r.defectArea} m² · FR ${r.fr} 외판열 ${r.strake}(${r.side}) · ${zoneLabel(r.zone)}`:'';
@@ -68,7 +83,7 @@ export function createDetailPanel(body,store,ui,subEl){
     const W=Math.round(fig.clientWidth),H=Math.round(fig.clientHeight);
     fig.innerHTML=W>40&&H>60?sectionSvg(m,level,W,H):'';
   }
-  new ResizeObserver(()=>{const r=ui.selId!=null&&store.get(ui.selId);if(r&&ui.layer!=='defect')drawFig(thickness(r,ui.layer),judge(r,ui.layer).level);}).observe(body);
+  new ResizeObserver(()=>{const r=last&&last.r;if(r&&last.layer!=='defect')drawFig(thickness(r,ui.layer),judge(r,ui.layer).level);}).observe(body);
   store.subscribe(k=>{if(k.has('state')){clearTimeout(timer);timer=null;render();}else if(k.has('records')&&!timer)timer=setTimeout(()=>{timer=null;render();},250);});
   ui.subscribe(k=>{if(k==='layer'||k==='select')render();});
   render();

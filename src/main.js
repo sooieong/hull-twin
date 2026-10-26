@@ -39,7 +39,7 @@ const state={selFR:170,hoverX:null,hoverSrc:null,cut:false};
 const hooks={onSelect:[],onHover:[]};
 function selectFR(fr){
   fr=clamp(Math.round(fr),0,FRMAX);state.selFR=fr;const X=fr*FS;const s=section(X);
-  $('#secFr').textContent=fr;$('#secMiniFr').textContent=fr;$('#secZone').textContent=regionOf(X);
+  const fi=$('#secFr');if(document.activeElement!==fi)fi.value=fr;$('#secMiniFr').textContent=fr;$('#secZone').textContent=regionOf(X);
   $('#secX').textContent=fmt(X)+' m';
   const hb=HB(X,T);$('#secHb').textContent=hb>0?fmt(hb)+' m':'—';
   const g=s.gs[G-1];$('#secG').textContent=fmt(g,1)+' m';
@@ -52,6 +52,13 @@ function setHover(X,src){state.hoverX=X;state.hoverSrc=X==null?null:src;hooks.on
   if(X==null&&src!=='3d')$('#stCursor').textContent='—';}
 $('#secSlider').max=FRMAX;
 $('#secSlider').addEventListener('input',e=>selectFR(+e.target.value));
+/* frame number typed into the card: Enter moves there (clamped to 0–FRMAX), Esc or leaving the field restores it */
+{const fi=$('#secFr');
+  fi.addEventListener('focus',()=>fi.select());
+  fi.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){const n=parseInt(fi.value,10);fi.blur();if(Number.isFinite(n))selectFR(n);e.preventDefault();}
+    else if(e.key==='Escape'){fi.blur();e.preventDefault();}});
+  fi.addEventListener('blur',()=>{fi.value=state.selFR;});}
 
 /* =========================================================
    3D VIEWPORT (three.js)

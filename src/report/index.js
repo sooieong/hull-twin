@@ -18,7 +18,7 @@ const VIEW_JOBS=[{key:'all',view:'iso',w:700,h:400},
 const PAGE={w:1123,h:794,mmW:297,mmH:210};   // A4 가로
 const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
-export const reportFileName=d=>`DRDock_Report_${SHIP.hull}_${ymd(d)}.pdf`;
+export const reportFileName=d=>`Dr.Dock_Report_${SHIP.hull}_${ymd(d)}.pdf`;
 
 /* the 5 report pages as one element (images decoded, ready to show or to rasterise) */
 export async function buildReportPages(store,now=new Date()){
@@ -31,7 +31,7 @@ export async function buildReportPages(store,now=new Date()){
 export async function showPreview(store){
   document.body.classList.add('rp-preview');
   const pv=document.createElement('div');pv.className='rp-pv';
-  pv.innerHTML=`<div class="rp-pv-bar"><b>DR.Dock</b> 진단 보고서 미리보기<span>A4 가로 5장 · 1123 × 794 px · 전체 측정 데이터 기준</span><a href="${location.pathname}">대시보드로 돌아가기</a></div><div class="rp-pv-wait">보고서를 만드는 중…</div>`;
+  pv.innerHTML=`<div class="rp-pv-bar"><b>Dr.Dock</b> 진단 보고서 미리보기<span>A4 가로 5장 · 1123 × 794 px · 전체 측정 데이터 기준</span><a href="${location.pathname}">대시보드로 돌아가기</a></div><div class="rp-pv-wait">보고서를 만드는 중…</div>`;
   document.body.appendChild(pv);
   if(document.fonts&&document.fonts.ready)await document.fonts.ready;
   const root=await buildReportPages(store);
@@ -68,7 +68,7 @@ export async function makeReportPdf(store,now=new Date()){
       if(i)pdf.addPage();
       pdf.addImage(page.toDataURL('image/jpeg',0.92),'JPEG',0,0,PAGE.mmW,PAGE.mmH);
     });
-    pdf.setProperties({title:`DR.Dock Hull Report ${SHIP.hull} ${ymd(now)}`,creator:'DR.Dock'});
+    pdf.setProperties({title:`Dr.Dock Hull Report ${SHIP.hull} ${ymd(now)}`,creator:'Dr.Dock'});
     return pdf.output('blob');
   }finally{host.remove();}
 }
@@ -95,7 +95,7 @@ export function setupReportButton(button,store,toast){
     if(typeof window.showSaveFilePicker==='function'){
       try{handle=await window.showSaveFilePicker({suggestedName:name,types:[{description:'PDF 문서',accept:{'application/pdf':['.pdf']}}]});}
       catch(e){if(e&&e.name==='AbortError')return;                      // cancelled: end quietly
-        console.warn('[DR.Dock] 저장 창을 쓸 수 없어 일반 다운로드로 저장합니다',e);handle=null;}   // e.g. inside an iframe
+        console.warn('[Dr.Dock] 저장 창을 쓸 수 없어 일반 다운로드로 저장합니다',e);handle=null;}   // e.g. inside an iframe
     }
     busy=true;button.textContent='보고서 생성 중…';sync();
     let stage='make';
@@ -106,7 +106,7 @@ export function setupReportButton(button,store,toast){
       if(handle){const w=await handle.createWritable();await w.write(blob);await w.close();toast(`보고서를 저장했습니다 · ${handle.name}`,4000);}
       else{download(blob,name);toast(`보고서를 저장했습니다 · 다운로드 폴더 · ${name}`,4000);}
     }catch(e){
-      console.error(`[DR.Dock] 보고서 ${stage==='make'?'생성':'저장'} 실패`,e);
+      console.error(`[Dr.Dock] 보고서 ${stage==='make'?'생성':'저장'} 실패`,e);
       toast(`보고서를 ${stage==='make'?'만들지':'저장하지'} 못했습니다 · ${shortError(e)}`,8000);
     }finally{busy=false;button.textContent=label;sync();}
   });

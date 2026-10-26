@@ -18,7 +18,7 @@ const TYPE={dft:'도막',plate:'강판',defect:'손상'};
 
 function page(n,title,body,now){
   return `<section class="rp-page" data-page="${n}">
-    <header class="rp-head"><div class="rp-brand">${LOGO}<span>DR.Dock</span></div>
+    <header class="rp-head"><div class="rp-brand">${LOGO}<span>Dr.Dock</span></div>
       <div class="rp-doc"><b>선체 외판 진단 보고서</b><span>${SHIP.name} · ${SHIP.hull}</span></div>
       <div class="rp-ch"><i>${n}</i><b>${title}</b></div></header>
     <div class="rp-body">${body}</div>

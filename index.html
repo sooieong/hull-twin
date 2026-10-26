@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>DR.Dock 선체 진단</title>
+<title>Dr.Dock 선체 진단</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M2 19h28l-4.5 7.5H7.5z' fill='%23F37321'/%3E%3Cpath d='M7 19v-8h6v8M15.5 19v-4.5h11V19' fill='none' stroke='%23FBB584' stroke-width='1.6'/%3E%3Cpath d='M9.5 11V6.5' stroke='%23F89B6C' stroke-width='1.6'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +14,7 @@
   <header class="topbar">
     <div class="brand">
       <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M2 19h28l-4.5 7.5H7.5z" fill="#F37321"/><path d="M7 19v-8h6v8M15.5 19v-4.5h11V19" fill="none" stroke="#FBB584" stroke-width="1.6"/><path d="M9.5 11V6.5" stroke="#F89B6C" stroke-width="1.6"/></svg>
-      <div><div class="brand-name">DR.Dock</div><div class="brand-sub">설계 DX</div></div>
+      <div><div class="brand-name">Dr.Dock</div><div class="brand-sub">설계 DX</div></div>
     </div>
     <nav class="crumbs" aria-label="현재 위치">
       <span>선체 외판 디지털 트윈</span><span class="sep">/</span>
@@ -110,19 +110,17 @@
 
         <div class="ov ov-sec" id="secCard">
           <button class="sec-mini" id="secExpand" aria-label="프레임 정보 펼치기" title="펼치기"><small>FR</small><span id="secMiniFr">170</span><svg class="ic chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></button>
-          <div class="row1"><div class="fr"><small>FR</small><span id="secFr">170</span></div><span class="zone" id="secZone">평행 중앙부</span>
+          <div class="row1"><label class="fr"><small>FR</small><input id="secFr" value="170" inputmode="numeric" autocomplete="off" spellcheck="false" aria-label="프레임 번호 (입력 후 Enter)" title="클릭해서 입력 · Enter로 이동"></label>
+            <label class="tog"><input type="checkbox" id="cutTog">단면 절단</label>
             <button class="icon-btn sm" id="secCollapse" aria-label="프레임 정보 접기" title="접기"><svg class="ic chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></button></div>
           <dl class="kv">
+            <dt>구역</dt><dd><span class="zone" id="secZone">평행 중앙부</span></dd>
             <dt>X (AP 기준)</dt><dd id="secX">144.50 m</dd>
             <dt>반폭 @ 설계흘수</dt><dd id="secHb">23.20 m</dd>
             <dt>외판 거스 (편현)</dt><dd id="secG">48.6 m</dd>
             <dt>외판열</dt><dd id="secS">K, A–N</dd>
           </dl>
           <input class="slider" type="range" id="secSlider" min="0" max="351" value="170" aria-label="단면 프레임 번호">
-          <div class="sec-foot">
-            <label class="tog"><input type="checkbox" id="cutTog">단면 절단</label>
-            <span class="hint">선체 클릭으로 선택</span>
-          </div>
         </div>
 
 
