@@ -5,62 +5,13 @@
      이전 도킹 두께 = 점선, 현재 = 실선, 기준값(원두께·설계) = 가는 회색 선, 아래 치수선, 오른쪽 감소량, 아래 수치 카드 4칸
    - 도막 손상: 실제 손상 사진을 잘리지 않게 전체 표시(contain), 누르면 라이트박스. 사진이 없으면 "사진 없음" (가짜 이미지는 만들지 않는다)
    ========================================================= */
-import { judge, isCompound, actionFor, LEVEL_LABEL, DEFECT_LABEL, ratioPct, lossPct } from './data/criteria.js';
+import { judge, isCompound, actionFor, LEVEL_LABEL, DEFECT_LABEL } from './data/criteria.js';
 import { ZONES, ZONE_LABELS } from './hull.js';
+import { thickness, sectionSvg, THEME } from './sectionSvg.js';
 
-export const PREV_DOCK='2023.09';                 // 이전 도킹 (헤더 도킹 선택 목록과 같은 값)
-const EXAG=1.6;                                   // 두께 차이 과장 배율 (그림 전용)
-const LV_COLOR=['#8FA3BF','#FFB224','#FF5A4E'];   // 정상 · 주의 · 심각 (히트맵 계열, UI 오렌지와 구분)
+const LV_COLOR=THEME.dark.level;   // 정상 · 주의 · 심각 (히트맵 계열, UI 오렌지와 구분)
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const zoneLabel=z=>ZONE_LABELS[ZONES.indexOf(z)]||z;
-const MINUS='−';
-
-function thickness(r,layer){
-  if(layer==='plate')return {title:'강판 두께',unit:'mm',dp:1,ref:r.plateOrig,prev:r.platePrev,cur:r.plate,refLabel:'원두께',
-    material:'#3A4558',cards:[['원두께',r.plateOrig],[`이전 (${PREV_DOCK})`,r.platePrev],['현재',r.plate,1],['감소율 (원두께 대비)',lossPct(r),1]]};
-  return {title:'도막 두께',unit:'µm',dp:0,ref:r.dftDesign,prev:r.dftPrev,cur:r.dft,refLabel:'설계',
-    material:'#4A3A1E',cards:[['설계 (NDFT)',r.dftDesign],[`이전 (${PREV_DOCK})`,r.dftPrev],['현재',r.dft,1],['설계 대비',ratioPct(r),1]]};
-}
-
-/* rough text width (px): Hangul ≈ 1 em, other characters ≈ 0.6 em */
-const textW=(t,fs)=>[...t].reduce((w,ch)=>w+(/[\u3131-\uD7A3]/.test(ch)?1:0.6),0)*fs;
-
-/* section drawing (px, W × H). The section takes all the width left after the labels (left: reference value,
-   right: the reduction note) and all the height; line weights, labels and the dimension text scale with the space (k ≥ 1). */
-function sectionSvg(m,level,W,H){
-  const k=Math.max(1,Math.min(2.2,W/380,H/200)),col=LV_COLOR[level],fmt=v=>v.toFixed(m.dp);
-  const fs=11.5*k,fsDim=13*k,dim=`${fmt(m.cur)} ${m.unit}`,tw=dim.length*fsDim*0.6+14*k;
-  const drop=m.prev-m.cur,dropTxt=drop>=0?`감소 ${MINUS}${fmt(drop)} ${m.unit}`:`증가 +${fmt(-drop)} ${m.unit}`;
-  const rel=v=>Math.min(1.2,Math.max(0.2,1-EXAG*(m.ref-v)/m.ref)),outerRel=Math.max(1,rel(m.prev),rel(m.cur));
-  const padL=Math.max(textW(`${m.refLabel} ${fmt(m.ref)}`,10.5*k),textW('이전',fs))+12*k;
-  const padR=Math.max(textW(dropTxt,12*k),textW('이전 대비',10.5*k),textW('이전',fs))+14*k;
-  const wRef=Math.max(40,(W-padL-padR)/outerRel),cx=padL+wRef*outerRel/2;
-  const wOf=v=>wRef*rel(v);
-  const wp=wOf(m.prev),wc=wOf(m.cur),narrow=wc<tw+16*k,L=w=>cx-w/2,Rt=w=>cx+w/2;   // narrow: dimension text below the line
-  const yLab=fs+2,y1=yLab+10*k,top=y1+8*k,bot=Math.max(top+30,H-(narrow?40:30)*k),dimY=bot+16*k;
-  const annX=Rt(Math.max(wp,wc,wRef))+8*k,a=6*k,arrow=(x,dir)=>`<path d="M${x} ${dimY}l${-dir*a} ${-a*0.6}v${a*1.2}z" fill="${col}"/>`;
-  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${m.title} 단면: 이전 ${fmt(m.prev)}, 현재 ${fmt(m.cur)} ${m.unit}, ${m.refLabel} ${fmt(m.ref)}">
-    <defs><pattern id="dtHatch" width="${7*k}" height="${7*k}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="${7*k}" stroke="rgba(255,255,255,.12)" stroke-width="${1.2*k}"/></pattern></defs>
-    <rect x="${L(wp)}" y="${top}" width="${wp}" height="${bot-top}" fill="${col}" fill-opacity=".16"/>
-    <rect x="${L(wc)}" y="${top}" width="${wc}" height="${bot-top}" fill="${m.material}"/>
-    <rect x="${L(wc)}" y="${top}" width="${wc}" height="${bot-top}" fill="url(#dtHatch)"/>
-    <g stroke="#6F7C93" stroke-width="${k}"><line x1="${L(wRef)}" y1="${top-4*k}" x2="${L(wRef)}" y2="${bot+8*k}"/><line x1="${Rt(wRef)}" y1="${top-4*k}" x2="${Rt(wRef)}" y2="${bot+8*k}"/></g>
-    <g stroke="#C9D3E3" stroke-width="${1.6*k}" stroke-dasharray="${2*k} ${3*k}"><line x1="${L(wp)}" y1="${y1}" x2="${L(wp)}" y2="${bot}"/><line x1="${Rt(wp)}" y1="${y1}" x2="${Rt(wp)}" y2="${bot}"/></g>
-    <g stroke="${col}" stroke-width="${2.4*k}"><line x1="${L(wc)}" y1="${y1}" x2="${L(wc)}" y2="${dimY+5*k}"/><line x1="${Rt(wc)}" y1="${y1}" x2="${Rt(wc)}" y2="${dimY+5*k}"/></g>
-    <g font-size="${fs}" font-family="IBM Plex Sans KR,sans-serif">
-      <text x="${L(wp)-5*k}" y="${yLab}" text-anchor="end" fill="#C9D3E3">이전</text>
-      ${wc<70*k?`<text x="${cx}" y="${yLab}" text-anchor="middle" fill="${col}">현재</text>`
-        :`<text x="${L(wc)+5*k}" y="${yLab}" fill="${col}">현재</text><text x="${Rt(wc)-5*k}" y="${yLab}" text-anchor="end" fill="${col}">현재</text>`}
-      <text x="${Rt(wp)+5*k}" y="${yLab}" fill="#C9D3E3">이전</text>
-      <text x="${L(wRef)-6*k}" y="${bot+8*k}" text-anchor="end" font-size="${10.5*k}" fill="#6F7C93">${m.refLabel} ${fmt(m.ref)}</text>
-      <text x="${annX}" y="${(top+bot)/2-2*k}" fill="${col}" font-size="${12*k}">${dropTxt}</text>
-      <text x="${annX}" y="${(top+bot)/2+13*k}" fill="#6F7C93" font-size="${10.5*k}">이전 대비</text>
-    </g>
-    ${narrow?`<line x1="${L(wc)}" y1="${dimY}" x2="${Rt(wc)}" y2="${dimY}" stroke="${col}" stroke-width="${1.2*k}"/>`
-      :`<g stroke="${col}" stroke-width="${1.2*k}"><line x1="${L(wc)}" y1="${dimY}" x2="${cx-tw/2}" y2="${dimY}"/><line x1="${cx+tw/2}" y1="${dimY}" x2="${Rt(wc)}" y2="${dimY}"/></g>${arrow(L(wc),-1)}${arrow(Rt(wc),1)}`}
-    <text x="${cx}" y="${narrow?dimY+18*k:dimY+fsDim*0.35}" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-weight="500" font-size="${fsDim}" fill="#E8EDF6">${dim}</text>
-  </svg>`;
-}
 
 const ICON_PHOTO='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-2.5h6L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/><path d="M3 3l18 18"/></svg>';
 const ICON_OK='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m8 12.3 2.7 2.7 5.3-5.6"/></svg>';

@@ -19,8 +19,9 @@ Node.js 18 이상 필요.
 - `src/kpi.js` — KPI 패널(요약, 보수 구역 우선순위 목록)
 - `src/panels.js` — 패널 접기·최대화(상태는 localStorage에 기억)
 - `src/sideShell.js` — 보조 시각화 1: Side Shell 전개도(Canvas)
-- `src/detail.js` — 보조 시각화 2: 두께 단면 비교(SVG), 손상 사진
-- `src/pdfReport.js` — 보고서 생성(PDF): 화면 캡처 + KPI 상위 10건. `html2canvas`·`jspdf`는 버튼을 누를 때 불러옴
+- `src/detail.js` — 보조 시각화 2: 두께 단면 비교, 손상 사진 · `src/sectionSvg.js` — 두께 단면 그림(상세 패널·보고서 공용)
+- `src/hullMesh.js` — 선체 외판 메시 데이터(대시보드 3D·보고서 3D 공용)
+- `src/report/` — 진단 보고서 5장(A4 가로): `data.js` 계산, `pages.js` 페이지, `charts.js` SVG 차트, `render3d.js` 오프스크린 3D 그림
 - `src/data/` — 데이터 계층
   - `robotSource.js` 데이터 소스 인터페이스(+ WebSocket 골격), `simulator.js` 시뮬레이터
   - `scanPath.js` 외판 전체 순회 경로, `synth.js` 예시 측정값 생성
@@ -28,6 +29,6 @@ Node.js 18 이상 필요.
   - `photos.js` `public/images/defects/` 손상 사진 찾기
 
 ## 참고
-- 보고서는 Chrome·Edge에서 저장 창이 뜨고(바탕화면 선택 가능), 그 밖의 브라우저는 다운로드 폴더에 저장된다.
+- 보고서 레이아웃 확인: `http://localhost:5173/?report=preview` (PDF 대신 5장을 화면에 표시)
 - three는 0.147.0으로 고정. r155 이후 버전은 조명 기본값이 달라져 화면이 어두워질 수 있음.
 - 선체 형상, 로봇 경로, 선번(H-2491)은 예시 값.

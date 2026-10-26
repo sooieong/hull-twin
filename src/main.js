@@ -10,8 +10,8 @@ import { createUiState } from './uiState.js';
 import { createKpiPanel } from './kpi.js';
 import { createSideShell } from './sideShell.js';
 import { createDetailPanel } from './detail.js';
-import { setupReport } from './pdfReport.js';
 import { setupPanels } from './panels.js';
+import { nV, pos, girth, index as hullIndex, SUPER_BOXES } from './hullMesh.js';
 import { SimulatorSource } from './data/simulator.js';
 import { createStore } from './data/store.js';
 import { findDefectPhotos } from './data/photos.js';
@@ -90,16 +90,12 @@ const clipMats=[];
 function cm(m){clipMats.push(m);return m;}
 
 /* hull shell */
-const nV=(NX+1)*G;const pos=new Float32Array(nV*3),girth=new Float32Array(nV);
 const colReal=new Float32Array(nV*3),colBp=new Float32Array(nV*3);
 const cHull=new THREE.Color(0xD3D8DF),cBp=new THREE.Color(0x0c1528);   // 실선: light achromatic hull (SPEC 4.4) · 도면: dark navy
-for(let i=0;i<=NX;i++){const s=stSec[i],X=stX[i];for(let j=0;j<G;j++){const k=i*G+j;const Z=s.Zs[j];
-  pos[k*3]=X-XC;pos[k*3+1]=Z;pos[k*3+2]=s.Ys[j];girth[k]=s.gs[j];
-  cHull.toArray(colReal,k*3);cBp.toArray(colBp,k*3);}}
-const idx=[];for(let i=0;i<NX;i++)for(let j=0;j<G-1;j++){const a=i*G+j,b=(i+1)*G+j,c=a+1,d=b+1;idx.push(a,b,c,b,d,c);}
+for(let k=0;k<nV;k++){cHull.toArray(colReal,k*3);cBp.toArray(colBp,k*3);}
 const hullGeo=new THREE.BufferGeometry();
 hullGeo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-hullGeo.setIndex(idx);hullGeo.computeVertexNormals();hullGeo.computeBoundingSphere();
+hullGeo.setIndex(hullIndex);hullGeo.computeVertexNormals();hullGeo.computeBoundingSphere();
 // each side shares position/normal/index but has its own colours (the heatmap differs port vs starboard)
 function sideGeo(){const g=new THREE.BufferGeometry();g.setAttribute('position',hullGeo.attributes.position);g.setAttribute('normal',hullGeo.attributes.normal);
   g.setIndex(hullGeo.index);g.setAttribute('color',new THREE.BufferAttribute(colReal.slice(),3));g.boundingSphere=hullGeo.boundingSphere;return g;}
@@ -192,9 +188,7 @@ const supEdgeMat=cm(new THREE.LineBasicMaterial({color:0x5F6A7C,transparent:true
 const bandMat=cm(new THREE.MeshStandardMaterial({color:0x0b0b0b,roughness:0.5}));   // K100: orange is reserved for UI accents
 function box(x0,x1,z0,z1,w,mat=supMat,yc=0){const g=new THREE.BoxGeometry(x1-x0,z1-z0,w);const m=new THREE.Mesh(g,mat);m.position.set((x0+x1)/2-XC,(z0+z1)/2,yc);superGroup.add(m);
   const e=new THREE.LineSegments(new THREE.EdgesGeometry(g),supEdgeMat);e.position.copy(m.position);superGroup.add(e);return m;}
-box(40,245,D,D+2.4,34);box(6,24,D,D+20,36);box(18,24,D+17.8,D+20,46);box(2,9,D+20,D+30,9);box(2,9,D+27.4,D+29,9.2,bandMat);
-box(120,135,D+2.4,D+6.4,14);box(278,279.4,deckZ(279),deckZ(279)+11,1.4);
-[60,100,150,200].forEach(x=>box(x,x+9,D+2.4,D+4.4,6));
+SUPER_BOXES.forEach(([x0,x1,z0,z1,w,band])=>box(x0,x1,z0,z1,w,band?bandMat:supMat));
 scene.add(superGroup);
 
 /* dock: floor, grid, walls, keel blocks */
@@ -419,10 +413,6 @@ window.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
   if(!mapMenu.hidden){openMenu(false);mapMoreBtn.focus();e.preventDefault();}
   else if(!legendPop.hidden){openLegend(false);legendBtn.focus();e.preventDefault();}
 },true);
-/* report (SPEC 6): the 3D canvas is captured right after a render instead of keeping preserveDrawingBuffer on */
-setupReport({button:$('#reportBtn'),store:()=>store,ui,toast,
-  snapshot3D:()=>{renderer.render(scene,camera);return renderer.domElement.toDataURL('image/png');},
-  ship:()=>({name:$('.crumbs b').textContent,dock:$('#dockSel').value})});
 /* 실선 | 도면 (VIEW row): 도면 = dark navy hull, orange design lines (waterlines, stations, frames); the heatmap stays */
 function setLook(l){
   look=l;const bp=l==='bp';
@@ -446,7 +436,10 @@ document.querySelectorAll('[data-look]').forEach(b=>b.addEventListener('click',(
 function setSpeed(k){if(store)store.setSpeed(k);document.querySelectorAll('[data-speed]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.speed===k)));}
 document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>setSpeed(+b.dataset.speed)));
 storeReady.then(s=>{store=s;buildPath(s.plan);setSpeed(10);
-  setLook(look);createKpiPanel($('#paneKpi .pane-body'),s,ui);createSideShell($('#paneShell .pane-body'),s,ui);
+  setLook(look);createKpiPanel($('#paneKpi .pane-body'),s,ui);
+  // diagnostic report (SPEC 6, 10.9): loaded on demand; ?report=preview shows the 5 pages instead of the dashboard
+  import('./report/index.js').then(rep=>{rep.setupReportButton($('#reportBtn'),s,toast);
+    if(new URLSearchParams(location.search).get('report')==='preview')rep.showPreview(s);});createSideShell($('#paneShell .pane-body'),s,ui);
   createDetailPanel($('#paneDetail .pane-body'),s,ui,$('#detailSub'));
   s.subscribe(k=>{
     if(k.has('records')){scheduleHeat();placeMarker(ui.selId!=null?s.get(ui.selId):null);}

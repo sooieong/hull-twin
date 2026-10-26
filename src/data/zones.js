@@ -3,21 +3,39 @@
    심각 핵심부와 그 둘레의 주의 영역은 따로 구역이 된다 (주의 띠로 여러 심각 군집이 한 덩어리가 되지 않게).
    이웃 = 같은 현에서 FR 차이 ZONE_LINK.dfr 이내이고 외판열 차이 ZONE_LINK.dstrake 이내 (K 외판열은 좌우현이 이어진다).
    구역의 판정·복합·점수는 구역 안에서 가장 나쁜 점 기준이며, 복합은 구역 안에 복합 점이 하나라도 있으면 복합이다.
+   layer 'all': 세 레이어를 합친 기준 (보고서 5장 보수 계획). 점의 판정 = 세 레이어 중 가장 나쁜 판정.
    ========================================================= */
 import { LETTERS } from '../hull.js';
-import { OK, judge, isCompound, actionFor, scoreOf } from './criteria.js';
+import { OK, CRIT, LAYERS, judge, isCompound, actionFor, scoreOf, ACTION } from './criteria.js';
 
 export const ZONE_LINK={dfr:3,dstrake:1};   // 측정 간격(3 프레임)과 이웃 외판열
 
 const strakeIdx=s=>s==='K'?-1:LETTERS.indexOf(s);
 const strakeOf=i=>i<0?'K':LETTERS[i];
 
-/* → [{worst, items, count, level, degree, compound, score, action, frMin, frMax, strakeMin, strakeMax, side, zone, ids}]
+/* 세 레이어를 합친 판정: {level, degree, types:[이상 레이어], primary:점수가 가장 높은 레이어} */
+export function judgeAll(r){
+  let level=OK,degree=0,primary=null,best=-1;const types=[];
+  for(const l of LAYERS){const j=judge(r,l);if(j.level===OK)continue;types.push(l);
+    const sc=scoreOf(j.level,j.degree,false);if(sc>best){best=sc;primary=l;level=j.level;degree=j.degree;}}
+  return {level,degree,types,primary};
+}
+function actionAll(r,level,compound){
+  if(level===OK)return null;
+  if(compound||judge(r,'plate').level===CRIT)return ACTION.steel;
+  if(judge(r,'dft').level===CRIT||judge(r,'defect').level===CRIT)return ACTION.repaint;
+  return ACTION.local;
+}
+
+/* → [{worst, items, count, level, degree, compound, score, action, frMin, frMax, strakeMin, strakeMax, side, zone, ids, types, primary}]
    우선순위 내림차순 (같은 점수면 점이 많은 구역이 위) */
 export function groupZones(records,layer){
-  const ab=[];
-  for(const r of records){const j=judge(r,layer);if(j.level===OK)continue;
-    const compound=isCompound(r);ab.push({r,level:j.level,degree:j.degree,compound,score:scoreOf(j.level,j.degree,compound),si:strakeIdx(r.strake)});}
+  const all=layer==='all',ab=[];
+  for(const r of records){
+    const j=all?judgeAll(r):judge(r,layer);if(j.level===OK)continue;
+    const compound=isCompound(r);
+    ab.push({r,level:j.level,degree:j.degree,compound,score:scoreOf(j.level,j.degree,compound),si:strakeIdx(r.strake),types:all?j.types:[layer],primary:all?j.primary:layer});
+  }
 
   const key=(side,si,fr)=>(si+2)*100000+fr*10+side,at=new Map();
   ab.forEach((a,i)=>at.set(key(a.r.side==='P'?1:0,a.si,a.r.fr),i));
@@ -36,13 +54,14 @@ export function groupZones(records,layer){
   for(const items of groups.values()){
     items.sort((a,b)=>b.score-a.score);
     const w=items[0],compound=items.some(a=>a.compound);
-    let frMin=1e9,frMax=-1e9,siMin=99,siMax=-99;const sides=new Set(),zc={};
+    let frMin=1e9,frMax=-1e9,siMin=99,siMax=-99;const sides=new Set(),zc={},types=new Set();
     for(const a of items){frMin=Math.min(frMin,a.r.fr);frMax=Math.max(frMax,a.r.fr);siMin=Math.min(siMin,a.si);siMax=Math.max(siMax,a.si);
-      sides.add(a.r.side);zc[a.r.zone]=(zc[a.r.zone]||0)+1;}
+      sides.add(a.r.side);zc[a.r.zone]=(zc[a.r.zone]||0)+1;a.types.forEach(t=>types.add(t));}
     zones.push({worst:w.r,items,count:items.length,level:w.level,degree:w.degree,compound,
-      score:scoreOf(w.level,w.degree,compound),action:actionFor(w.r,layer,w.level,compound),
+      score:scoreOf(w.level,w.degree,compound),action:all?actionAll(w.r,w.level,compound):actionFor(w.r,layer,w.level,compound),
       frMin,frMax,strakeMin:strakeOf(siMin),strakeMax:strakeOf(siMax),side:sides.size>1?'PS':[...sides][0],
-      zone:Object.keys(zc).sort((a,b)=>zc[b]-zc[a])[0],ids:new Set(items.map(a=>a.r.id))});
+      zone:Object.keys(zc).sort((a,b)=>zc[b]-zc[a])[0],ids:new Set(items.map(a=>a.r.id)),
+      types:LAYERS.filter(l=>types.has(l)),primary:w.primary});
   }
   return zones.sort((a,b)=>b.score-a.score||b.count-a.count);
 }
