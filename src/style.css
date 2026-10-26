@@ -211,10 +211,6 @@ button,select,input{font:inherit;color:inherit}
 .ss-read{position:absolute;left:30px;top:4px;z-index:2;pointer-events:none;font-family:var(--font-mono);font-size:11px;color:var(--text);
   background:rgba(3,6,12,.85);padding:1px 6px;border-radius:4px;white-space:nowrap}
 .ss-read:empty{display:none}
-.ss-legend{display:flex;align-items:center;gap:5px;font-family:var(--font-ui)}
-.ss-legend i{width:7px;height:7px;border-radius:50%}
-.ss-legend .d1{background:#FFB224}
-.ss-legend .d2{background:#B4161B;margin-left:4px}
 
 /* ---------- detail ---------- */
 .pane-detail .pane-body{display:flex;flex-direction:column}
