@@ -22,9 +22,9 @@
     <div class="top-right">
       <div class="field"><label for="dockSel">도킹</label>
         <select id="dockSel">
-          <option>2026.10 리도킹 · 2번 도크 (현재)</option>
-          <option>2023.09 리도킹</option>
-          <option>2021.06 신조 인도</option>
+          <option>2026.10 2차 리도킹·2번 도크 (현재)</option>
+          <option>2021.10 1차 리도킹</option>
+          <option>2016.10 신조 인도</option>
         </select>
       </div>
       <div class="map-toggle" id="mapToggle">
@@ -49,18 +49,21 @@
     <section class="pane pane-3d" id="pane3d" aria-label="3D 선체 모델">
       <div class="pane-head">
         <span class="eyebrow">3D Hull Model</span><span class="pane-title">선체 외판</span>
-        <span class="chip">Ship CS · m</span>
         <button class="help-btn" id="legendBtn" aria-expanded="false" aria-controls="legendPop" aria-label="범례와 조작법" title="범례와 조작법">?</button>
       </div>
       <div class="pop" id="legendPop" role="dialog" aria-label="범례" hidden>
-        <span class="pop-ttl" id="heatTtl">도막 두께 · 현재 / 설계</span>
+        <span class="pop-ttl" id="heatTtl">도막 두께·현재 / 설계</span>
         <div class="ramp" id="heatRamp"></div>
         <div class="ticks"><span id="heatWarn">주의</span><span id="heatCrit">심각</span></div>
         <ul>
           <li><i class="sw-hull"></i>정상 구역은 선체 기본색</li>
-          <li><i class="hatch"></i>측정 불가 · 킬 블록 접촉면</li>
+          <li><i class="hatch"></i>측정 불가·킬 블록 접촉면</li>
+          <li class="lg-top"><span class="lv lv3">최우선 보수</span>레이어별 기준·목록 맨 위</li>
+          <li class="lg-rule"><b>도막 두께</b><span data-top="coat"></span></li>
+          <li class="lg-rule"><b>강판 두께</b><span data-top="coat"></span></li>
+          <li class="lg-rule"><b>도막 손상</b><span data-top="defect"></span></li>
         </ul>
-        <p class="pop-help">드래그 회전 · 휠 확대 · 우클릭 이동 · 클릭 선택</p>
+        <p class="pop-help">드래그 회전·휠 확대·우클릭 이동·클릭 선택</p>
       </div>
       <div class="pane-body">
         <div id="vp"></div>
@@ -94,7 +97,7 @@
           <button class="chip-back" id="flyBack" hidden>← 선박 전체 보기</button>
         </div>
 
-        <details class="ov ov-layers" id="layers" open>
+        <details class="ov ov-layers" id="layers">
           <summary>Layers<svg class="ic chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></summary>
           <ul>
             <li><label class="tog"><input type="checkbox" id="lyFrames" checked>프레임선<span class="sw" style="background:#8A96AA"></span></label></li>
@@ -102,14 +105,14 @@
             <li><label class="tog"><input type="checkbox" id="lyDwl" checked>설계 흘수선<span class="sw" style="background:#4A6FB0"></span></label></li>
             <li><label class="tog"><input type="checkbox" id="lyRobot" checked>로봇 주행경로<span class="sw dash"></span></label></li>
             <li><label class="tog"><input type="checkbox" id="lySuper" checked>상부 구조</label></li>
-            <li><label class="tog"><input type="checkbox" id="lyBlocks" checked>도크 · 킬 블록</label></li>
+            <li><label class="tog"><input type="checkbox" id="lyBlocks" checked>도크·킬 블록</label></li>
             <li><label class="tog"><input type="checkbox" id="lyZones">구역 경계<span class="sw dash2"></span></label></li>
           </ul>
         </details>
 
         <div class="ov ov-sec" id="secCard">
           <button class="sec-mini" id="secExpand" aria-label="프레임 정보 펼치기" title="펼치기"><small>FR</small><span id="secMiniFr">170</span><svg class="ic chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></button>
-          <div class="row1"><label class="fr"><small>FR</small><input id="secFr" value="170" inputmode="numeric" autocomplete="off" spellcheck="false" aria-label="프레임 번호 (입력 후 Enter)" title="클릭해서 입력 · Enter로 이동"></label>
+          <div class="row1"><label class="fr"><small>FR</small><input id="secFr" value="170" inputmode="numeric" autocomplete="off" spellcheck="false" aria-label="프레임 번호 (입력 후 Enter)" title="클릭해서 입력·Enter로 이동"></label>
             <label class="tog"><input type="checkbox" id="cutTog">단면 절단</label>
             <button class="icon-btn sm" id="secCollapse" aria-label="프레임 정보 접기" title="접기"><svg class="ic chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></button></div>
           <dl class="kv">
@@ -137,23 +140,31 @@
 
     <section class="pane pane-detail" id="paneDetail" aria-label="상세">
       <div class="pane-head">
-        <span class="eyebrow">Detail</span><span class="pane-title">상세</span><span class="pane-sub" id="detailSub"></span>
+        <span class="eyebrow">Detail</span><span class="pane-title">상세</span>
       </div>
       <div class="pane-body"></div>
     </section>
 
-    <section class="pane pane-kpi" id="paneKpi" aria-label="KPI · 보수 우선순위">
-      <div class="pane-head">
-        <span class="eyebrow">KPI</span><span class="pane-title">보수 우선순위</span>
-      </div>
-      <div class="pane-body"></div>
-    </section>
+    <div class="col-side">
+      <section class="pane pane-kpi" id="paneKpi" aria-label="KPI·핵심 지표">
+        <div class="pane-head">
+          <span class="eyebrow">KPI</span><span class="pane-title">핵심 지표</span>
+        </div>
+        <div class="pane-body"></div>
+      </section>
+      <section class="pane pane-list" id="paneList" aria-label="보수 대상 목록">
+        <div class="pane-head">
+          <span class="eyebrow">List</span><span class="pane-title">보수 대상</span><span class="pane-count" id="listCount"></span>
+        </div>
+        <div class="pane-body"></div>
+      </section>
+    </div>
   </div>
 
   <footer class="statusbar">
     <span class="rb idle" id="stRobotWrap"><i></i><span id="stRobot">데이터 불러오는 중…</span></span>
     <span><span class="k">커서</span><span id="stCursor">—</span></span>
-    <span class="right"><span class="k">좌표계</span>Ship CS · X 선수(+) · Y 좌현(+) · Z 기선 · 프레임 간격 850 mm</span>
+    <span class="right"><span class="k">좌표계</span>Ship CS·X 선수(+)·Y 좌현(+)·Z 기선·프레임 간격 850 mm</span>
   </footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

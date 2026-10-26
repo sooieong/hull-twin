@@ -6,16 +6,16 @@ import { LAYERS, OK, WARN, CRIT, CRITERIA, ACTION, judge, dftRatio, plateLoss, i
 import { DEFECT_LABEL, recLoc, designRatio, lossRatio, area, pct as pctText } from '../format.js';
 import { groupZones } from '../data/zones.js';
 import { SAMPLE_EVERY } from '../data/scanPath.js';
-import { PREV_DOCK } from '../sectionSvg.js';
+import { DOCKING_CYCLE_YEARS, CURRENT_DOCK, PREV_DOCK } from '../data/docking.js';
 
 /* 예시 상수: 보고서 계산에만 쓰며 나중에 바꿀 수 있다 */
 export const REPORT_CONST={
   pointLen:SAMPLE_EVERY*FS,             // 측정점 하나가 대표하는 길이 (m): 측정 간격
   solids:0.6,                           // 도료 고형분 비율 (도료 물량 = 면적 × 설계 두께 ÷ 고형분)
-  yearsSincePrev:37/12,                 // 이전 도킹(2023.09) → 이번 도킹(2026.10)
-  yearsToNext:2.5                       // 다음 도킹까지 (예시)
+  yearsSincePrev:DOCKING_CYCLE_YEARS,   // 1차 리도킹(2021.10) → 2차 리도킹(2026.10)
+  yearsToNext:DOCKING_CYCLE_YEARS       // 다음 도킹(2031.10)까지
 };
-export const SHIP={name:'174K LNG Carrier',hull:'H-2491',docking:'2026.10 정기 리도킹',dock:'2번 도크',robot:'RBT-01',prevDock:PREV_DOCK};
+export const SHIP={name:'174K LNG Carrier',hull:'H-2491',docking:`${CURRENT_DOCK.date} ${CURRENT_DOCK.name}`,dock:CURRENT_DOCK.dock,robot:'RBT-01',prevDock:PREV_DOCK};
 
 const pct=(n,d)=>d?n/d*100:0;
 
@@ -44,16 +44,17 @@ export function buildReportData(store,now=new Date()){
   layers.dft.worst={label:'최소 도막',value:designRatio(byRatio[0]),where:recLoc(byRatio[0])};
   layers.plate.worst={label:'최대 강판 감소율',value:lossRatio(byLoss[0]),where:recLoc(byLoss[0])};
   const bigDefect=[...defects].sort((a,b)=>b.defectArea-a.defectArea)[0];
-  layers.defect.worst=bigDefect?{label:'최대 손상',value:area(bigDefect.defectArea),where:`${DEFECT_LABEL[bigDefect.defect]} · ${recLoc(bigDefect)}`}:{label:'최대 손상',value:'없음',where:''};
+  layers.defect.worst=bigDefect?{label:'최대 손상',value:area(bigDefect.defectArea),where:`${DEFECT_LABEL[bigDefect.defect]}·${recLoc(bigDefect)}`}:{label:'최대 손상',value:'없음',where:''};
 
   /* --- repair zones (all layers) and quantities --- */
   const zonesAll=groupZones(R,'all');
   const repaintPts=R.filter(r=>lv(r,'dft')===CRIT||lv(r,'defect')===CRIT);
   const repaintArea=sumArea(repaintPts);
   const paintL=repaintPts.reduce((s,r)=>s+areaOf(r)*r.dftDesign*1e-6*1000/C.solids,0);
-  const steelZones=zonesAll.filter(z=>z.action===ACTION.steel),localZones=zonesAll.filter(z=>z.action===ACTION.local);
-  const compoundZones=zonesAll.filter(z=>z.compound);
-  const headline={top:compoundZones.length,steel:steelZones.length,repaint:Math.round(repaintArea)};
+  // steel work: plain steel replacement and the compound zones (steel first, then repaint)
+  const steelZones=zonesAll.filter(z=>z.action===ACTION.steel||z.action===ACTION.steelRepaint),localZones=zonesAll.filter(z=>z.action===ACTION.local);
+  const compoundZones=zonesAll.filter(z=>z.compound),topZones=zonesAll.filter(z=>z.top);
+  const headline={top:topZones.length,steel:steelZones.length,repaint:Math.round(repaintArea)};
 
   /* --- per-zone tables --- */
   const zoneRows=f=>ZONES.map(z=>{const rs=R.filter(r=>r.zone===z);return {zone:z,n:rs.length,...f(rs)};}).filter(row=>row.n>0);
@@ -75,11 +76,11 @@ export function buildReportData(store,now=new Date()){
   const share=(rs)=>{const c={};rs.forEach(r=>c[r.zone]=(c[r.zone]||0)+1);return Object.entries(c).sort((a,b)=>b[1]-a[1]);};
   const findings=[];
   const dAb=R.filter(r=>lv(r,'dft')>OK),pAb=R.filter(r=>lv(r,'plate')>OK);
-  if(dAb.length){const [z,n]=share(dAb)[0];findings.push(`${z}에 도막 두께 이상 집중 (전체 도막 이상의 ${pctText(pct(n,dAb.length))}) · 최소 ${layers.dft.worst.value}`);}
-  if(pAb.length){const [z,n]=share(pAb)[0];findings.push(`${z}에 강판 감소 집중 (전체 강판 이상의 ${pctText(pct(n,pAb.length))}) · 최대 ${layers.plate.worst.value}, ${byLoss[0]?recLoc(byLoss[0]):''}`);}
+  if(dAb.length){const [z,n]=share(dAb)[0];findings.push(`${z}에 도막 두께 이상 집중 (전체 도막 이상의 ${pctText(pct(n,dAb.length))})·최소 ${layers.dft.worst.value}`);}
+  if(pAb.length){const [z,n]=share(pAb)[0];findings.push(`${z}에 강판 감소 집중 (전체 강판 이상의 ${pctText(pct(n,pAb.length))})·최대 ${layers.plate.worst.value}, ${byLoss[0]?recLoc(byLoss[0]):''}`);}
   if(defects.length){const sh=share(defects),top2=sh.slice(0,2),n2=top2.reduce((a,[,n])=>a+n,0);
-    findings.push(`도막 손상 ${defects.length}건 중 ${pctText(pct(n2,defects.length))}가 ${top2.map(([z])=>z).join('·')}에 분포 · ${DEFECT_LABEL.flaking} ${defects.filter(r=>r.defect==='flaking').length}건`);}
-  if(compoundZones.length&&findings.length<3)findings.push(`도막·강판 복합 이상 ${compoundZones.length}구역 — 최우선 보수 대상`);
+    findings.push(`도막 손상 ${defects.length}건 중 ${pctText(pct(n2,defects.length))}가 ${top2.map(([z])=>z).join('·')}에 분포·${DEFECT_LABEL.flaking} ${defects.filter(r=>r.defect==='flaking').length}건`);}
+  if(topZones.length&&findings.length<3)findings.push(`최우선 보수 ${topZones.length}구역 — 도막 이상(두께 또는 손상)과 강판 이상이 같은 곳에 함께 있음`);
 
   /* --- coverage --- */
   const blockedS=plan.samples.filter(s=>s.blocked),total=shellArea(),measured=sumArea(R);

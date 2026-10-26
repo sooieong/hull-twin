@@ -31,7 +31,7 @@ export async function buildReportPages(store,now=new Date()){
 export async function showPreview(store){
   document.body.classList.add('rp-preview');
   const pv=document.createElement('div');pv.className='rp-pv';
-  pv.innerHTML=`<div class="rp-pv-bar"><b>Dr.Dock</b> 진단 보고서 미리보기<span>A4 가로 5장 · 1123 × 794 px · 전체 측정 데이터 기준</span><a href="${location.pathname}">대시보드로 돌아가기</a></div><div class="rp-pv-wait">보고서를 만드는 중…</div>`;
+  pv.innerHTML=`<div class="rp-pv-bar"><b>Dr.Dock</b> 진단 보고서 미리보기<span>A4 가로 5장·1123 × 794 px·전체 측정 데이터 기준</span><a href="${location.pathname}">대시보드로 돌아가기</a></div><div class="rp-pv-wait">보고서를 만드는 중…</div>`;
   document.body.appendChild(pv);
   if(document.fonts&&document.fonts.ready)await document.fonts.ready;
   const root=await buildReportPages(store);
@@ -103,11 +103,11 @@ export function setupReportButton(button,store,toast){
       // 2) make the report, 3) write it
       const blob=await makeReportPdf(store,now);
       stage='save';
-      if(handle){const w=await handle.createWritable();await w.write(blob);await w.close();toast(`보고서를 저장했습니다 · ${handle.name}`,4000);}
-      else{download(blob,name);toast(`보고서를 저장했습니다 · 다운로드 폴더 · ${name}`,4000);}
+      if(handle){const w=await handle.createWritable();await w.write(blob);await w.close();toast(`보고서를 저장했습니다·${handle.name}`,4000);}
+      else{download(blob,name);toast(`보고서를 저장했습니다·다운로드 폴더·${name}`,4000);}
     }catch(e){
       console.error(`[Dr.Dock] 보고서 ${stage==='make'?'생성':'저장'} 실패`,e);
-      toast(`보고서를 ${stage==='make'?'만들지':'저장하지'} 못했습니다 · ${shortError(e)}`,8000);
+      toast(`보고서를 ${stage==='make'?'만들지':'저장하지'} 못했습니다·${shortError(e)}`,8000);
     }finally{busy=false;button.textContent=label;sync();}
   });
   store.subscribe(k=>{if(k.has('state'))sync();});sync();

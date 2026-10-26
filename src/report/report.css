@@ -31,7 +31,7 @@
 .rp-lv{display:inline-block;padding:0 6px;border-radius:3px;font-size:10px;font-weight:600;line-height:16px}
 .rp-lv0{background:#E3E6EB;color:#3A4252}
 .rp-lv1{background:#FFB224;color:#000000}
-.rp-lv2{background:#C42A1B;color:#FFFFFF}
+.rp-lv2,.rp-lv3{background:#C42A1B;color:#FFFFFF}
 .rp-none{margin:4px 0;color:#6B7385}
 
 .rp-legend{display:flex;gap:14px;margin-top:4px;font-size:10px;color:#3A4252}

@@ -8,8 +8,8 @@
    ========================================================= */
 import { T, R, FS, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, ZONES, section, atGirth, girthAtZ, zoneOf, strakeName, signedGirth, recordU,
   KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
-import { OK, judge } from './data/criteria.js';
-import { LAYER_LABEL, LEVEL_LABEL, value, recLoc, loc } from './format.js';
+import { OK, judge, isTop } from './data/criteria.js';
+import { LAYER_LABEL, gradeLabel, value, recLoc, loc } from './format.js';
 import { mappingState } from './emptyState.js';
 import { heatOf, heatRGB, buildIndex, nearest } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
@@ -102,11 +102,7 @@ export function createSideShell(body,store,ui){
     if(sel){const x=px(sel.fr),y=py(recordU(sel));
       ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.beginPath();
       ctx.moveTo(x,M.t);ctx.lineTo(x,h-M.b);ctx.moveTo(M.l,y);ctx.lineTo(w-M.r,y);ctx.stroke();ctx.setLineDash([]);
-      [[7.5,'#fff'],[5.5,'#000'],[2.2,'#fff']].forEach(([rad,col])=>{ctx.fillStyle=col;ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);ctx.fill();});
-      const label=recLoc(sel);ctx.font=`600 11px ${LBL}`;
-      const tw=ctx.measureText(label).width+10,lx=Math.min(Math.max(M.l,x-tw/2),w-M.r-tw),ly=y-11<M.t+14?y+11:y-25;
-      ctx.fillStyle='rgba(3,6,12,.9)';ctx.fillRect(lx,ly,tw,15);ctx.strokeStyle='#fff';ctx.strokeRect(lx+.5,ly+.5,tw-1,14);
-      ctx.fillStyle='#fff';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(label,lx+5,ly+8);}
+      [[7.5,'#fff'],[5.5,'#000'],[2.2,'#fff']].forEach(([rad,col])=>{ctx.fillStyle=col;ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);ctx.fill();});}
     if(robot){const x=px(robot.X/FS),y=py(robot.u),ph=(performance.now()/1000)%1.4/1.4;
       ctx.strokeStyle=`rgba(255,255,255,${0.7*(1-ph)})`;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,y,6+ph*9,0,Math.PI*2);ctx.stroke();
       ctx.fillStyle='#000';ctx.fillRect(x-4.5,y-4.5,9,9);ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.strokeRect(x-4.5,y-4.5,9,9);}
@@ -135,7 +131,7 @@ export function createSideShell(body,store,ui){
     if(!t.inside){read.textContent='';return;}
     const fr=Math.round(t.fr),q=!t.dot&&atGirth(F[fr].s,Math.abs(t.u));
     const r=t.dot&&t.dot.r,pos=r?recLoc(r):loc(fr,strakeName(Math.abs(t.u)),t.u<0?'S':'P',q?ZONES[zoneOf(fr*FS,q.Z)]:'');
-    read.textContent=t.dot?`${pos} · ${LAYER_LABEL[ui.layer]} ${value(t.dot.r,ui.layer)} · ${LEVEL_LABEL[t.dot.level]}`:pos;
+    read.textContent=t.dot?`${pos}·${LAYER_LABEL[ui.layer]} ${value(t.dot.r,ui.layer)}·${gradeLabel(t.dot.level,isTop(t.dot.r,ui.layer))}`:pos;
   });
   cv.addEventListener('pointerleave',()=>{read.textContent='';cv.style.cursor='';});
   cv.addEventListener('click',e=>{const t=hit(e);if(t.rec)ui.select(t.rec.id,{fly:true});});

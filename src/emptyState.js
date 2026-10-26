@@ -17,7 +17,7 @@ export function emptyState(title,sub='',{icon='',live=null}={}){
 
 /* the mapping / paused notice for a panel, or null when no run is going */
 export function mappingState(store,what){
-  if(store.mapState==='mapping')return emptyState(`매핑 중입니다 · ${progress(store.progress)}`,`이상이 탐지되면 ${subj(what)} 여기에 표시됩니다`,{live:'on'});
-  if(store.mapState==='paused')return emptyState(`매핑이 중지되었습니다 · ${progress(store.progress)}`,'이어서 매핑하면 이상 탐지를 계속합니다',{live:'off'});
+  if(store.mapState==='mapping')return emptyState(`매핑 중입니다·${progress(store.progress)}`,`이상이 탐지되면 ${subj(what)} 여기에 표시됩니다`,{live:'on'});
+  if(store.mapState==='paused')return emptyState(`매핑이 중지되었습니다·${progress(store.progress)}`,'이어서 매핑하면 이상 탐지를 계속합니다',{live:'off'});
   return null;
 }

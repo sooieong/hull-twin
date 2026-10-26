@@ -3,8 +3,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { clamp, smooth, L, B, D, T, R, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
   deckZ, keelZ, HB, section, atGirth, strakeLower, recordU, strakeName, ZONES, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
-import { CRITERIA, judge } from './data/criteria.js';
-import { LAYER_LABEL, LEVEL_LABEL, DEFECT_LABEL, value, loc, coords, metres, num, progress, dateTime } from './format.js';
+import { CRITERIA, TOP_RULE, judge, isTop, gradeOf } from './data/criteria.js';
+import { LAYER_LABEL, gradeLabel, DEFECT_LABEL, value, loc, coords, metres, num, progress, dateTime } from './format.js';
 import { HEAT, heatOf, heatRGB, heatAlpha, heatCss, buildIndex, addToIndex, idw, coverage, nearest } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
 import { createUiState } from './uiState.js';
@@ -273,7 +273,7 @@ function ringPoints(X,off){const s=section(X);const pts=[];
   for(let j=1;j<G;j++)pts.push(new V3(X-XC,s.Zs[j],s.Ys[j]+off));
   return pts.filter((p,i,a)=>i===0||p.distanceTo(a[i-1])>1e-3);}
 const labelsEl=$('#labels');const frLabels=[];
-for(let n=0;n<=FRMAX;n+=50){const el=document.createElement('div');el.className='lbl3d';el.textContent='FR '+n;labelsEl.appendChild(el);const X=n*FS;const Z=deckZ(X);frLabels.push({el,p:new V3(X-XC,Z+2.2,HB(X,Z)+0.5)});}
+for(let n=0;n<=FRMAX;n+=50){const el=document.createElement('div');el.className='lbl3d';el.textContent='FR'+n;labelsEl.appendChild(el);const X=n*FS;const Z=deckZ(X);frLabels.push({el,p:new V3(X-XC,Z+2.2,HB(X,Z)+0.5)});}
 const selLabel=document.createElement('div');selLabel.className='lbl3d sel';labelsEl.appendChild(selLabel);let selLabelPos=new V3();
 // staggered along the ship so the stacked bands do not overlap in the side view
 const zoneLabels=[[0.3*L,0,B/4],[0.34*L,1.2],[0.42*L,(R+0.6+T-1.2)/2],[0.52*L,T+0.2],[0.6*L,(T+1.6+D)/2],[0.95*L,T],[0.04*L,T+4]].map(([X,Z,Y],i)=>{
@@ -286,7 +286,7 @@ hooks.onSelect.push((fr,X)=>{
   const pts=ringPoints(X,0.12);const curve=new THREE.CatmullRomCurve3(pts,false,'centripetal');
   ringMesh=new THREE.Mesh(new THREE.TubeGeometry(curve,Math.max(60,pts.length*3),0.24,6,false),ringMat);hullGroup.add(ringMesh);
   clipPlane.constant=X-XC+0.02;
-  selLabel.textContent='FR '+fr;const Z=deckZ(X);selLabelPos.set(X-XC,Z+5.5,HB(X,Z));
+  selLabel.textContent='FR'+fr;const Z=deckZ(X);selLabelPos.set(X-XC,Z+5.5,HB(X,Z));
 });
 hooks.onHover.push((X,src)=>{
   if(X==null){hoverRing.visible=false;if(src!=='3d')hoverDot.visible=false;return;}
@@ -334,11 +334,12 @@ function paintHull(){
     attr.needsUpdate=true;});
 }
 const LEGEND={
-  dft:{t:'도막 두께 · 현재 / 설계',w:`주의 · ${CRITERIA.dft.warn*100}% 미만`,c:`심각 · ${CRITERIA.dft.crit*100}% 미만`},
-  plate:{t:'강판 두께 · 원두께 대비 감소율',w:`주의 · ${CRITERIA.plate.warn*100}% 이상`,c:`심각 · ${CRITERIA.plate.crit*100}% 이상`},
-  defect:{t:'도막 손상 · 종류 / 면적',w:`주의 · ${DEFECT_LABEL.scratch}`,c:`심각 · ${DEFECT_LABEL.flaking}, ${CRITERIA.defect.critArea} m² 이상`}
+  dft:{t:'도막 두께·현재 / 설계',w:`주의·${CRITERIA.dft.warn*100}% 미만`,c:`심각·${CRITERIA.dft.crit*100}% 미만`},
+  plate:{t:'강판 두께·감소율 (원두께 기준)',w:`주의·${CRITERIA.plate.warn*100}% 이상`,c:`심각·${CRITERIA.plate.crit*100}% 이상`},
+  defect:{t:'도막 손상·종류 / 면적',w:`주의·${DEFECT_LABEL.scratch}`,c:`심각·${DEFECT_LABEL.flaking}, ${CRITERIA.defect.critArea} m² 이상`}
 };
 $('#heatRamp').style.background=`linear-gradient(90deg,${heatCss()})`;
+document.querySelectorAll('#legendPop [data-top]').forEach(el=>{el.textContent=TOP_RULE[el.dataset.top];});   // 최우선 보수 기준 (criteria.js)
 function syncLayer(){const l=ui.layer;
   document.querySelectorAll('[data-layer]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.layer===l)));
   $('#heatTtl').textContent=LEGEND[l].t;$('#heatWarn').textContent=LEGEND[l].w;$('#heatCrit').textContent=LEGEND[l].c;}
@@ -375,19 +376,19 @@ ui.subscribe((k,o)=>{
 /* mapping state (SPEC 10.1, 10.2)
    mapping: heatmap fills in behind the robot · paused: heatmap, robot and path stay where they are ·
    done: whole ship + all results, robot and path hidden; "재매핑" only in the ⋯ menu */
-const poseText=p=>`${loc(p.fr,p.strake,p.side,p.zone)} · ${coords(p.X,p.Y,p.Z)}`;
+const poseText=p=>`${loc(p.fr,p.strake,p.side,p.zone)}·${coords(p.X,p.Y,p.Z)}`;
 let mapMode=null,robotSeen=false;
 function syncMap(){
   const st=store.mapState,active=st==='mapping'||st==='paused',pct=progress(store.progress);
   const ms=$('#mapState');ms.classList.toggle('on',st==='mapping');ms.classList.toggle('paused',st==='paused');ms.classList.toggle('done',st==='done');
-  $('#mapStateTxt').textContent=st==='mapping'?`매핑 중 · ${pct}`:st==='paused'?`매핑 중지 · ${pct}`:'매핑 완료';
+  $('#mapStateTxt').textContent=st==='mapping'?`매핑 중·${pct}`:st==='paused'?`매핑 중지·${pct}`:'매핑 완료';
   const btn=$('#mapBtn');btn.hidden=!active;btn.textContent=st==='mapping'?'매핑 중지':'이어서 매핑';btn.classList.toggle('secondary',st==='mapping');
   $('.map-more').hidden=!(st==='paused'||st==='done');
   $('#speedSeg').hidden=!active;   // replay speed only matters while a run is going or paused
   const again=st==='paused'?'처음부터 다시':'재매핑';$('#mapRestart').textContent=again;$('#mapConfirm').textContent=again;
   $('#stRobotWrap').classList.toggle('idle',st!=='mapping');
-  if(st==='done')$('#stRobot').textContent=`매핑 완료 · 측정점 ${num(store.records.length)}개 · 마지막 측정 ${store.lastTs?dateTime(store.lastTs):'—'}`;
-  if(st==='paused')$('#stRobot').textContent=store.pose?`매핑 중지 · ${poseText(store.pose)} · 진행 ${pct}`:`매핑 중지 · 진행 ${pct}`;
+  if(st==='done')$('#stRobot').textContent=`매핑 완료·측정점 ${num(store.records.length)}개·마지막 측정 ${store.lastTs?dateTime(store.lastTs):'—'}`;
+  if(st==='paused')$('#stRobot').textContent=store.pose?`매핑 중지·${poseText(store.pose)}·진행 ${pct}`:`매핑 중지·진행 ${pct}`;
   if(!active||!store.pose){robotWrap.visible=false;robotSeen=false;}
   pathGroup.visible=active&&lyRobotOn;
   if(st!==mapMode){
@@ -403,8 +404,8 @@ function onPose(p){
   follow.raw=followAngle(p);
   setRobotTarget(p,!robotSeen);robotSeen=true;robotWrap.visible=true;showPathAt(p.k);
   const pct=progress(p.progress);
-  $('#mapStateTxt').textContent=`매핑 중 · ${pct}`;
-  $('#stRobot').textContent=`RBT-01 매핑 중 · ${poseText(p)} · 진행 ${pct}`;
+  $('#mapStateTxt').textContent=`매핑 중·${pct}`;
+  $('#stRobot').textContent=`RBT-01 매핑 중·${poseText(p)}·진행 ${pct}`;
 }
 $('#mapBtn').addEventListener('click',()=>{if(!store)return;if(store.mapState==='mapping')store.pause();else if(store.mapState==='paused')store.resume();});
 // ⋯ menu: restart from the beginning, confirmed inside the menu (no browser confirm)
@@ -450,11 +451,11 @@ document.querySelectorAll('[data-look]').forEach(b=>b.addEventListener('click',(
 function setSpeed(k){if(store)store.setSpeed(k);document.querySelectorAll('[data-speed]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.speed===k)));}
 document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>setSpeed(+b.dataset.speed)));
 storeReady.then(s=>{store=s;buildPath(s.plan);setSpeed(10);
-  setLook(look);createKpiPanel($('#paneKpi .pane-body'),s,ui);
+  setLook(look);createKpiPanel($('#paneKpi .pane-body'),$('#paneList .pane-body'),$('#listCount'),s,ui);
   // diagnostic report (SPEC 6, 10.9): loaded on demand; ?report=preview shows the 5 pages instead of the dashboard
   import('./report/index.js').then(rep=>{rep.setupReportButton($('#reportBtn'),s,toast);
     if(new URLSearchParams(location.search).get('report')==='preview')rep.showPreview(s);});createSideShell($('#paneShell .pane-body'),s,ui);
-  createDetailPanel($('#paneDetail .pane-body'),s,ui,$('#detailSub'));
+  createDetailPanel($('#paneDetail .pane-body'),s,ui);
   s.subscribe(k=>{
     if(k.has('records')){scheduleHeat();placeMarker(ui.selId!=null?s.get(ui.selId):null);}
     if(k.has('state')||k.has('records'))syncMap();
@@ -567,14 +568,14 @@ function pick(e){
   lastHit={fr,X,rec};
   let val='<div class="none">측정값 없음</div>';
   if(rec){const lv=judge(rec,ui.layer).level;
-    val=`<div class="tv"><b>${value(rec,ui.layer)}</b><span class="lv lv${lv}">${LEVEL_LABEL[lv]}</span></div>`;}
-  const zone=ZONES[zoneOf(X,Z)],[frTxt,...rest]=loc(fr,st,side,zone).split(' · ');   // FR bold, the rest of the same line lighter
-  tip.innerHTML=`<div class="t1">${frTxt} <em>· ${rest.join(' · ')}</em></div><div class="t2">${LAYER_LABEL[ui.layer]}</div>${val}<div class="t3">${coords(X,Y,Z)}</div>`;
+    const cx=isTop(rec,ui.layer);val=`<div class="tv"><b>${value(rec,ui.layer)}</b><span class="lv lv${gradeOf(lv,cx)}">${gradeLabel(lv,cx)}</span></div>`;}
+  const zone=ZONES[zoneOf(X,Z)],[frTxt,...rest]=loc(fr,st,side,zone).split('·');   // FR bold, the rest of the same line lighter
+  tip.innerHTML=`<div class="t1">${frTxt}<em>·${rest.join('·')}</em></div><div class="t2">${LAYER_LABEL[ui.layer]}</div>${val}<div class="t3">${coords(X,Y,Z)}</div>`;
   tip.hidden=false;const pw=r.width;tip.style.left=(e.clientX-r.left)+'px';tip.style.top=(e.clientY-r.top)+'px';
   tip.style.transform=(e.clientX-r.left)>pw-260?'translate(calc(-100% - 14px),14px)':'translate(14px,14px)';
   hoverDot.position.copy(p);hoverDot.visible=true;
   setHover(X,'3d');
-  $('#stCursor').textContent=`${loc(fr,st,side,zone)} · ${coords(X,Y,Z)}`;
+  $('#stCursor').textContent=`${loc(fr,st,side,zone)}·${coords(X,Y,Z)}`;
 }
 const cvs=renderer.domElement;
 cvs.addEventListener('pointermove',e=>{pendingMove=e;});
@@ -632,6 +633,6 @@ function loop(now){
 }
 syncLayer();paintHull();selectFR(state.selFR);
 setupPanels($('.main'));
-if(window.innerWidth<=1100)$('#layers').open=false;   // narrow main pane: keep the hull visible
+// LAYERS starts folded every time (index.html, no 'open'); its state is not remembered
 requestAnimationFrame(loop);
 })();

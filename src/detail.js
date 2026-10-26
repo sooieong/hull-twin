@@ -3,17 +3,18 @@
    매핑 중(중지 포함)에 고른 지점이 없으면 가장 최근에 측정된 이상 지점(현재 레이어 기준)을 자동으로 보여준다.
    아직 이상이 없으면 공통 빈 상태 안내(emptyState.js)를 보여준다. 사용자가 지점을 고르면 그 지점을 계속 보여준다.
    매핑 완료 상태의 기본 선택(KPI 1위)은 KPI 패널이 정한다.
-   위치·판정 정보는 KPI 목록에 있으므로 여기에는 그림과 수치 카드만 둔다. 어떤 지점인지는 패널 헤더에 작게 표시한다.
-   - 도막 두께 · 강판 두께: 단면 비교 그림 (private/두께비교_예시.png 구성)이 남는 높이를 채운다.
-     이전 도킹 두께 = 점선, 현재 = 실선, 기준값(원두께·설계) = 가는 회색 선, 아래 치수선, 오른쪽 감소량, 아래 수치 카드 4칸
+   위치·판정 정보는 KPI 목록에 있으므로 여기에는 그림과 수치 카드만 둔다.
+   - 도막 두께 · 강판 두께 (private/시안_v4_수정.png): 왼쪽 단면 그림 + 치수선 3개(sectionSvg.js)가 패널 높이를 채운다.
+     오른쪽 칸: 카드 2개 — "원두께 대비"(도막은 "설계 대비") 줄어든 두께(판정색), "1차 리도킹 대비" 줄어든 두께(주황, 조금 작게).
+     "○○ 대비"는 화면 전체에서 줄어든 양(부호 포함)만 뜻한다.
    - 도막 손상: 실제 손상 사진을 잘리지 않게 전체 표시(contain), 누르면 라이트박스. 사진이 없으면 "사진 없음" (가짜 이미지는 만들지 않는다)
    ========================================================= */
-import { judge, isCompound, actionFor } from './data/criteria.js';
-import { LEVEL_LABEL, DEFECT_LABEL, recLoc, area } from './format.js';
+import { judge, isTop, actionFor, gradeOf, CRIT } from './data/criteria.js';
+import { gradeLabel, DEFECT_LABEL, recLoc, area, dropHtml } from './format.js';
 import { thickness, sectionSvg, THEME } from './sectionSvg.js';
 import { emptyState, mappingState, PICK_HINT } from './emptyState.js';
 
-const LV_COLOR=THEME.dark.level;   // 정상 · 주의 · 심각 (히트맵 계열, UI 오렌지와 구분)
+const LV_COLOR=THEME.dark.level,PREV_COLOR=LV_COLOR[1];   // 1차 리도킹 대비: 주황   // 정상 · 주의 · 심각 (히트맵 계열, UI 오렌지와 구분)
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 const ICON_PHOTO='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-2.5h6L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/><path d="M3 3l18 18"/></svg>';
@@ -35,7 +36,7 @@ function createLightbox(){
     opener=from;lb.hidden=false;lb.querySelector('.lb-close').focus();}};
 }
 
-export function createDetailPanel(body,store,ui,subEl){
+export function createDetailPanel(body,store,ui){
   let timer=null;const lightbox=createLightbox();
   function cards(list,level){
     // numbers in the mono face, words (종류, 판정, 조치) in the UI face so they can wrap
@@ -52,22 +53,22 @@ export function createDetailPanel(body,store,ui,subEl){
   const shownRecord=()=>ui.selId!=null?store.get(ui.selId)||null:mapping()?latestAbnormal(ui.layer):null;
   let last=null;   // {r,layer,mode}: skip identical redraws so the photo/figure does not flicker during mapping
   function render(){
-    const layer=ui.layer,r=shownRecord(),auto=ui.selId==null&&!!r;
+    const layer=ui.layer,r=shownRecord();
     // no record: the user's pick not measured yet, the mapping notice (nothing abnormal yet), or the pick hint
     const empty=r?null:!mapping()?state(ICON_PICK,PICK_HINT):ui.selId!=null?state(ICON_PICK,'아직 측정되지 않은 지점입니다','로봇이 지나가면 이 지점의 값이 표시됩니다')
       :mappingState(store,'상세 정보');
     if(last&&last.r===r&&last.layer===layer&&last.empty===empty)return;
     last={r,layer,empty};
-    subEl.textContent=r?`${recLoc(r)}${auto?' · 최근 이상':''}`:'';
     if(!r){body.innerHTML=empty;return;}
-    const {level}=judge(r,layer),action=actionFor(r,layer,level,isCompound(r));
+    const {level}=judge(r,layer),top=isTop(r,layer),action=actionFor(r,layer,level,top);
+    const colorLevel=Math.min(gradeOf(level,top),CRIT);   // 최우선 보수 is drawn in the 심각 colour, like its chip
     if(layer==='defect'){
-      const has=!!r.defect,caption=has?`${DEFECT_LABEL[r.defect]} · ${area(r.defectArea)} · ${recLoc(r)}`:'';
+      const has=!!r.defect,caption=has?`${DEFECT_LABEL[r.defect]}·${area(r.defectArea)}·${recLoc(r)}`:'';
       const media=!has?state(ICON_OK,'손상 없음','이 지점에서 발견된 도막 손상이 없습니다')
-        :r.photo?`<button class="dt-img" title="크게 보기" aria-label="사진 크게 보기"><img src="${esc(r.photo)}" alt="${esc(DEFECT_LABEL[r.defect])} 사진 · ${recLoc(r)}"></button>`
+        :r.photo?`<button class="dt-img" title="크게 보기" aria-label="사진 크게 보기"><img src="${esc(r.photo)}" alt="${esc(DEFECT_LABEL[r.defect])} 사진·${recLoc(r)}"></button>`
         :state(ICON_PHOTO,'사진 없음','이 손상에 연결된 사진이 없습니다');
       body.innerHTML=`<div class="dt"><div class="dt-media">${media}</div>
-        ${cards([['종류',has?DEFECT_LABEL[r.defect]:'없음'],['면적',has?area(r.defectArea):'—',1],['판정',LEVEL_LABEL[level],1],['권장 조치',action||'—',1]],level)}</div>`;
+        ${cards([['종류',has?DEFECT_LABEL[r.defect]:'없음'],['면적',has?area(r.defectArea):'—',1],['판정',gradeLabel(level,top),1],['권장 조치',action||'—',1]],colorLevel)}</div>`;
       const btn=body.querySelector('.dt-img'),img=btn&&btn.querySelector('img');
       if(img){
         img.addEventListener('error',()=>{img.closest('.dt-media').innerHTML=state(ICON_PHOTO,'사진 없음','사진 파일을 불러올 수 없습니다');},{once:true});
@@ -75,16 +76,17 @@ export function createDetailPanel(body,store,ui,subEl){
       }
       return;
     }
-    const m=thickness(r,layer);
-    body.innerHTML=`<div class="dt"><div class="dt-fig"></div>${cards(m.cards,level)}</div>`;
-    drawFig(m,level);
+    const m=thickness(r,layer),card=([k,v,u],cls,color)=>`<div class="dt-card ${cls}"><span>${k}</span>${dropHtml(v,u,color)}</div>`;
+    body.innerHTML=`<div class="dt"><div class="dt-main"><div class="dt-fig"></div>
+      <div class="dt-side">${card(m.side[0],'ref',LV_COLOR[colorLevel])}${card(m.side[1],'prev',PREV_COLOR)}</div></div></div>`;
+    drawFig(m,colorLevel);
   }
   function drawFig(m,level){
     const fig=body.querySelector('.dt-fig');if(!fig)return;
     const W=Math.round(fig.clientWidth),H=Math.round(fig.clientHeight);
     fig.innerHTML=W>40&&H>60?sectionSvg(m,level,W,H):'';
   }
-  new ResizeObserver(()=>{const r=last&&last.r;if(r&&last.layer!=='defect')drawFig(thickness(r,ui.layer),judge(r,ui.layer).level);}).observe(body);
+  new ResizeObserver(()=>{const r=last&&last.r;if(r&&last.layer!=='defect')drawFig(thickness(r,ui.layer),Math.min(gradeOf(judge(r,ui.layer).level,isTop(r,ui.layer)),CRIT));}).observe(body);
   // the mapping notice carries the progress, so robot moves (pose) refresh it too while nothing is shown
   store.subscribe(k=>{if(k.has('state')){clearTimeout(timer);timer=null;render();}
     else if((k.has('records')||k.has('pose')&&last&&!last.r)&&!timer)timer=setTimeout(()=>{timer=null;render();},250);});

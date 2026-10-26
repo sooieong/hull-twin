@@ -48,7 +48,7 @@ export function createSynth(seed=2491){
     if(defect==='flaking'){defectArea=0.15+rnd()*1.2*c;ratio=Math.min(ratio,0.25+0.3*rnd());}
     else if(defect==='scratch')defectArea=0.03+rnd()*0.35;
     const loss=Math.max(0,Math.min(0.4,0.015+0.04*rnd()+0.27*p+(rnd()-0.5)*0.02));
-    const prevLoss=loss*(0.45+0.25*rnd());
+    const prevLoss=loss*(0.4+0.2*rnd());   // at the 1st redocking (5 of the 10 years since delivery): about half of today's loss
     const dft=Math.round(design*Math.max(0.05,Math.min(1.1,ratio)));
     return {
       dft,dftDesign:design,dftPrev:Math.round(Math.max(design*(0.96+0.08*rnd()),dft*1.04)),

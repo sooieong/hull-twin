@@ -1,5 +1,5 @@
 /* =========================================================
-   패널 접기·최대화 (SPEC 10.4): 3D 선체 모델, 외판 전개도, 상세, 보수 우선순위
+   패널 접기·최대화 (SPEC 10.4): 3D 선체 모델, 외판 전개도, 상세, KPI 핵심 지표, 보수 대상
    - 접기/펼치기: 위쪽 꺾쇠(접기) ↔ 아래쪽 꺾쇠(펼치기). −/+는 확대·축소로 오해하기 쉬워 쓰지 않는다.
    - 접힌 패널은 헤더 줄만 남고 같은 열의 다른 패널이 높이를 채운다. 한 열이 모두 접히면 44px 세로 띠가 된다.
    - 최대화/복원: 헤더와 상태바 사이 전체를 차지한다. Esc로도 복원.
@@ -8,7 +8,7 @@
 export const CHEV='<svg class="ic chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg>';
 const ICON_MAX='<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg>';
 const ICON_RESTORE='<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2.5V6H2.5M13.5 6H10V2.5M10 13.5V10h3.5M2.5 10H6v3.5"/></svg>';
-const COLS=[['pane3d'],['paneShell','paneDetail'],['paneKpi']];
+const COLS=[['pane3d'],['paneShell','paneDetail'],['paneKpi','paneList']];
 const WEIGHT=[50,29,21];          // 레이아웃.png 비율 (style.css .main 과 같은 값)
 const STRIP='44px';
 const KEY='drdock.panels.v1';
