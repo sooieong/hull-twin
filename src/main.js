@@ -1,8 +1,8 @@
 import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { clamp, L, B, D, T, R, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
-  deckZ, keelZ, HB, section, recordU, strakeName, ZONE_LABELS, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
+import { clamp, smooth, L, B, D, T, R, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
+  deckZ, keelZ, HB, section, atGirth, strakeLower, recordU, strakeName, ZONE_LABELS, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
 import { CRITERIA, LAYER_LABEL, LEVEL_LABEL, judge, formatValue } from './data/criteria.js';
 import { HEAT, heatOf, heatRGB, heatAlpha, heatCss, buildIndex, addToIndex, idw, coverage, nearest } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
@@ -78,8 +78,8 @@ controls.enableDamping=true;controls.dampingFactor=0.08;controls.minDistance=8;c
 const PRESETS={iso:{p:[240,125,275],t:[0,8,0]},side:{p:[0,14,600],t:[0,12,0]},plan:{p:[0,640,0.5],t:[0,0,0]},front:{p:[560,18,0.5],t:[0,14,0]},bottom:{p:[150,-340,170],t:[0,4,0]}};
 // each preset keeps its direction; the distance is fitted so the whole ship shows in the pane (SPEC 4.1)
 const FIT=0.9,SHIP_BOX=[];for(const x of [-XC,XC])for(const y of [-1.8,D+30])for(const z of [-B/2,B/2])SHIP_BOX.push(new V3(x,y,z));
-function fitPreset(k){
-  const pr=PRESETS[k],t=new V3(...pr.t),dir=new V3(...pr.p).sub(t).normalize();
+function fitPreset(k){const pr=PRESETS[k],t=new V3(...pr.t);return fitDir(new V3(...pr.p).sub(t).normalize(),t);}
+function fitDir(dir,t){
   const ax=new V3(),ay=new V3(),az=new V3();new THREE.Matrix4().lookAt(dir,new V3(),camera.up).extractBasis(ax,ay,az);
   const tv=Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*FIT,th=tv*camera.aspect,c=new V3();let d=0;
   for(const b of SHIP_BOX){c.copy(b).sub(t);const z=c.dot(az);d=Math.max(d,z+Math.abs(c.dot(ax))/th,z+Math.abs(c.dot(ay))/tv);}
@@ -391,9 +391,17 @@ function syncMap(){
   if(st==='paused')$('#stRobot').textContent=store.pose?`중지됨 · ${poseText(store.pose)} · 진행 ${pct}%`:`중지됨 · 진행 ${pct}%`;
   if(!active||!store.pose){robotWrap.visible=false;robotSeen=false;}
   pathGroup.visible=active&&lyRobotOn;
-  if(st!==mapMode){mapMode=st;openMenu(false);paintHull();}
+  if(st!==mapMode){
+    const prev=mapMode;mapMode=st;
+    // robot follow (mapping only): every run start (fresh or resumed) moves to ISO first and follows from there;
+    // the end of the traversal stops it and brings the camera back to ISO (the KPI panel selects rank 1 at the same time)
+    follow.on=follow.engaging=follow.paused=false;
+    if(st==='mapping'){if(prev!=='paused')follow.raw=null;startFollow(ISO);}
+    else if(st==='done'&&(prev==='mapping'||prev==='paused'))goView('iso');
+    openMenu(false);paintHull();syncFollowBtn();}
 }
 function onPose(p){
+  follow.raw=followAngle(p);
   setRobotTarget(p,!robotSeen);robotSeen=true;robotWrap.visible=true;showPathAt(p.k);
   const pct=Math.floor(p.progress*100);
   $('#mapStateTxt').textContent=`매핑 중 ${pct}%`;
@@ -476,17 +484,64 @@ function startTween(to,onDone){
 }
 const flyBack=$('#flyBack');
 function pressView(k){document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===k)));}
-function goView(k){pressView(k);curView=k;flyBack.hidden=true;startTween(fitPreset(k));}
+function goView(k){pauseFollow();pressView(k);curView=k;flyBack.hidden=true;startTween(fitPreset(k));}
 /* fly to a measurement point: look at it along the outward shell normal from ~30 m; bottom points are seen from below */
 function flyTo(r){
   const t=toThree(r.X,r.Y,r.Z),dir=shellNormal(r.X,r.Y,r.Z);
   if(dir.y<-0.85){dir.x+=0.12;dir.z+=(r.Y<0?1:-1)*0.35;dir.normalize();}   // straight up would be a degenerate view
-  pressView(null);curView=null;flyBack.hidden=false;
+  pauseFollow();pressView(null);curView=null;flyBack.hidden=false;
   startTween({p:t.clone().addScaledVector(dir,FLY_DIST),t},()=>{pulseUntil=performance.now()+2000;});
 }
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>goView(b.dataset.view)));
 flyBack.addEventListener('click',()=>goView('iso'));
-controls.addEventListener('start',()=>{tween=null;curView=null;pressView(null);});
+controls.addEventListener('start',()=>{tween=null;curView=null;pressView(null);pauseFollow();});
+
+/* robot follow while mapping: the ship stays put and the camera turns around the ship centre so the face the robot is on stays in view.
+   direction = ISO (a bow-quarter look from above) turned left/right only: starboard strakes → ISO, port strakes → ISO mirrored.
+   bottom strakes lower the elevation to the 선저 preset's, looking up from below; bottom or not is judged per strake on the
+   midship section, so the view only changes when the robot changes strake (row ends at the bow/stern do not pull it).
+   distance: fitted for the current elevation seen from the ISO azimuth — exactly the ISO preset's at ISO elevation; turning
+   toward the bow (crossing the keel) needs less, so it never zooms in.
+   two low-pass stages (goal, then camera; ~3 s in all) so small robot moves do not shake the view.
+   the user orbiting/zooming, a view preset or a fly-to pauses it; "로봇 따라가기" swings back and resumes. */
+const FOLLOW_T=new V3(...PRESETS.iso.t),FOLLOW_TAU=[1.2,1.6];
+const presetAngles=k=>{const d=new V3(...PRESETS[k].p).sub(new V3(...PRESETS[k].t)).normalize();return {az:Math.atan2(d.z,d.x),el:Math.asin(d.y)};};
+const ISO=presetAngles('iso'),EL_BOTTOM=presetAngles('bottom').el;   // az: from the bow (+x) toward starboard (+z)
+const follow={paused:false,on:false,engaging:false,raw:null,goal:{...ISO},cur:{...ISO}};
+const followBtn=$('#followBtn');
+const followDir=(a,out=new V3())=>out.set(Math.cos(a.el)*Math.cos(a.az),Math.sin(a.el),Math.cos(a.el)*Math.sin(a.az));
+const followDist=el=>fitDir(followDir({az:ISO.az,el}),FOLLOW_T).p.distanceTo(FOLLOW_T);
+const followPose=a=>({p:FOLLOW_T.clone().addScaledVector(followDir(a),followDist(a.el)),t:FOLLOW_T.clone()});
+const strakeBottom=new Map(),MID=L/2,midSec=section(MID);
+function followAngle(p){
+  let b=strakeBottom.get(p.strake);
+  if(b===undefined){   // 0 = side shell … 1 = bottom, from how far the strake's outward normal points down on the midship section
+    const i=p.strake==='K'?-1:LETTERS.indexOf(p.strake),g=Math.min(i<0?KEEL_HALF/2:strakeLower(i)+STRAKE_W/2,midSec.gs[G-1]*0.999);
+    const q=atGirth(midSec,g)||{Y:B/2,Z:D},n=shellNormal(MID,-q.Y,q.Z);
+    b=smooth(-0.3,-0.8,n.y/(Math.hypot(n.y,n.z)||1));if(reduce)b=b<0.5?0:1;
+    strakeBottom.set(p.strake,b);
+  }
+  return {az:p.side==='P'?-ISO.az:ISO.az,el:ISO.el+(EL_BOTTOM-ISO.el)*b};
+}
+function syncFollowBtn(){followBtn.hidden=!(store&&store.mapState==='mapping'&&follow.paused);}
+function pauseFollow(){
+  if(store&&store.mapState==='mapping')follow.paused=true;
+  follow.on=follow.engaging=false;syncFollowBtn();
+}
+/* swing from wherever the camera is to the follow view at angles a (the usual 1 s tween), then track from there */
+function startFollow(a){
+  follow.engaging=true;follow.on=false;curView=null;pressView(null);flyBack.hidden=true;
+  startTween(followPose(a),()=>{if(!follow.engaging)return;follow.engaging=false;follow.on=true;follow.goal={...a};follow.cur={...a};});
+}
+function stepFollow(dt){
+  if(!follow.on||!store||store.mapState!=='mapping')return;
+  const to=follow.raw,gl=follow.goal,c=follow.cur;
+  if(to&&reduce){follow.goal={...to};follow.cur={...to};}
+  else if(to){const k1=1-Math.exp(-dt/FOLLOW_TAU[0]),k2=1-Math.exp(-dt/FOLLOW_TAU[1]);
+    for(const k of ['az','el']){gl[k]+=(to[k]-gl[k])*k1;c[k]+=(gl[k]-c[k])*k2;}}
+  const f=followPose(follow.cur);camera.position.copy(f.p);controls.target.copy(f.t);
+}
+followBtn.addEventListener('click',()=>{follow.paused=false;syncFollowBtn();startFollow(follow.raw||ISO);});
 
 /* frame info card: fold to a small "FR 170" chip (SPEC 10.4) */
 const secCard=$('#secCard');
@@ -559,6 +614,7 @@ function loop(now){
     const dir=tween.dir0.clone().applyQuaternion(new THREE.Quaternion().slerp(tween.q,e));
     camera.position.copy(controls.target).addScaledVector(dir,Math.exp(tween.l0+(tween.l1-tween.l0)*e));
     if(k>=1){const done=tween.onDone;tween=null;if(done)done();}}
+  stepFollow(dt);
   controls.update();
   if(robotWrap.visible){const e=1-Math.exp(-dt*14);robotGroup.position.lerp(rbTarget.p,e);robotGroup.quaternion.slerp(rbTarget.q,e);
     rbLocator.scale.setScalar(clamp(camera.position.distanceTo(robotGroup.position)/120,1,3.5));

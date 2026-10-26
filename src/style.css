@@ -154,6 +154,9 @@ button,select,input{font:inherit;color:inherit}
 .chip-back{align-self:flex-start;height:28px;padding:0 12px;border-radius:14px;border:1px solid var(--line-strong);background:var(--glass);color:var(--text);cursor:pointer;font-size:12px;
   -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .chip-back:hover{border-color:var(--ho-coral)}
+#followBtn{display:flex;align-items:center;gap:6px;border-color:var(--ho-orange)}
+#followBtn[hidden]{display:none}
+#followBtn .ic{color:var(--ho-orange)}
 
 .ov-sec{left:12px;bottom:12px;width:236px;padding:12px 14px 12px}
 .ov-sec .row1{display:flex;align-items:center;gap:10px}
