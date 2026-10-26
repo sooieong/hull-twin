@@ -1,7 +1,8 @@
 /* =========================================================
    보조 시각화 2: 상세 (SPEC 5.2, 10.5, 10.6) — 선택한 측정점에 따라 바뀐다.
    매핑 중(중지 포함)에 고른 지점이 없으면 가장 최근에 측정된 이상 지점(현재 레이어 기준)을 자동으로 보여준다.
-   사용자가 지점을 고르면 그 지점을 계속 보여준다.
+   아직 이상이 없으면 "매핑 중입니다" 안내를 보여준다. 사용자가 지점을 고르면 그 지점을 계속 보여준다.
+   매핑 완료 상태의 기본 선택(KPI 1위)은 KPI 패널이 정한다.
    위치·판정 정보는 KPI 목록에 있으므로 여기에는 그림과 수치 카드만 둔다. 어떤 지점인지는 패널 헤더에 작게 표시한다.
    - 도막 두께 · 강판 두께: 단면 비교 그림 (private/두께비교_예시.png 구성)이 남는 높이를 채운다.
      이전 도킹 두께 = 점선, 현재 = 실선, 기준값(원두께·설계) = 가는 회색 선, 아래 치수선, 오른쪽 감소량, 아래 수치 카드 4칸
@@ -18,7 +19,8 @@ const zoneLabel=z=>ZONE_LABELS[ZONES.indexOf(z)]||z;
 const ICON_PHOTO='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-2.5h6L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/><path d="M3 3l18 18"/></svg>';
 const ICON_OK='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m8 12.3 2.7 2.7 5.3-5.6"/></svg>';
 const ICON_PICK='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>';
-const state=(icon,t,s)=>`<div class="dt-state">${icon}<b>${t}</b>${s?`<span>${s}</span>`:''}</div>`;
+const ICON_LIVE='<div class="dt-live" aria-hidden="true"><i></i><i></i><i></i></div>';   // mapping in progress: blinking dots
+const state=(icon,t,s,cls='')=>`<div class="dt-state${cls}">${icon}<b>${t}</b>${s?`<span>${s}</span>`:''}</div>`;
 
 /* photo lightbox: closes on the backdrop, the close button or Esc */
 function createLightbox(){
@@ -52,12 +54,13 @@ export function createDetailPanel(body,store,ui,subEl){
   let last=null;   // {r,layer,mode}: skip identical redraws so the photo/figure does not flicker during mapping
   function render(){
     const layer=ui.layer,r=shownRecord(),auto=ui.selId==null&&!!r;
-    const mode=r?'r':ui.selId!=null&&mapping()?'pending':'empty';
+    const mode=r?'r':!mapping()?'empty':ui.selId!=null?'pending':store.mapState;   // … 'mapping' | 'paused': nothing abnormal yet
     if(last&&last.r===r&&last.layer===layer&&last.mode===mode)return;
     last={r,layer,mode};
     subEl.textContent=r?`FR ${r.fr} · ${r.strake}(${r.side})${auto?' · 최근 이상':''}`:'';
-    if(!r){body.innerHTML=mode==='pending'
-      ?state(ICON_PICK,'아직 측정되지 않은 지점입니다','로봇이 지나가면 이 지점의 값이 표시됩니다')
+    if(!r){body.innerHTML=mode==='pending'?state(ICON_PICK,'아직 측정되지 않은 지점입니다','로봇이 지나가면 이 지점의 값이 표시됩니다')
+      :mode==='mapping'?state(ICON_LIVE,'매핑 중입니다','이상이 탐지되면 상세 정보가 여기에 표시됩니다',' live')
+      :mode==='paused'?state(ICON_LIVE,'매핑이 중지되었습니다','이상이 탐지되면 상세 정보가 여기에 표시됩니다',' live paused')
       :state(ICON_PICK,'보수 우선순위 목록에서 지점을 선택하세요');return;}
     const {level}=judge(r,layer),action=actionFor(r,layer,level,isCompound(r));
     if(layer==='defect'){
