@@ -1,6 +1,6 @@
 /* =========================================================
    표시 형식: 목록·상세·3D 툴팁·외판 전개도·KPI 타일·상태바·보고서가 모두 이 함수만 쓴다.
-   - 위치: FR 261 · B · 좌현 (현측은 좌현/우현, P/S 표기는 쓰지 않는다)
+   - 위치: FR 309–312 · E–F · 우현 · 선수 (프레임 · 외판열 · 현측 · 구역 한 줄. 범위는 –, 단일 값은 하나만. 현측은 좌현/우현)
    - 좌표: X 154.70 · Y −21.84 · Z 1.92 m (소수 둘째 자리, 음수는 −)
    - 두께: 도막 정수 µm (215 µm), 강판 소수 첫째 자리 mm (12.4 mm)
    - 감소량: 부호 포함 (−253 µm, −2.2 mm) · 비율: 소수 첫째 자리 % (22.5%)
@@ -28,12 +28,11 @@ const floor1=x=>Math.floor(x*10+1e-9)/10;
 export const SIDE_LABEL={S:'우현',P:'좌현',PS:'좌우현'};
 export const side=s=>SIDE_LABEL[s]||s;
 export const span=(a,b)=>a===b?String(a):`${a}–${b}`;
-export const loc=(fr,strake,sd)=>`FR ${fr} · ${strake} · ${side(sd)}`;
-export const recLoc=r=>loc(r.fr,r.strake,r.side);
-export const recLocZone=r=>`${recLoc(r)} · ${r.zone}`;
-/* repair zone: FR 120–126 · B–C · 좌현 */
-export const zoneLoc=z=>loc(span(z.frMin,z.frMax),span(z.strakeMin,z.strakeMax),z.side);
-export const zoneLocZone=z=>`${zoneLoc(z)} · ${z.zone}`;
+/* FR 309–312 · E–F · 우현 · 선수: frame · strake · side · zone (zone left out only where it is unknown) */
+export const loc=(fr,strake,sd,zone)=>[`FR ${fr}`,strake,side(sd),zone].filter(Boolean).join(' · ');
+export const recLoc=r=>loc(r.fr,r.strake,r.side,r.zone);
+/* repair zone: ranges over its points, zone = the one most of its points are in */
+export const zoneLoc=z=>loc(span(z.frMin,z.frMax),span(z.strakeMin,z.strakeMax),z.side,z.zone);
 export const coords=(X,Y,Z)=>`X ${num(X,2)} · Y ${num(Y,2)} · Z ${num(Z,2)} m`;
 export const metres=(v,dp=2)=>`${num(v,dp)} m`;
 

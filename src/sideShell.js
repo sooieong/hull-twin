@@ -6,7 +6,7 @@
          현재 레이어의 이상 지점, 선택 지점, 매핑 중 로봇 위치. 지점을 누르면 메인과 똑같이 선택된다.
    매핑 중(중지 포함) 아직 이상 지점이 없으면 공통 빈 상태 안내(emptyState.js)를 도면 위에 겹쳐 보여준다.
    ========================================================= */
-import { T, R, FS, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, section, girthAtZ, strakeName, signedGirth, recordU,
+import { T, R, FS, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, ZONES, section, atGirth, girthAtZ, zoneOf, strakeName, signedGirth, recordU,
   KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
 import { OK, judge } from './data/criteria.js';
 import { LAYER_LABEL, LEVEL_LABEL, value, recLoc, loc } from './format.js';
@@ -23,7 +23,7 @@ const PICK_PX=9;                  // click / hover tolerance around an anomaly d
 /* per-frame girth of deck edge, waterline and bilge boundaries (zone limits as in hull.zoneOf) */
 const F=[];
 for(let fr=0;fr<=FRMAX;fr++){const s=section(fr*FS);
-  F.push({g:s.gs[G-1],wl:girthAtZ(s,T),b0:girthAtZ(s,0.15),b1:girthAtZ(s,R+0.6)});}
+  F.push({s,g:s.gs[G-1],wl:girthAtZ(s,T),b0:girthAtZ(s,0.15),b1:girthAtZ(s,R+0.6)});}
 const G_MAX=Math.max(...F.map(f=>f.g));
 let nStrakes=0;while(nStrakes<LETTERS.length&&KEEL_HALF+STRAKE_W*nStrakes<G_MAX)nStrakes++;
 
@@ -133,7 +133,8 @@ export function createSideShell(body,store,ui){
   cv.addEventListener('pointermove',e=>{
     const t=hit(e);cv.style.cursor=t.dot?'pointer':'crosshair';
     if(!t.inside){read.textContent='';return;}
-    const r=t.dot&&t.dot.r,pos=r?recLoc(r):loc(Math.round(t.fr),strakeName(Math.abs(t.u)),t.u<0?'S':'P');
+    const fr=Math.round(t.fr),q=!t.dot&&atGirth(F[fr].s,Math.abs(t.u));
+    const r=t.dot&&t.dot.r,pos=r?recLoc(r):loc(fr,strakeName(Math.abs(t.u)),t.u<0?'S':'P',q?ZONES[zoneOf(fr*FS,q.Z)]:'');
     read.textContent=t.dot?`${pos} · ${LAYER_LABEL[ui.layer]} ${value(t.dot.r,ui.layer)} · ${LEVEL_LABEL[t.dot.level]}`:pos;
   });
   cv.addEventListener('pointerleave',()=>{read.textContent='';cv.style.cursor='';});

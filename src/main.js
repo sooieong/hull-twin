@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { clamp, smooth, L, B, D, T, R, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
   deckZ, keelZ, HB, section, atGirth, strakeLower, recordU, strakeName, ZONES, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
 import { CRITERIA, judge } from './data/criteria.js';
-import { LAYER_LABEL, LEVEL_LABEL, DEFECT_LABEL, value, loc, side as sideName, coords, metres, num, progress, dateTime } from './format.js';
+import { LAYER_LABEL, LEVEL_LABEL, DEFECT_LABEL, value, loc, coords, metres, num, progress, dateTime } from './format.js';
 import { HEAT, heatOf, heatRGB, heatAlpha, heatCss, buildIndex, addToIndex, idw, coverage, nearest } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
 import { createUiState } from './uiState.js';
@@ -375,7 +375,7 @@ ui.subscribe((k,o)=>{
 /* mapping state (SPEC 10.1, 10.2)
    mapping: heatmap fills in behind the robot · paused: heatmap, robot and path stay where they are ·
    done: whole ship + all results, robot and path hidden; "재매핑" only in the ⋯ menu */
-const poseText=p=>`${loc(p.fr,p.strake,p.side)} · ${coords(p.X,p.Y,p.Z)}`;
+const poseText=p=>`${loc(p.fr,p.strake,p.side,p.zone)} · ${coords(p.X,p.Y,p.Z)}`;
 let mapMode=null,robotSeen=false;
 function syncMap(){
   const st=store.mapState,active=st==='mapping'||st==='paused',pct=progress(store.progress);
@@ -568,12 +568,13 @@ function pick(e){
   let val='<div class="none">측정값 없음</div>';
   if(rec){const lv=judge(rec,ui.layer).level;
     val=`<div class="tv"><b>${value(rec,ui.layer)}</b><span class="lv lv${lv}">${LEVEL_LABEL[lv]}</span></div>`;}
-  tip.innerHTML=`<div class="t1">FR ${fr} <em>· ${st} · ${sideName(side)}</em></div><div class="t2">${ZONES[zoneOf(X,Z)]} · ${LAYER_LABEL[ui.layer]}</div>${val}<div class="t3">${coords(X,Y,Z)}</div>`;
+  const zone=ZONES[zoneOf(X,Z)],[frTxt,...rest]=loc(fr,st,side,zone).split(' · ');   // FR bold, the rest of the same line lighter
+  tip.innerHTML=`<div class="t1">${frTxt} <em>· ${rest.join(' · ')}</em></div><div class="t2">${LAYER_LABEL[ui.layer]}</div>${val}<div class="t3">${coords(X,Y,Z)}</div>`;
   tip.hidden=false;const pw=r.width;tip.style.left=(e.clientX-r.left)+'px';tip.style.top=(e.clientY-r.top)+'px';
   tip.style.transform=(e.clientX-r.left)>pw-260?'translate(calc(-100% - 14px),14px)':'translate(14px,14px)';
   hoverDot.position.copy(p);hoverDot.visible=true;
   setHover(X,'3d');
-  $('#stCursor').textContent=`${loc(fr,st,side)} · ${coords(X,Y,Z)}`;
+  $('#stCursor').textContent=`${loc(fr,st,side,zone)} · ${coords(X,Y,Z)}`;
 }
 const cvs=renderer.domElement;
 cvs.addEventListener('pointermove',e=>{pendingMove=e;});

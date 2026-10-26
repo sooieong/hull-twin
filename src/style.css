@@ -269,9 +269,8 @@ button,select,input{font:inherit;color:inherit}
 .tile.t-top{background:#B3141F;border-color:#D42A33}
 .tile.t-crit{background:linear-gradient(135deg,#9E1D25,#4F1219);border-color:#B8323A}
 .tile.t-warn{background:linear-gradient(135deg,#9A5C0B,#553608);border-color:#B87414}
-.pane-head .kpi-lay{margin-left:auto}
-.kpi-lay~.pane-ctl{margin-left:0}
-.kpi-head{display:flex;justify-content:space-between;gap:8px;padding:4px 14px 6px;flex:none;font-size:11.5px;color:var(--muted)}
+.kpi-sub{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0 10px;padding:8px 2px 7px;border-top:1px solid var(--line);flex:none}
+.kpi-sub b{font-size:12.5px;font-weight:600;color:var(--text)}
 .kpi-list{list-style:none;margin:0;padding:0 8px 10px 10px;overflow-y:auto;min-height:0;flex:1;scrollbar-width:thin}
 .kpi-list.is-empty{display:flex;flex-direction:column;padding:0}
 .kpi-empty{flex:1;display:flex;min-height:0}
@@ -281,14 +280,13 @@ button,select,input{font:inherit;color:inherit}
 .z:hover{border-color:var(--line-strong);background:var(--surface-3)}
 .z.sel{border-color:var(--ho-orange);box-shadow:inset 0 0 0 1px var(--ho-orange)}
 .z .rk{flex:none;width:20px;font-family:var(--font-label);font-weight:600;font-size:20px;line-height:1;color:var(--text-2);text-align:center;font-variant-numeric:tabular-nums}
-.z .zb{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-.z .zl{display:flex;align-items:baseline;gap:5px;min-width:0;font-size:12px;color:var(--text-2);white-space:nowrap}
-.z .zl b{font-family:var(--font-mono);font-weight:500;font-size:13px;color:var(--text)}
-.z .zl span{font-size:11.5px;overflow:hidden;text-overflow:ellipsis}
-.z .zm{display:flex;align-items:center;gap:5px;min-width:0;font-size:11.5px;color:var(--text-2);white-space:nowrap}
+.z .zb{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.z .zl{font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.z .zr{display:flex;align-items:center;gap:8px;min-width:0}
+.z .zi{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.z .zm{display:flex;align-items:center;gap:5px;min-width:0;white-space:nowrap}
 .z .zm .lv{flex:none}
 .z .zm .cx{flex:none;padding:0 6px;border-radius:4px;border:1px solid #E5484D;color:#FFB4B0;font-size:11px;line-height:16px}
-.z .zm .zn{overflow:hidden;text-overflow:ellipsis}
 .z .act{font-size:11.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .z .zv{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:3px;text-align:right}
 .z .zv .dv{display:flex;align-items:baseline;gap:3px;white-space:nowrap}

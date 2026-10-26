@@ -3,7 +3,7 @@
    1 표지·종합 진단 · 2 도막 두께 · 3 강판 두께 · 4 도막 손상 · 5 보수 계획
    ========================================================= */
 import { CRITERIA, OK, WARN, CRIT, judge } from '../data/criteria.js';
-import { LAYER_LABEL, LEVEL_LABEL, DEFECT_LABEL, value, recLocZone, zoneLocZone, thick, thickNum, drop, designRatio, lossRatio, ratio,
+import { LAYER_LABEL, LEVEL_LABEL, DEFECT_LABEL, value, recLoc, zoneLoc, thick, thickNum, drop, designRatio, lossRatio, ratio,
   pct, num, area, areaNum, dateTime } from '../format.js';
 import { SHIP, REPORT_CONST } from './data.js';
 const MAP_W=500,MAP_H=236;   // box content width of a half-page column
@@ -64,7 +64,7 @@ function page2(d,imgs){
     bandOf:v=>v<c.crit*100?CRIT:v<c.warn*100?WARN:OK});
   const zt=table(['구역','#평균','#최소','#주의','#심각','#재도장 대상 (m²)'],d.dft.zones.map(z=>`<tr>${td(z.zone)}${td(pct(z.avg),'n')}${td(ratio(z.min/100),'n')}${td(z.warn,'n')}${td(z.crit,'n')}${td(areaNum(z.area),'n')}</tr>`));
   const thin=table(['#순위','위치','#현재 / 설계 (µm)','#설계 대비','판정'],d.dft.thinnest.map((r,i)=>{const l=judge(r,'dft').level;
-    return `<tr>${td(i+1,'n')}${td(recLocZone(r))}${td(`${thickNum(r.dft,'dft')} / ${thickNum(r.dftDesign,'dft')}`,'n m')}${td(designRatio(r),'n m')}${td(chip(l))}</tr>`;}));
+    return `<tr>${td(i+1,'n')}${td(recLoc(r))}${td(`${thickNum(r.dft,'dft')} / ${thickNum(r.dftDesign,'dft')}`,'n m')}${td(designRatio(r),'n m')}${td(chip(l))}</tr>`;}));
   return `<div class="rp-grid2">
       <div class="rp-col">${box('Side Shell 전개도 · 설계 대비 도막 두께',sideShellMap(d.records,'dft',MAP_W,MAP_H)+legend([['#DCE1E8','정상'],[LV_FILL[1],`주의 · ${c.warn*100}% 미만`],[LV_FILL[2],`심각 · ${c.crit*100}% 미만`]]))}
         ${views(imgs,'dft')}</div>
@@ -77,11 +77,11 @@ function page2(d,imgs){
 function page3(d,imgs){
   const c=CRITERIA.plate,yrs=REPORT_CONST.yearsToNext;
   const secs=d.plate.top3.map((r,i)=>{const l=judge(r,'plate').level;
-    return `<figure class="rp-sec">${sectionSvg(thickness(r,'plate'),l,160,124,THEME.light,1,{note:false})}<figcaption><b>${i+1}</b> ${esc(recLocZone(r))}<br>${thick(r.platePrev,'plate')} → ${thick(r.plate,'plate')} (${drop(r.platePrev,r.plate,'plate')}) · 감소율 ${lossRatio(r)} ${chip(l)}</figcaption></figure>`;}).join('');
+    return `<figure class="rp-sec">${sectionSvg(thickness(r,'plate'),l,160,124,THEME.light,1,{note:false})}<figcaption><b>${i+1}</b> ${esc(recLoc(r))}<br>${thick(r.platePrev,'plate')} → ${thick(r.plate,'plate')} (${drop(r.platePrev,r.plate,'plate')}) · 감소율 ${lossRatio(r)} ${chip(l)}</figcaption></figure>`;}).join('');
   const zt=table(['구역','#평균 감소율','#최대 감소율','#주의','#심각'],d.plate.zones.map(z=>`<tr>${td(z.zone)}${td(pct(z.avg),'n')}${td(ratio(z.max/100),'n')}${td(z.warn,'n')}${td(z.crit,'n')}</tr>`));
-  const fast=table(['위치','#이전 → 현재 (mm)','#연간 감소','#현재 감소율'],d.plate.fastest.map(x=>`<tr>${td(recLocZone(x.r))}${td(`${thickNum(x.r.platePrev,'plate')} → ${thickNum(x.r.plate,'plate')}`,'n m')}${td(`${num(x.rate,2)} mm/년`,'n m')}${td(lossRatio(x.r),'n m')}</tr>`));
+  const fast=table(['위치','#이전 → 현재 (mm)','#연간 감소','#현재 감소율'],d.plate.fastest.map(x=>`<tr>${td(recLoc(x.r))}${td(`${thickNum(x.r.platePrev,'plate')} → ${thickNum(x.r.plate,'plate')}`,'n m')}${td(`${num(x.rate,2)} mm/년`,'n m')}${td(lossRatio(x.r),'n m')}</tr>`));
   const pr=d.plate.predicted;
-  const pred=pr.length?table(['위치','#현재 감소율','#예상 감소율','현재'],pr.slice(0,5).map(x=>`<tr>${td(recLocZone(x.r))}${td(lossRatio(x.r),'n m')}${td(ratio(x.pred),'n m')}${td(chip(judge(x.r,'plate').level))}</tr>`))
+  const pred=pr.length?table(['위치','#현재 감소율','#예상 감소율','현재'],pr.slice(0,5).map(x=>`<tr>${td(recLoc(x.r))}${td(lossRatio(x.r),'n m')}${td(ratio(x.pred),'n m')}${td(chip(judge(x.r,'plate').level))}</tr>`))
     :'<p class="rp-none">지금 속도로는 다음 도킹까지 심각 등급에 도달할 곳이 없습니다.</p>';
   return `<div class="rp-grid2">
       <div class="rp-col">${box('Side Shell 전개도 · 원두께 대비 감소율',sideShellMap(d.records,'plate',MAP_W,MAP_H)+legend([['#DCE1E8','정상'],[LV_FILL[1],`주의 · ${c.warn*100}% 이상`],[LV_FILL[2],`심각 · ${c.crit*100}% 이상`]]))}
@@ -99,7 +99,7 @@ function page4(d,imgs){
   const photos=Array.from({length:6},(_,i)=>{const r=d.defect.photos[i];if(!r)return '<figure class="rp-ph empty"><div>—</div></figure>';
     const l=judge(r,'defect').level;
     return `<figure class="rp-ph">${r.photo?`<img src="${esc(r.photo)}" alt="">`:'<div class="rp-nophoto">사진 없음</div>'}
-      <figcaption><span>${esc(recLocZone(r))}</span><span>${DEFECT_LABEL[r.defect]} · ${area(r.defectArea)} ${chip(l)}</span></figcaption></figure>`;}).join('');
+      <figcaption><span>${esc(recLoc(r))}</span><span>${DEFECT_LABEL[r.defect]} · ${area(r.defectArea)} ${chip(l)}</span></figcaption></figure>`;}).join('');
   return `<div class="rp-grid2">
       <div class="rp-col">${box('Side Shell 전개도 · 손상 위치',sideShellMap(d.records,'defect',MAP_W,MAP_H,'markers')+legend([[LV_FILL[2],DEFECT_LABEL.flaking,'dot'],[LV_FILL[1],DEFECT_LABEL.scratch,'dia']]))}
         ${views(imgs,'defect')}</div>
@@ -110,12 +110,12 @@ function page4(d,imgs){
 /* ---------- 5. repair plan ---------- */
 function page5(d){
   const C=REPORT_CONST,rp=d.repair;
-  const rows=rp.zones.map((z,i)=>`<tr class="${z.compound?'rp-cx':''}">${td(i+1,'n')}${td(esc(zoneLocZone(z)))}${td(z.types.map(t=>`<span class="rp-tag">${TYPE[t]}</span>`).join(''))}
+  const rows=rp.zones.map((z,i)=>`<tr class="${z.compound?'rp-cx':''}">${td(i+1,'n')}${td(esc(zoneLoc(z)))}${td(z.types.map(t=>`<span class="rp-tag">${TYPE[t]}</span>`).join(''))}
     ${td(esc(value(z.worst,z.primary)),z.primary==='defect'?'':'m')}${td(chip(z.level))}${td(esc(z.action))}${td(areaNum(z.area),'n')}</tr>`);
   const list=table(['#순위','위치 (FR · 외판열 · 현측 · 구역)','이상 항목','측정값 / 기준값','판정','권장 조치','#대상 면적 (m²)'],rows,'rp-plan');
   const pr=d.plate.predicted;
   const watch=pr.length?`<p>지금의 감소 속도가 이어지면 다음 도킹(${C.yearsToNext}년 후)에 <b>${pr.length}곳</b>이 심각 등급(감소율 ${CRITERIA.plate.crit*100}% 이상)에 도달할 것으로 예상됩니다.</p>
-      <ul>${pr.slice(0,3).map(x=>`<li>${esc(recLocZone(x.r))} — 현재 ${lossRatio(x.r)} → 예상 ${ratio(x.pred)}</li>`).join('')}</ul>`
+      <ul>${pr.slice(0,3).map(x=>`<li>${esc(recLoc(x.r))} — 현재 ${lossRatio(x.r)} → 예상 ${ratio(x.pred)}</li>`).join('')}</ul>`
     :'<p>지금 속도로는 다음 도킹까지 심각 등급에 도달할 곳이 없습니다.</p>';
   const crit=CRITERIA;
   const ctab=table(['항목','정상','주의','심각'],[

@@ -9,7 +9,7 @@
    - 도막 손상: 실제 손상 사진을 잘리지 않게 전체 표시(contain), 누르면 라이트박스. 사진이 없으면 "사진 없음" (가짜 이미지는 만들지 않는다)
    ========================================================= */
 import { judge, isCompound, actionFor } from './data/criteria.js';
-import { LEVEL_LABEL, DEFECT_LABEL, recLoc, recLocZone, area } from './format.js';
+import { LEVEL_LABEL, DEFECT_LABEL, recLoc, area } from './format.js';
 import { thickness, sectionSvg, THEME } from './sectionSvg.js';
 import { emptyState, mappingState, PICK_HINT } from './emptyState.js';
 
@@ -62,7 +62,7 @@ export function createDetailPanel(body,store,ui,subEl){
     if(!r){body.innerHTML=empty;return;}
     const {level}=judge(r,layer),action=actionFor(r,layer,level,isCompound(r));
     if(layer==='defect'){
-      const has=!!r.defect,caption=has?`${DEFECT_LABEL[r.defect]} · ${area(r.defectArea)} · ${recLocZone(r)}`:'';
+      const has=!!r.defect,caption=has?`${DEFECT_LABEL[r.defect]} · ${area(r.defectArea)} · ${recLoc(r)}`:'';
       const media=!has?state(ICON_OK,'손상 없음','이 지점에서 발견된 도막 손상이 없습니다')
         :r.photo?`<button class="dt-img" title="크게 보기" aria-label="사진 크게 보기"><img src="${esc(r.photo)}" alt="${esc(DEFECT_LABEL[r.defect])} 사진 · ${recLoc(r)}"></button>`
         :state(ICON_PHOTO,'사진 없음','이 손상에 연결된 사진이 없습니다');

@@ -3,7 +3,7 @@
    ========================================================= */
 import { FS, STRAKE_W, KEEL_HALF, LETTERS, XMAX, NX, G, stSec, section, strakeLower, ZONES } from '../hull.js';
 import { LAYERS, OK, WARN, CRIT, CRITERIA, ACTION, judge, dftRatio, plateLoss, isCompound, scoreOf } from '../data/criteria.js';
-import { DEFECT_LABEL, recLocZone, designRatio, lossRatio, area, pct as pctText } from '../format.js';
+import { DEFECT_LABEL, recLoc, designRatio, lossRatio, area, pct as pctText } from '../format.js';
 import { groupZones } from '../data/zones.js';
 import { SAMPLE_EVERY } from '../data/scanPath.js';
 import { PREV_DOCK } from '../sectionSvg.js';
@@ -41,10 +41,10 @@ export function buildReportData(store,now=new Date()){
   for(const l of LAYERS){const c=[0,0,0];R.forEach(r=>c[lv(r,l)]++);layers[l]={counts:c,total:R.length};}
   const byRatio=[...R].sort((a,b)=>dftRatio(a)-dftRatio(b)),byLoss=[...R].sort((a,b)=>plateLoss(b)-plateLoss(a));
   const defects=R.filter(r=>r.defect).sort((a,b)=>{const ja=judge(a,'defect'),jb=judge(b,'defect');return scoreOf(jb.level,jb.degree,isCompound(b))-scoreOf(ja.level,ja.degree,isCompound(a));});
-  layers.dft.worst={label:'최소 도막',value:designRatio(byRatio[0]),where:recLocZone(byRatio[0])};
-  layers.plate.worst={label:'최대 강판 감소율',value:lossRatio(byLoss[0]),where:recLocZone(byLoss[0])};
+  layers.dft.worst={label:'최소 도막',value:designRatio(byRatio[0]),where:recLoc(byRatio[0])};
+  layers.plate.worst={label:'최대 강판 감소율',value:lossRatio(byLoss[0]),where:recLoc(byLoss[0])};
   const bigDefect=[...defects].sort((a,b)=>b.defectArea-a.defectArea)[0];
-  layers.defect.worst=bigDefect?{label:'최대 손상',value:area(bigDefect.defectArea),where:`${DEFECT_LABEL[bigDefect.defect]} · ${recLocZone(bigDefect)}`}:{label:'최대 손상',value:'없음',where:''};
+  layers.defect.worst=bigDefect?{label:'최대 손상',value:area(bigDefect.defectArea),where:`${DEFECT_LABEL[bigDefect.defect]} · ${recLoc(bigDefect)}`}:{label:'최대 손상',value:'없음',where:''};
 
   /* --- repair zones (all layers) and quantities --- */
   const zonesAll=groupZones(R,'all');
@@ -76,7 +76,7 @@ export function buildReportData(store,now=new Date()){
   const findings=[];
   const dAb=R.filter(r=>lv(r,'dft')>OK),pAb=R.filter(r=>lv(r,'plate')>OK);
   if(dAb.length){const [z,n]=share(dAb)[0];findings.push(`${z}에 도막 두께 이상 집중 (전체 도막 이상의 ${pctText(pct(n,dAb.length))}) · 최소 ${layers.dft.worst.value}`);}
-  if(pAb.length){const [z,n]=share(pAb)[0];findings.push(`${z}에 강판 감소 집중 (전체 강판 이상의 ${pctText(pct(n,pAb.length))}) · 최대 ${layers.plate.worst.value}, ${byLoss[0]?recLocZone(byLoss[0]):''}`);}
+  if(pAb.length){const [z,n]=share(pAb)[0];findings.push(`${z}에 강판 감소 집중 (전체 강판 이상의 ${pctText(pct(n,pAb.length))}) · 최대 ${layers.plate.worst.value}, ${byLoss[0]?recLoc(byLoss[0]):''}`);}
   if(defects.length){const sh=share(defects),top2=sh.slice(0,2),n2=top2.reduce((a,[,n])=>a+n,0);
     findings.push(`도막 손상 ${defects.length}건 중 ${pctText(pct(n2,defects.length))}가 ${top2.map(([z])=>z).join('·')}에 분포 · ${DEFECT_LABEL.flaking} ${defects.filter(r=>r.defect==='flaking').length}건`);}
   if(compoundZones.length&&findings.length<3)findings.push(`도막·강판 복합 이상 ${compoundZones.length}구역 — 최우선 보수 대상`);
