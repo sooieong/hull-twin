@@ -105,6 +105,10 @@
 .rp-watch ul{margin:0;padding-left:18px;font-size:11px;line-height:1.5}
 .rp-crit td{white-space:normal}
 
+/* offscreen pages being rasterised for the PDF */
+.rp-offscreen{position:fixed;left:-20000px;top:0;pointer-events:none}
+.rp-offscreen .rp-page{box-shadow:none}
+
 /* ?report=preview */
 body.rp-preview{overflow:auto;background:#5B6474}
 body.rp-preview .app,body.rp-preview .toast{display:none!important}

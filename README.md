@@ -29,6 +29,7 @@ Node.js 18 이상 필요.
   - `photos.js` `public/images/defects/` 손상 사진 찾기
 
 ## 참고
+- 보고서 생성: 헤더 `보고서 생성` → Chrome·Edge는 저장 창(바탕화면 선택 가능), 그 밖의 브라우저는 다운로드 폴더에 `DRDock_Report_H-2491_YYYYMMDD.pdf`로 저장. 매핑 중·중지 상태에서는 비활성화.
 - 보고서 레이아웃 확인: `http://localhost:5173/?report=preview` (PDF 대신 5장을 화면에 표시)
 - three는 0.147.0으로 고정. r155 이후 버전은 조명 기본값이 달라져 화면이 어두워질 수 있음.
 - 선체 형상, 로봇 경로, 선번(H-2491)은 예시 값.

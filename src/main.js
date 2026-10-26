@@ -26,7 +26,7 @@ const lsGet=k=>{try{return localStorage.getItem(k);}catch(_){return null;}},lsSe
 
 /* ---------- toast + placeholders ---------- */
 const toastEl=$('#toast');let toastT;
-function toast(m){toastEl.textContent=m;toastEl.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{toastEl.hidden=true;},2400);}
+function toast(m,ms=2400){toastEl.textContent=m;toastEl.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{toastEl.hidden=true;},ms);}
 $('#dockSel').addEventListener('change',()=>toast('도킹 이력 비교는 측정 데이터 연결 후 활성화됩니다'));
 
 /* ---------- data layer: every panel draws from this store (SPEC 3) ---------- */
