@@ -1,77 +1,77 @@
 /* =========================================================
-   KPI 핵심 지표 패널 + 보수 대상 목록 패널 (SPEC 5.3, private/시안_v4.png): 현재 레이어 기준 요약 타일과 보수 구역 우선순위 목록.
-   요약 타일: 측정 진행률 → 최우선 보수 → 심각 → 주의 (2×2). 세 숫자는 겹치지 않는다 (criteria.gradeOf). 판정은 타일 배경색으로만 구분한다.
-   목록 패널 헤더: 제목 옆 "N건"(현재 레이어).
-   항목: 순위 | 1줄 위치(전체 폭, 넘치면 … · 마우스를 올리면 전체) | 2줄 판정 칩(최우선 보수 / 심각 / 주의), 3줄 권장 조치
-         | 2~3줄 오른쪽: 구역에서 가장 나쁜 점의 원두께 대비 감소율 % + "원두께 대비"
-           (도막 두께는 "설계 대비", 도막 손상은 손상 면적 m² + "손상 면적").
+   KPI 핵심 지표 패널 + 보수 목록 패널 (SPEC 5.3, private/보수목록_새UI.png): 현재 레이어 기준 요약 타일과 보수 구역 목록.
+   요약: 카드 하나를 얇은 세로선으로 3칸 — 최우선 보수 · 경고 · 주의. 세 숫자는 겹치지 않는다 (criteria.gradeOf). 측정 진행률은 헤더에만.
+     칸마다 윗줄 판정 아이콘(24px)과 회색 이름을 한 묶음으로 칸 가운데, 아랫줄 숫자 + "구역"도 칸 가운데.
+     묶음은 칸보다 넓어지지 않는다 (긴 이름은 줄바꿈). 숫자는 세 칸 모두 흰색 굵게.
+   목록 패널 헤더: 제목 옆 "총 N건"(현재 레이어).
+   목록: 판정별 그룹(최우선 보수 → 경고 → 주의). 그룹 제목 줄 = 아이콘·이름·건수, 건수 옆 작은 ! 버튼 — 올리거나 누르면
+     그 그룹의 권장 조치(가장 많은 조치)를 팝오버로 ("권장 조치: …").
+     항목은 한 줄(약 32px): 순위(작은 회색) · 위치(프레임 번호만 흰색 굵게, 나머지 회색) · 수치(오른쪽 정렬, 판정색, 고정폭 숫자).
+     그룹 조치와 다른 항목만 수치 앞에 회색 태그로 조치를 붙인다. 수치의 뜻은 패널 헤더 건수 옆 ? 팝오버 (VALUE_NOTE).
    기본 선택: 매핑 완료 상태(첫 화면, 매핑이 끝났을 때, 완료 상태에서 레이어를 바꿨을 때)에는 1위 구역의 가장 나쁜 점을
    자동으로 선택한다 (카메라는 그대로). 재매핑하면 선택을 해제한다.
    레이어 전환·매핑 진행에 따라 갱신되고, 항목을 누르면 구역에서 가장 나쁜 점이 선택된다.
    ========================================================= */
-import { FS, STRAKE_W } from './hull.js';
-import { CRIT, WARN, gradeOf } from './data/criteria.js';
-import { gradeLabel, refDropPctNum, dropHtml, areaNum, zoneLoc, num, progress } from './format.js';
+import { CRIT, WARN, TOP, gradeName, gradeOf } from './data/criteria.js';
+import { refDropPctNum, dropHtml, areaNum, zoneLoc, num } from './format.js';
 import { zonesOf } from './data/zones.js';
-import { SAMPLE_EVERY } from './data/scanPath.js';
+import { gradeIcon } from './gradeUi.js';
 import { emptyState, mappingState } from './emptyState.js';
 
-const AREA_PER_POINT=SAMPLE_EVERY*FS*STRAKE_W;   // 측정점 하나가 대표하는 외판 면적 (m²)
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-/* 오른쪽 큰 값과 그 아래 작은 설명: 원두께(도막은 설계) 대비 감소율 % — 판정 기준과 같은 기준이라 순위·판정·숫자가 맞는다.
-   도막 손상은 손상 면적. (실제 두께는 상세 패널에 있다) */
+/* 오른쪽 수치: 원두께(도막은 설계) 대비 감소율 % — 판정 기준과 같은 기준이라 순위·판정·숫자가 맞는다. 도막 손상은 손상 면적.
+   (실제 두께는 상세 패널에 있다) · 수치의 뜻은 목록 맨 아래에 한 번 */
 function valueParts(r,layer){
-  if(layer==='defect')return {v:areaNum(r.defectArea),u:'m²',sub:'손상 면적'};
-  return {v:refDropPctNum(r,layer),u:'%',sub:layer==='plate'?'원두께 대비':'설계 대비'};
+  if(layer==='defect')return {v:areaNum(r.defectArea),u:'m²'};
+  return {v:refDropPctNum(r,layer),u:'%'};
+}
+export const VALUE_NOTE={dft:'수치: 설계 대비 감소율',plate:'수치: 원두께 대비 감소율',defect:'수치: 손상 면적(m²)'};   // ? popover in the list header (main.js)
+/* the group's action = the one most of its items have (ties: the first item's) */
+function groupAction(items){
+  const n=new Map();items.forEach(z=>n.set(z.action,(n.get(z.action)||0)+1));
+  return [...n.entries()].sort((a,b)=>b[1]-a[1])[0][0];
 }
 
-/* tilesRoot: KPI 핵심 지표 패널 본문 · listRoot: 보수 대상 패널 본문 · countEl: 보수 대상 패널 헤더의 "N건" */
+/* tilesRoot: KPI 핵심 지표 패널 본문 · listRoot: 보수 대상 패널 본문 · countEl: 보수 대상 패널 헤더의 "총 N건" */
 export function createKpiPanel(tilesRoot,listRoot,countEl,store,ui){
-  tilesRoot.innerHTML=`<div class="kpi-sum">
-      <div class="tile t-prog"><span class="k">측정 진행률</span><span class="n"><b data-k="prog">0</b><i class="pct">%</i></span>
-        <span class="bar" role="progressbar" aria-label="측정 진행률" aria-valuemin="0" aria-valuemax="100"><i></i></span><small data-k="progSub"></small></div>
-      <div class="tile t-top"><span class="k">최우선 보수</span><span class="n"><b data-k="top">0</b><i>구역</i></span></div>
-      <div class="tile t-crit"><span class="k">심각</span><span class="n"><b data-k="crit">0</b><i>구역</i></span></div>
-      <div class="tile t-warn"><span class="k">주의</span><span class="n"><b data-k="warn">0</b><i>구역</i></span></div>
-    </div>`;
-  listRoot.innerHTML='<ol class="kpi-list" aria-label="보수 대상 우선순위"></ol>';
+  const cell=(cls,g,key)=>`<div class="kc ${cls}"><div class="kc-h"><span class="kc-name">${gradeIcon(g)}<span data-g="${g}"></span></span></div><div class="kc-n"><b data-k="${key}">0</b><i>구역</i></div></div>`;
+  tilesRoot.innerHTML=`<div class="kpi-card">${cell('t-top',TOP,'top')}${cell('t-crit',CRIT,'crit')}${cell('t-warn',WARN,'warn')}</div>`;
+  listRoot.innerHTML='<ol class="kpi-list" aria-label="보수 목록"></ol>';
   const $k=k=>tilesRoot.querySelector(`[data-k="${k}"]`),list=listRoot.querySelector('.kpi-list');
-  const bar=tilesRoot.querySelector('.bar');
-  const measurable=store.plan.samples.filter(s=>!s.blocked).length,totalArea=areaNum(measurable*AREA_PER_POINT);
   let zones=[],timer=null,lastHtml='';
 
   function render(){
-    const layer=ui.layer,R=store.records;
-    zones=zonesOf(store,layer);   // 최우선 보수 구역이 맨 위 (zones.js)
-    // same progress as the header and the mapping notice (robot path); the measured area comes from the points
-    const prog=progress(store.progress);
-    $k('prog').textContent=parseInt(prog,10);bar.firstChild.style.width=prog;bar.setAttribute('aria-valuenow',parseInt(prog,10));
-    $k('progSub').textContent=`≈ ${areaNum(R.length*AREA_PER_POINT)} / ${totalArea} m²`;
+    const layer=ui.layer;
+    zones=zonesOf(store,layer);
+    tilesRoot.querySelectorAll('[data-g]').forEach(el=>{el.textContent=gradeName(+el.dataset.g,layer);});   // 도막 손상: 최우선 보수 / 도막 떨어짐 / 스크래치   // 최우선 보수 → 경고 → 주의, 각 안에서 수치 큰 순 (zones.js)
     const grades=zones.map(z=>gradeOf(z.level,z.top));
     $k('top').textContent=zones.filter(z=>z.top).length;
     $k('crit').textContent=grades.filter(g=>g===CRIT).length;
     $k('warn').textContent=grades.filter(g=>g===WARN).length;
-    countEl.textContent=`${num(zones.length)}건`;
+    countEl.textContent=`총 ${num(zones.length)}건`;
     // nothing to list: the shared notice (mapping / paused), or after a finished run with nothing abnormal
     const empty=zones.length?null:mappingState(store,'보수 대상')||emptyState('탐지된 이상이 없습니다');
     list.classList.toggle('is-empty',!!empty);
-    const html=empty?`<li class="kpi-empty">${empty}</li>`
-      :zones.map((z,i)=>{
-      const r=z.worst,v=valueParts(r,layer),where=esc(zoneLoc(z)),grade=gradeOf(z.level,z.top);
-      return `<li class="z lvl${Math.min(grade,2)}" data-id="${r.id}" tabindex="0" role="button" aria-label="${i+1}순위 ${where} ${gradeLabel(z.level,z.top)} ${esc(z.action)} ${v.sub} ${v.v} ${v.u}">
-        <span class="rk">${i+1}</span>
-        <div class="zb">
-          <div class="zl" title="${where}">${where}</div>
-          <div class="zr">
-            <div class="zi">
-              <div class="zm"><span class="lv lv${grade}">${gradeLabel(z.level,z.top)}</span></div>
-              <div class="act">→ ${esc(z.action)}</div>
-            </div>
-            <div class="zv"><div class="dv">${dropHtml(v.v,v.u)}</div><span>${v.sub}</span></div>
-          </div>
-        </div></li>`;}).join('');
-    if(html!==lastHtml){list.innerHTML=html;lastHtml=html;}   // unchanged while mapping finds nothing new: keep the DOM (hover, clicks)
+    let html='';
+    if(empty)html=`<li class="kpi-empty">${empty}</li>`;
+    else{
+      // zones come grouped already (최우선 보수 → 경고 → 주의); the rank runs on across the groups
+      let i=0;
+      for(const g of [TOP,CRIT,WARN]){
+        const items=zones.filter(z=>gradeOf(z.level,z.top)===g);if(!items.length)continue;
+        const act=groupAction(items),name=gradeName(g,layer);
+        html+=`<li class="zg-head g${g}"><span class="zgi">${gradeIcon(g)}</span><b>${name}</b><span class="zg-n">${num(items.length)}건</span>`
+          +`<button class="help-btn sm act-btn" data-g="${g}" data-act="${esc(act)}" aria-expanded="false" aria-controls="actPop" aria-label="${name} 권장 조치">!</button></li>`;
+        for(const z of items){
+          const v=valueParts(z.worst,layer),[fr,...rest]=zoneLoc(z).split('·'),where=esc(zoneLoc(z)),own=z.action!==act;
+          html+=`<li class="z lvl${Math.min(g,CRIT)}" data-id="${z.worst.id}" tabindex="0" role="button" aria-label="${++i}순위 ${where} ${name} ${esc(z.action)} ${v.v}${v.u}">
+            <span class="rk">${i}</span><span class="zl" title="${where}"><b>${esc(fr)}</b>·${esc(rest.join('·'))}</span>
+            ${own?`<span class="ztag">${esc(z.action)}</span>`:''}<span class="dv">${dropHtml(v.v,v.u)}</span></li>`;
+        }
+      }
+    }
+    if(html!==lastHtml){list.innerHTML=html;lastHtml=html;if(actFor!==null)openAct(actBtn(actFor),actPinned);}   // unchanged while mapping finds nothing new: keep the DOM (hover, clicks)
     syncSel(false);
   }
   function schedule(){if(timer)return;timer=setTimeout(()=>{timer=null;render();},250);}
@@ -89,11 +89,39 @@ export function createKpiPanel(tilesRoot,listRoot,countEl,store,ui){
   }
   const pick=el=>{const li=el.closest('.z');if(li)ui.select(+li.dataset.id,{fly:true});};
   list.addEventListener('pointerdown',e=>{if(e.button===0)pick(e.target);});
-  list.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(e.target);}});
+  list.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!e.target.closest('.act-btn')){e.preventDefault();pick(e.target);}});
+
+  /* group action popover: the ! next to a group's count — shown while hovered, or pinned open by a click
+     (another click, an outside press, Esc or scrolling the list closes it). Follows its group across re-renders. */
+  const actPop=document.getElementById('actPop'),actTxt=document.getElementById('actTxt');
+  let actFor=null,actPinned=false;   // grade of the group whose action is open
+  const actBtn=g=>list.querySelector(`.act-btn[data-g="${g}"]`);
+  function openAct(btn,pin){
+    if(!btn){closeAct();return;}
+    list.querySelectorAll('.act-btn[aria-expanded="true"]').forEach(b=>{if(b!==btn)b.setAttribute('aria-expanded','false');});
+    actFor=btn.dataset.g;actPinned=pin;btn.setAttribute('aria-expanded','true');
+    actTxt.textContent=`권장 조치: ${btn.dataset.act}`;actPop.hidden=false;
+    const b=btn.getBoundingClientRect(),h=actPop.offsetHeight;   // below the button, above it when there is no room
+    actPop.style.left=Math.max(8,Math.min(b.left-12,innerWidth-actPop.offsetWidth-8))+'px';
+    actPop.style.top=(b.bottom+8+h>innerHeight-8?b.top-8-h:b.bottom+8)+'px';
+  }
+  function closeAct(){
+    if(actFor===null)return;
+    const b=actBtn(actFor);if(b)b.setAttribute('aria-expanded','false');
+    actFor=null;actPinned=false;actPop.hidden=true;
+  }
+  list.addEventListener('mouseover',e=>{const b=e.target.closest('.act-btn');if(b&&!actPinned)openAct(b,false);});
+  list.addEventListener('mouseout',e=>{const b=e.target.closest('.act-btn');if(b&&!actPinned&&!b.contains(e.relatedTarget))closeAct();});
+  list.addEventListener('click',e=>{const b=e.target.closest('.act-btn');if(!b)return;
+    if(actPinned&&actFor===b.dataset.g)closeAct();else openAct(b,true);});
+  list.addEventListener('scroll',closeAct,{passive:true});
+  document.addEventListener('pointerdown',e=>{if(actPinned&&!e.target.closest('#actPop,.act-btn'))closeAct();});
+  // capture + handled: Esc closes only the popover (a maximized panel stays maximized)
+  window.addEventListener('keydown',e=>{if(e.key!=='Escape'||actFor===null)return;
+    const b=actBtn(actFor),pinned=actPinned;closeAct();if(b&&pinned)b.focus();e.preventDefault();},true);
 
   // mapping start/stop: redraw at once; the stream of new measurements while mapping: throttled
-  // pose: the progress tile and the mapping notice follow the robot
-  store.subscribe(k=>{if(k.has('state')){clearTimeout(timer);timer=null;render();onState();}else if(k.has('records')||k.has('pose'))schedule();});
+  store.subscribe(k=>{if(k.has('state')){clearTimeout(timer);timer=null;render();onState();}else if(k.has('records'))schedule();});
   ui.subscribe((k,o)=>{
     if(k==='layer'){render();list.scrollTop=0;if(store.mapState==='done')selectTop();else syncSel(false);}
     if(k==='select')syncSel(!(o&&o.auto));});

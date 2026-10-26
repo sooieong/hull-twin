@@ -2,7 +2,7 @@
    진단 보고서 데이터 (SPEC 6): 화면에서 고른 레이어와 상관없이 전체 측정 데이터로 계산한다.
    ========================================================= */
 import { FS, STRAKE_W, KEEL_HALF, LETTERS, XMAX, NX, G, stSec, section, strakeLower, ZONES } from '../hull.js';
-import { LAYERS, OK, WARN, CRIT, CRITERIA, ACTION, judge, dftRatio, plateLoss, isCompound, scoreOf } from '../data/criteria.js';
+import { LAYERS, OK, WARN, CRIT, CRITERIA, ACTION, judge, dftRatio, plateLoss, isCompound, isTop, scoreOf } from '../data/criteria.js';
 import { DEFECT_LABEL, recLoc, designRatio, lossRatio, area, pct as pctText } from '../format.js';
 import { groupZones } from '../data/zones.js';
 import { SAMPLE_EVERY } from '../data/scanPath.js';
@@ -40,7 +40,9 @@ export function buildReportData(store,now=new Date()){
   const layers={};
   for(const l of LAYERS){const c=[0,0,0];R.forEach(r=>c[lv(r,l)]++);layers[l]={counts:c,total:R.length};}
   const byRatio=[...R].sort((a,b)=>dftRatio(a)-dftRatio(b)),byLoss=[...R].sort((a,b)=>plateLoss(b)-plateLoss(a));
-  const defects=R.filter(r=>r.defect).sort((a,b)=>{const ja=judge(a,'defect'),jb=judge(b,'defect');return scoreOf(jb.level,jb.degree,isCompound(b))-scoreOf(ja.level,ja.degree,isCompound(a));});
+  // 도막 손상 (화면 목록과 같은 기준): 최우선 보수 → 도막 떨어짐 → 스크래치, 각 안에서 면적 큰 순
+  const dmgGrade=r=>isTop(r,'defect')?3:judge(r,'defect').level;
+  const defects=R.filter(r=>r.defect).sort((a,b)=>dmgGrade(b)-dmgGrade(a)||b.defectArea-a.defectArea);
   layers.dft.worst={label:'최소 도막',value:designRatio(byRatio[0]),where:recLoc(byRatio[0])};
   layers.plate.worst={label:'최대 강판 감소율',value:lossRatio(byLoss[0]),where:recLoc(byLoss[0])};
   const bigDefect=[...defects].sort((a,b)=>b.defectArea-a.defectArea)[0];
@@ -62,8 +64,10 @@ export function buildReportData(store,now=new Date()){
     return {avg:v.reduce((a,b)=>a+b,0)/v.length*100,min:Math.min(...v)*100,warn:w,crit:c,area:sumArea(rs.filter(r=>lv(r,'dft')===CRIT))};});
   const plateZones=zoneRows(rs=>{const v=rs.map(plateLoss);return {avg:v.reduce((a,b)=>a+b,0)/v.length*100,max:Math.max(...v)*100,
     warn:rs.filter(r=>lv(r,'plate')===WARN).length,crit:rs.filter(r=>lv(r,'plate')===CRIT).length};});
-  const defectZones=zoneRows(rs=>{const f=rs.filter(r=>r.defect==='flaking'),s=rs.filter(r=>r.defect==='scratch');
-    return {fN:f.length,fA:f.reduce((a,r)=>a+r.defectArea,0),sN:s.length,sA:s.reduce((a,r)=>a+r.defectArea,0)};}).filter(row=>row.fN+row.sN>0);
+  // 최우선 보수에 든 손상은 도막 떨어짐·스크래치에서 뺀다
+  const defectZones=zoneRows(rs=>{const d=rs.filter(r=>r.defect),t=d.filter(r=>isTop(r,'defect')),rest=d.filter(r=>!isTop(r,'defect'));
+    const f=rest.filter(r=>r.defect==='flaking'),s=rest.filter(r=>r.defect==='scratch'),A=xs=>xs.reduce((a,r)=>a+r.defectArea,0);
+    return {tN:t.length,tA:A(t),fN:f.length,fA:A(f),sN:s.length,sA:A(s)};}).filter(row=>row.tN+row.fN+row.sN>0);
 
   /* --- plate loss rate and next-docking prediction --- */
   const rate=r=>(r.platePrev-r.plate)/C.yearsSincePrev;

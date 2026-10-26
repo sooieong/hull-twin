@@ -2,9 +2,9 @@
    보수 구역: 서로 이웃한 측정점들을 한 구역으로 묶는다.
    1) 최우선 보수 구역 (criteria.isTop): 최우선 보수 지점끼리 판정 단계와 상관없이 이웃하면 묶는다.
       도막 두께·강판 두께 레이어는 같은 기준이라 묶음을 한 번만 계산해서 함께 쓴다 (zonesOf) — 두 레이어의 개수·항목이 같다.
-   2) 나머지 이상 지점: 현재 레이어에서 판정이 같은(주의끼리, 심각끼리) 점끼리 묶는다.
-      심각 핵심부와 그 둘레의 주의 영역은 따로 구역이 된다 (주의 띠로 여러 심각 군집이 한 덩어리가 되지 않게).
-   목록 순서 (레이어 화면): 최우선 보수 → 심각 → 주의로 묶고, 각 묶음 안에서는 현재 레이어 수치(layerValue)가 큰 순.
+   2) 나머지 이상 지점: 현재 레이어에서 판정이 같은(주의끼리, 경고끼리) 점끼리 묶는다.
+      경고 핵심부와 그 둘레의 주의 영역은 따로 구역이 된다 (주의 띠로 여러 경고 군집이 한 덩어리가 되지 않게).
+   목록 순서 (레이어 화면): 최우선 보수 → 경고 → 주의로 묶고, 각 묶음 안에서는 현재 레이어 수치(layerValue)가 큰 순.
      구역의 대표 지점(목록 수치·선택 지점)도 그 레이어 수치가 가장 큰 지점이다. 레이어마다 1위가 다를 수 있다.
    이웃 = 같은 현에서 FR 차이 ZONE_LINK.dfr 이내이고 외판열 차이 ZONE_LINK.dstrake 이내 (K 외판열은 좌우현이 이어진다).
    복합은 구역 안에 복합 점이 하나라도 있으면 복합이다.
@@ -60,7 +60,7 @@ export function topClusters(records,layer){
 
 /* → [{worst, items, count, level, degree, compound, top, value, score, action, frMin, frMax, strakeMin, strakeMax, side, zone, ids, types, primary}]
    worst: 대표 지점 (레이어 화면: 레이어 수치가 가장 큰 점, 'all': 우선순위 점수가 가장 높은 점) · value: 그 점의 레이어 수치
-   순서: 최우선 보수 → 심각 → 주의, 각 안에서 value 내림차순 ('all'은 우선순위 점수) — 같으면 점이 많은 구역이 위 */
+   순서: 최우선 보수 → 경고 → 주의, 각 안에서 value 내림차순 ('all'은 우선순위 점수) — 같으면 점이 많은 구역이 위 */
 export function groupZones(records,layer,top=topClusters(records,layer)){
   const all=layer==='all';
   const item=r=>{const j=all?judgeAll(r):judge(r,layer),compound=isCompound(r);
@@ -79,7 +79,7 @@ export function groupZones(records,layer,top=topClusters(records,layer)){
       zone:Object.keys(zc).sort((a,b)=>zc[b]-zc[a]||ZONES.indexOf(a)-ZONES.indexOf(b))[0],ids:new Set(items.map(a=>a.r.id)),
       types:LAYERS.filter(l=>types.has(l)),primary:w.primary};
   };
-  // grade group first (최우선 보수 → 심각 → 주의), then the layer value (the priority score for 'all'), then more points
+  // grade group first (최우선 보수 → 경고 → 주의), then the layer value (the priority score for 'all'), then more points
   const order=(a,b)=>(b.top-a.top)||(b.level-a.level)||(b.value-a.value)||(b.count-a.count);
   const inTop=new Set(top.flatMap(c=>c.map(r=>r.id)));
   const rest=[];for(const r of records){if(inTop.has(r.id))continue;const a=item(r);if(a.level>OK)rest.push(a);}

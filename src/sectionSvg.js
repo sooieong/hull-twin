@@ -13,9 +13,9 @@ import { THICK, thick, thickNum, dropNum } from './format.js';
 const EXAG=1.6;                     // 두께 차이 과장 배율 (그림 전용)
 
 export const THEME={
-  dark:{bg:'#0A1120',level:['#8FA3BF','#FFB224','#FF5A4E'],label:'#C9D3E3',muted:'#6F7C93',dim:'#E8EDF6',hatch:'rgba(255,255,255,.12)',
+  dark:{bg:'#0A1120',level:['#8FA3BF','#F2B53A','#FF5A5F'],label:'#C9D3E3',muted:'#6F7C93',dim:'#E8EDF6',hatch:'rgba(255,255,255,.12)',
     material:{plate:'#3A4558',dft:'#4A3A1E'}},
-  light:{bg:'#FFFFFF',level:['#8A93A3','#E09A00','#C42A1B'],label:'#3A4252',muted:'#6B7385',dim:'#14181F',hatch:'rgba(0,0,0,.14)',
+  light:{bg:'#FFFFFF',level:['#8A93A3','#C98A12','#E23D4B']   /* amber darkened to read on white */,label:'#3A4252',muted:'#6B7385',dim:'#14181F',hatch:'rgba(0,0,0,.14)',
     material:{plate:'#C3C9D2',dft:'#EAD3A2'}}
 };
 

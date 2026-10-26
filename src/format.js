@@ -7,14 +7,14 @@
    - 면적: ≈ 18 m² (1 m² 미만은 소수 첫째 자리)
    - 숫자와 단위 사이는 한 칸, %만 붙여 쓴다. 천 단위 쉼표.
    - 날짜 2026.10.26 · 시각 14:05
-   - 용어(판정·권장 조치·구역·손상 종류·레이어)는 정의된 곳의 값을 그대로 다시 내보낸다. 판정 이름은 gradeLabel(최우선 보수/심각/주의).
+   - 용어(판정·권장 조치·구역·손상 종류·레이어)는 정의된 곳의 값을 그대로 다시 내보낸다. 판정 이름은 gradeLabel(최우선 보수/경고/주의).
    ========================================================= */
-import { dftRatio, plateLoss, LEVEL_LABEL, GRADE_LABEL, gradeOf, ACTION, DEFECT_LABEL, LAYER_LABEL } from './data/criteria.js';
+import { dftRatio, plateLoss, LEVEL_LABEL, GRADE_LABEL, gradeOf, gradeName, ACTION, DEFECT_LABEL, LAYER_LABEL } from './data/criteria.js';
 import { ZONES } from './hull.js';
 
 export { LEVEL_LABEL, GRADE_LABEL, ACTION, DEFECT_LABEL, LAYER_LABEL, ZONES };
-/* judgement name shown to people: 최우선 보수 / 심각 / 주의 / 정상 (compound = 도막+강판) */
-export const gradeLabel=(level,compound)=>GRADE_LABEL[gradeOf(level,compound)];
+/* judgement name shown to people: 최우선 보수 / 경고 / 주의 / 정상 (compound = 도막+강판) */
+export const gradeLabel=(level,top,layer)=>gradeName(gradeOf(level,top),layer);   // 도막 손상: 최우선 보수 / 도막 떨어짐 / 스크래치
 
 export const MINUS='−';
 const NF=[0,1,2].map(dp=>new Intl.NumberFormat('en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp}));

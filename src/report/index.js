@@ -12,6 +12,7 @@ import './report.css';
 import { buildReportData, SHIP } from './data.js';
 import { renderHullViews } from './render3d.js';
 import { pagesHtml } from './pages.js';
+import { loadIconData } from '../gradeUi.js';
 
 const VIEW_JOBS=[{key:'all',view:'iso',w:700,h:400},
   ...['dft','plate','defect'].flatMap(key=>[{key,view:'iso',w:500,h:250},{key,view:'bottom',w:500,h:250}])];
@@ -22,6 +23,7 @@ export const reportFileName=d=>`Dr.Dock_Report_${SHIP.hull}_${ymd(d)}.pdf`;
 
 /* the 5 report pages as one element (images decoded, ready to show or to rasterise) */
 export async function buildReportPages(store,now=new Date()){
+  await loadIconData();   // judgement icons as data URIs for the maps (they become images in the PDF)
   const data=buildReportData(store,now),imgs=renderHullViews(store.records,VIEW_JOBS);
   const root=document.createElement('div');root.className='rp-root';root.innerHTML=pagesHtml(data,imgs);
   await Promise.all([...root.querySelectorAll('img')].map(img=>img.decode?img.decode().catch(()=>{}):null));

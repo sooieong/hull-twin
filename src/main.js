@@ -3,12 +3,13 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { clamp, smooth, L, B, D, T, R, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
   deckZ, keelZ, HB, section, atGirth, strakeLower, recordU, strakeName, ZONES, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
-import { CRITERIA, TOP_RULE, judge, isTop, gradeOf } from './data/criteria.js';
-import { LAYER_LABEL, gradeLabel, DEFECT_LABEL, value, loc, coords, metres, num, progress, dateTime } from './format.js';
-import { HEAT, heatOf, heatRGB, heatAlpha, heatCss, buildIndex, addToIndex, idw, coverage, nearest } from './heatmap.js';
+import { CRITERIA, TOP_RULE, TOP, CRIT, WARN, topGroup, judge, isTop, gradeOf } from './data/criteria.js';
+import { gradeChip } from './gradeUi.js';
+import { LAYER_LABEL, DEFECT_LABEL, ACTION, value, loc, coords, metres, num, progress, dateTime } from './format.js';
+import { HEAT, heatOf, heatRGB, heatAlpha, buildIndex, addToIndex, idw, coverage, nearest } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
 import { createUiState } from './uiState.js';
-import { createKpiPanel } from './kpi.js';
+import { createKpiPanel, VALUE_NOTE } from './kpi.js';
 import { createSideShell } from './sideShell.js';
 import { createDetailPanel } from './detail.js';
 import { setupPanels } from './panels.js';
@@ -22,7 +23,6 @@ import { logDataSummary } from './data/report.js';
 "use strict";
 const $=s=>document.querySelector(s);
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
-const lsGet=k=>{try{return localStorage.getItem(k);}catch(_){return null;}},lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(_){}};
 
 /* ---------- toast + placeholders ---------- */
 const toastEl=$('#toast');let toastT;
@@ -44,12 +44,11 @@ function selectFR(fr){
   const hb=HB(X,T);$('#secHb').textContent=hb>0?metres(hb):'—';
   const g=s.gs[G-1];$('#secG').textContent=metres(g,1);
   const n=g<KEEL_HALF?0:Math.min(LETTERS.length-1,Math.floor((g-KEEL_HALF)/STRAKE_W));
-  $('#secS').textContent=n>0?`K, A–${LETTERS[n]} (${n+2}열)`:'K';
+  $('#secS').textContent=n>0?`K, A–${LETTERS[n]}`:'K';
   const sl=$('#secSlider');if(+sl.value!==fr)sl.value=fr;
   hooks.onSelect.forEach(f=>f(fr,X));
 }
-function setHover(X,src){state.hoverX=X;state.hoverSrc=X==null?null:src;hooks.onHover.forEach(f=>f(X,src));
-  if(X==null&&src!=='3d')$('#stCursor').textContent='—';}
+function setHover(X,src){state.hoverX=X;state.hoverSrc=X==null?null:src;hooks.onHover.forEach(f=>f(X,src));}
 $('#secSlider').max=FRMAX;
 $('#secSlider').addEventListener('input',e=>selectFR(+e.target.value));
 /* frame number typed into the card: Enter moves there (clamped to 0–FRMAX), Esc or leaving the field restores it */
@@ -333,16 +332,16 @@ function paintHull(){
       c[o]=r;c[o+1]=gr;c[o+2]=b;}
     attr.needsUpdate=true;});
 }
+/* ? legend: the current layer only — name · 최우선 보수 · 경고 · 주의 (the list's chips + criteria) · 정상 / 측정 불가 */
 const LEGEND={
-  dft:{t:'도막 두께·현재 / 설계',w:`주의·${CRITERIA.dft.warn*100}% 미만`,c:`심각·${CRITERIA.dft.crit*100}% 미만`},
-  plate:{t:'강판 두께·감소율 (원두께 기준)',w:`주의·${CRITERIA.plate.warn*100}% 이상`,c:`심각·${CRITERIA.plate.crit*100}% 이상`},
-  defect:{t:'도막 손상·종류 / 면적',w:`주의·${DEFECT_LABEL.scratch}`,c:`심각·${DEFECT_LABEL.flaking}, ${CRITERIA.defect.critArea} m² 이상`}
+  dft:{w:`${CRITERIA.dft.warn*100}% 미만`,c:`${CRITERIA.dft.crit*100}% 미만`},
+  plate:{w:`감소율 ${CRITERIA.plate.warn*100}% 이상`,c:`감소율 ${CRITERIA.plate.crit*100}% 이상`},
+  defect:{w:`→ ${ACTION.touchUp}`,c:`→ ${ACTION.partRepaint}`}   // the chips already name the damage; the line gives its repair
 };
-$('#heatRamp').style.background=`linear-gradient(90deg,${heatCss()})`;
-document.querySelectorAll('#legendPop [data-top]').forEach(el=>{el.textContent=TOP_RULE[el.dataset.top];});   // 최우선 보수 기준 (criteria.js)
-function syncLayer(){const l=ui.layer;
+function syncLayer(){const l=ui.layer,row=(g,t)=>`${gradeChip(g,l)}<span>${t}</span>`;
   document.querySelectorAll('[data-layer]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.layer===l)));
-  $('#heatTtl').textContent=LEGEND[l].t;$('#heatWarn').textContent=LEGEND[l].w;$('#heatCrit').textContent=LEGEND[l].c;}
+  $('#lgTitle').textContent=LAYER_LABEL[l];
+  $('#lgTop').innerHTML=row(TOP,TOP_RULE[topGroup(l)]);$('#lgCrit').innerHTML=row(CRIT,LEGEND[l].c);$('#lgWarn').innerHTML=row(WARN,LEGEND[l].w);}
 document.querySelectorAll('[data-layer]').forEach(b=>b.addEventListener('click',()=>ui.setLayer(b.dataset.layer)));
 const legendBtn=$('#legendBtn'),legendPop=$('#legendPop');
 function openLegend(on){
@@ -350,6 +349,22 @@ function openLegend(on){
   if(on){const pane=$('#pane3d');legendPop.style.left=Math.max(8,Math.min(legendBtn.offsetLeft-12,pane.clientWidth-legendPop.offsetWidth-8))+'px';}
 }
 legendBtn.addEventListener('click',()=>openLegend(legendPop.hidden));
+/* status bar ?: coordinate system popover, styled like the legend; opens above the button (the bar scrolls sideways) */
+const csBtn=$('#csBtn'),csPop=$('#csPop');
+function openCs(on){
+  csPop.hidden=!on;csBtn.setAttribute('aria-expanded',String(on));
+  if(on){const b=csBtn.getBoundingClientRect();
+    csPop.style.left=Math.max(8,Math.min(b.left-12,innerWidth-csPop.offsetWidth-8))+'px';csPop.style.bottom=(innerHeight-b.top+8)+'px';}
+}
+csBtn.addEventListener('click',()=>openCs(csPop.hidden));
+/* 보수 목록 header ?: what the right-hand numbers are, for the current layer — opens below the button */
+const valBtn=$('#valBtn'),valPop=$('#valPop');
+function openVal(on){
+  valPop.hidden=!on;valBtn.setAttribute('aria-expanded',String(on));
+  if(on){$('#valTxt').textContent=VALUE_NOTE[ui.layer];const b=valBtn.getBoundingClientRect();
+    valPop.style.left=Math.max(8,Math.min(b.left-12,innerWidth-valPop.offsetWidth-8))+'px';valPop.style.top=(b.bottom+8)+'px';}
+}
+valBtn.addEventListener('click',()=>openVal(valPop.hidden));
 
 /* selected measurement: K100 / white bullseye on the shell, distinct from the heatmap and the UI orange */
 const selMarker=new THREE.Group();
@@ -368,27 +383,33 @@ function placeMarker(r){
   selMarker.quaternion.setFromUnitVectors(new V3(0,0,1),nv);selMarker.visible=true;
 }
 ui.subscribe((k,o)=>{
-  if(k==='layer'){syncLayer();rebuildHeat();tip.hidden=true;}
+  // zoomed in on a point (list / side shell fly-to): a layer change swings back to the ISO overview
+  if(k==='layer'){syncLayer();rebuildHeat();tip.hidden=true;if(!valPop.hidden)$('#valTxt').textContent=VALUE_NOTE[ui.layer];if(!flyBack.hidden)goView('iso');}
   if(k==='select'||k==='fly'){const r=store&&store.get(ui.selId);
     if(k==='select'){placeMarker(r);if(r)selectFR(r.fr);}
     if(r&&o&&o.fly)flyTo(r);}
 });
 /* mapping state (SPEC 10.1, 10.2)
    mapping: heatmap fills in behind the robot · paused: heatmap, robot and path stay where they are ·
-   done: whole ship + all results, robot and path hidden; "재매핑" only in the ⋯ menu */
+   done: whole ship + all results, robot and path hidden.
+   header: state "매핑 중 / 매핑 중지 / 매핑 완료" + one button — 매핑 중지 / 이어서 매핑 / 재매핑 (starts a fresh run at once).
+   측정 진행률 is shown only here: a 2px orange bar along the state's bottom edge while mapping / paused (no number;
+   the tooltip says "측정 진행률 68%"), hidden when done */
+function syncProgress(p){
+  const ms=$('#mapState'),done=store.mapState==='done';
+  ms.querySelector('.map-prog i').style.width=done?'0':progress(p);ms.title=done?'':`측정 진행률 ${progress(p)}`;
+}
 const poseText=p=>`${loc(p.fr,p.strake,p.side,p.zone)}·${coords(p.X,p.Y,p.Z)}`;
 let mapMode=null,robotSeen=false;
 function syncMap(){
-  const st=store.mapState,active=st==='mapping'||st==='paused',pct=progress(store.progress);
+  const st=store.mapState,active=st==='mapping'||st==='paused';
   const ms=$('#mapState');ms.classList.toggle('on',st==='mapping');ms.classList.toggle('paused',st==='paused');ms.classList.toggle('done',st==='done');
-  $('#mapStateTxt').textContent=st==='mapping'?`매핑 중·${pct}`:st==='paused'?`매핑 중지·${pct}`:'매핑 완료';
-  const btn=$('#mapBtn');btn.hidden=!active;btn.textContent=st==='mapping'?'매핑 중지':'이어서 매핑';btn.classList.toggle('secondary',st==='mapping');
-  $('.map-more').hidden=!(st==='paused'||st==='done');
+  $('#mapStateTxt').textContent=st==='mapping'?'매핑 중':st==='paused'?'매핑 중지':'매핑 완료';syncProgress(store.progress);
+  const btn=$('#mapBtn');btn.textContent=st==='mapping'?'매핑 중지':st==='paused'?'이어서 매핑':'재매핑';btn.classList.toggle('secondary',st!=='paused');
   $('#speedSeg').hidden=!active;   // replay speed only matters while a run is going or paused
-  const again=st==='paused'?'처음부터 다시':'재매핑';$('#mapRestart').textContent=again;$('#mapConfirm').textContent=again;
   $('#stRobotWrap').classList.toggle('idle',st!=='mapping');
   if(st==='done')$('#stRobot').textContent=`매핑 완료·측정점 ${num(store.records.length)}개·마지막 측정 ${store.lastTs?dateTime(store.lastTs):'—'}`;
-  if(st==='paused')$('#stRobot').textContent=store.pose?`매핑 중지·${poseText(store.pose)}·진행 ${pct}`:`매핑 중지·진행 ${pct}`;
+  if(st==='paused')$('#stRobot').textContent=store.pose?`매핑 중지·${poseText(store.pose)}`:'매핑 중지';
   if(!active||!store.pose){robotWrap.visible=false;robotSeen=false;}
   pathGroup.visible=active&&lyRobotOn;
   if(st!==mapMode){
@@ -398,35 +419,25 @@ function syncMap(){
     follow.on=follow.engaging=follow.paused=false;
     if(st==='mapping'){if(prev!=='paused')follow.raw=null;startFollow(ISO);}
     else if(st==='done'&&(prev==='mapping'||prev==='paused'))goView('iso');
-    openMenu(false);paintHull();syncFollowBtn();}
+    paintHull();syncFollowBtn();}
 }
 function onPose(p){
   follow.raw=followAngle(p);
   setRobotTarget(p,!robotSeen);robotSeen=true;robotWrap.visible=true;showPathAt(p.k);
-  const pct=progress(p.progress);
-  $('#mapStateTxt').textContent=`매핑 중·${pct}`;
-  $('#stRobot').textContent=`RBT-01 매핑 중·${poseText(p)}·진행 ${pct}`;
+  $('#stRobot').textContent=`RBT-01 매핑 중·${poseText(p)}`;syncProgress(p.progress);
 }
-$('#mapBtn').addEventListener('click',()=>{if(!store)return;if(store.mapState==='mapping')store.pause();else if(store.mapState==='paused')store.resume();});
-// ⋯ menu: restart from the beginning, confirmed inside the menu (no browser confirm)
-const mapMenu=$('#mapMenu'),mapMoreBtn=$('#mapMoreBtn');
-function openMenu(on){
-  mapMenu.hidden=!on;mapMoreBtn.setAttribute('aria-expanded',String(on));
-  mapMenu.querySelector('.menu-main').hidden=false;mapMenu.querySelector('.menu-confirm').hidden=true;
-  if(on)$('#mapRestart').focus();
-}
-mapMoreBtn.addEventListener('click',()=>openMenu(mapMenu.hidden));
-$('#mapRestart').addEventListener('click',()=>{mapMenu.querySelector('.menu-main').hidden=true;mapMenu.querySelector('.menu-confirm').hidden=false;$('#mapCancel').focus();});
-$('#mapCancel').addEventListener('click',()=>{openMenu(false);mapMoreBtn.focus();});
-$('#mapConfirm').addEventListener('click',()=>{openMenu(false);if(store)store.start();});
-// overlays close on an outside press or Esc (Esc is marked handled so a maximized panel stays maximized)
+$('#mapBtn').addEventListener('click',()=>{if(!store)return;const st=store.mapState;
+  if(st==='mapping')store.pause();else if(st==='paused')store.resume();else store.start();});   // done: 재매핑 = fresh run
+// the legend closes on an outside press or Esc (Esc is marked handled so a maximized panel stays maximized)
 document.addEventListener('pointerdown',e=>{
-  if(!mapMenu.hidden&&!e.target.closest('.map-more'))openMenu(false);
   if(!legendPop.hidden&&!e.target.closest('#legendPop,#legendBtn'))openLegend(false);
+  if(!csPop.hidden&&!e.target.closest('#csPop,#csBtn'))openCs(false);
+  if(!valPop.hidden&&!e.target.closest('#valPop,#valBtn'))openVal(false);
 });
 window.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
-  if(!mapMenu.hidden){openMenu(false);mapMoreBtn.focus();e.preventDefault();}
-  else if(!legendPop.hidden){openLegend(false);legendBtn.focus();e.preventDefault();}
+  if(!legendPop.hidden){openLegend(false);legendBtn.focus();e.preventDefault();}
+  else if(!csPop.hidden){openCs(false);csBtn.focus();e.preventDefault();}
+  else if(!valPop.hidden){openVal(false);valBtn.focus();e.preventDefault();}
 },true);
 /* 실선 | 도면 (VIEW row): 도면 = dark navy hull, orange design lines (waterlines, stations, frames); the heatmap stays */
 function setLook(l){
@@ -484,7 +495,12 @@ function startTween(to,onDone){
 }
 const flyBack=$('#flyBack');
 function pressView(k){document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===k)));}
-function goView(k){pauseFollow();pressView(k);curView=k;flyBack.hidden=true;startTween(fitPreset(k));}
+/* zoom-out limit = the default distance of the last view button (ISO, 측면, 평면, 정면, 선저); zooming in stays free.
+   while the swing to the view runs the camera may still be farther, so the limit tightens when it lands */
+const viewDist=f=>f.p.distanceTo(f.t)*1.001,camDist=()=>camera.position.distanceTo(controls.target);
+function goView(k){pauseFollow();pressView(k);curView=k;flyBack.hidden=true;
+  const f=fitPreset(k);controls.maxDistance=Math.max(viewDist(f),camDist());
+  startTween(f,()=>{controls.maxDistance=viewDist(f);});}
 /* fly to a measurement point: look at it along the outward shell normal from ~30 m; bottom points are seen from below */
 function flyTo(r){
   const t=toThree(r.X,r.Y,r.Z),dir=shellNormal(r.X,r.Y,r.Z);
@@ -526,10 +542,12 @@ function followAngle(p){
 function syncFollowBtn(){followBtn.hidden=!(store&&store.mapState==='mapping'&&follow.paused);}
 function pauseFollow(){
   if(store&&store.mapState==='mapping')follow.paused=true;
+  if(follow.on||follow.engaging)controls.maxDistance=Math.max(viewDist(fitPreset('iso')),camDist());   // back to a view limit
   follow.on=follow.engaging=false;syncFollowBtn();
 }
 /* swing from wherever the camera is to the follow view at angles a (the usual 1 s tween), then track from there */
 function startFollow(a){
+  controls.maxDistance=Infinity;   // the follow sets its own distance (whole ship from every angle)
   follow.engaging=true;follow.on=false;curView=null;pressView(null);flyBack.hidden=true;
   startTween(followPose(a),()=>{if(!follow.engaging)return;follow.engaging=false;follow.on=true;follow.goal={...a};follow.cur={...a};});
 }
@@ -543,12 +561,23 @@ function stepFollow(dt){
 }
 followBtn.addEventListener('click',()=>{follow.paused=false;syncFollowBtn();startFollow(follow.raw||ISO);});
 
-/* frame info card: fold to a small "FR 170" chip (SPEC 10.4) */
+/* frame info card: fold to a small "FR 170" chip (SPEC 10.4). Starts folded on every load (not stored) */
 const secCard=$('#secCard');
-function foldSec(on){secCard.classList.toggle('collapsed',on);lsSet('drdock.secCard',on?'1':'0');(on?$('#secExpand'):$('#secCollapse')).focus({preventScroll:true});}
+function foldSec(on){secCard.classList.toggle('collapsed',on);fitLayers();(on?$('#secExpand'):$('#secCollapse')).focus({preventScroll:true});}
 $('#secCollapse').addEventListener('click',()=>foldSec(true));
 $('#secExpand').addEventListener('click',()=>foldSec(false));
-if(lsGet('drdock.secCard')==='1')secCard.classList.add('collapsed');
+
+/* LAYERS: left of the frame card. Folds to a "LAYERS ⌃" chip and starts folded on every load (not stored);
+   folded automatically while the two do not fit side by side */
+const layersEl=$('#layers'),dockEl=$('#ovDock'),SEC_W=236;   // the open frame card's width (.ov-sec)
+let layersWant=false,dockW=-1;   // the user's choice this session; a narrow pane overrides it
+layersEl.querySelector('summary').addEventListener('click',()=>{layersWant=!layersEl.open;});
+function fitLayers(){
+  layersEl.open=true;   // measure it open (no paint in between)
+  const fits=layersEl.offsetWidth+8+(secCard.classList.contains('collapsed')?secCard.offsetWidth:SEC_W)<=dockEl.clientWidth;
+  layersEl.open=layersWant&&fits;
+}
+new ResizeObserver(()=>{const w=dockEl.clientWidth;if(w!==dockW){dockW=w;fitLayers();}}).observe(dockEl);   // width only: opening LAYERS changes the height
 
 /* picking */
 const ray=new THREE.Raycaster();const ndc=new THREE.Vector2();let pendingMove=null,lastHit=null,downAt=null;
@@ -559,7 +588,7 @@ function pick(e){
   const r=renderer.domElement.getBoundingClientRect();ndc.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height)*2+1);
   ray.setFromCamera(ndc,camera);
   const hits=ray.intersectObjects([hullS,hullP],false).filter(h=>!state.cut||h.point.x<=clipPlane.constant);
-  if(!hits.length){lastHit=null;tip.hidden=true;hoverDot.visible=false;if(state.hoverSrc==='3d')setHover(null,'3d');$('#stCursor').textContent='—';return;}
+  if(!hits.length){lastHit=null;tip.hidden=true;hoverDot.visible=false;if(state.hoverSrc==='3d')setHover(null,'3d');return;}
   const h=hits[0],p=h.point;const lp=h.object.worldToLocal(p.clone());
   const f=h.face;tri.set(vA.fromArray(pos,f.a*3),vB.fromArray(pos,f.b*3),vC.fromArray(pos,f.c*3)).getBarycoord(lp,bary);
   const g=bary.x*girth[f.a]+bary.y*girth[f.b]+bary.z*girth[f.c];
@@ -568,14 +597,13 @@ function pick(e){
   lastHit={fr,X,rec};
   let val='<div class="none">측정값 없음</div>';
   if(rec){const lv=judge(rec,ui.layer).level;
-    const cx=isTop(rec,ui.layer);val=`<div class="tv"><b>${value(rec,ui.layer)}</b><span class="lv lv${gradeOf(lv,cx)}">${gradeLabel(lv,cx)}</span></div>`;}
+    const cx=isTop(rec,ui.layer);val=`<div class="tv"><b>${value(rec,ui.layer)}</b>${gradeChip(gradeOf(lv,cx),ui.layer)}</div>`;}
   const zone=ZONES[zoneOf(X,Z)],[frTxt,...rest]=loc(fr,st,side,zone).split('·');   // FR bold, the rest of the same line lighter
   tip.innerHTML=`<div class="t1">${frTxt}<em>·${rest.join('·')}</em></div><div class="t2">${LAYER_LABEL[ui.layer]}</div>${val}<div class="t3">${coords(X,Y,Z)}</div>`;
   tip.hidden=false;const pw=r.width;tip.style.left=(e.clientX-r.left)+'px';tip.style.top=(e.clientY-r.top)+'px';
   tip.style.transform=(e.clientX-r.left)>pw-260?'translate(calc(-100% - 14px),14px)':'translate(14px,14px)';
   hoverDot.position.copy(p);hoverDot.visible=true;
   setHover(X,'3d');
-  $('#stCursor').textContent=`${loc(fr,st,side,zone)}·${coords(X,Y,Z)}`;
 }
 const cvs=renderer.domElement;
 cvs.addEventListener('pointermove',e=>{pendingMove=e;});
@@ -602,7 +630,7 @@ function drawGizmo(){
 
 /* resize + loop */
 function resize3D(){const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
-  if(curView&&!tween){const f=fitPreset(curView);camera.position.copy(f.p);controls.target.copy(f.t);controls.update();}}
+  if(curView&&!tween){const f=fitPreset(curView);controls.maxDistance=viewDist(f);camera.position.copy(f.p);controls.target.copy(f.t);controls.update();}}
 new ResizeObserver(resize3D).observe(host);resize3D();
 const tmp=new V3();
 function place(el,p){tmp.copy(p).project(camera);if(tmp.z>1||tmp.z<-1){el.style.display='none';return;}

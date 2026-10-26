@@ -1,13 +1,14 @@
 /* =========================================================
    보고서 차트 (SVG, 인쇄용 흰 바탕): Side Shell 지도, 히스토그램, 판정 비율 막대
-   축·단위·기준선(주의·심각 경계)을 항상 표시한다 (SPEC 6.1).
+   축·단위·기준선(주의·경고 경계)을 항상 표시한다 (SPEC 6.1).
    ========================================================= */
 import { T, R, FS, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, section, girthAtZ, recordU } from '../hull.js';
-import { OK, judge } from '../data/criteria.js';
+import { OK, judge, isTop } from '../data/criteria.js';
+import { GRADE_ICON, GRADE_ICON_DATA } from '../gradeUi.js';
 import { heatOf, heatRGB } from '../heatmap.js';
 import { SAMPLE_EVERY } from '../data/scanPath.js';
 
-export const LV_FILL=['#8A93A3','#FFB224','#C42A1B'];   // 정상 · 주의 · 심각 (대시보드와 같은 판정색)
+export const LV_FILL=['#8A93A3','#F2B53A','#E23D4B'];   // 정상 · 주의 · 경고 (대시보드와 같은 판정색)
 const INK='#14181F',MUTED='#6B7385',GRIDC='#E1E5EB',FONT='IBM Plex Sans KR,sans-serif',MONO='IBM Plex Mono,monospace';
 const rgb=c=>`rgb(${c.map(Math.round).join(',')})`;
 
@@ -20,7 +21,7 @@ function frames(){
 
 /* Side Shell map: frames across, girth down (starboard on top, port below — as on the dashboard)
    mode 'value': every measurement point painted (normal = light grey, abnormal = judgement colour)
-   mode 'markers': defects only — flaking = filled circle, scratch = open diamond */
+   mode 'markers': defects only, with the dashboard's icons — 최우선 보수 = 사이렌, 도막 떨어짐 = 경고, 스크래치 = 주의 (PNG, gradeUi.js) */
 export function sideShellMap(records,layer,W,H,mode='value'){
   frames();
   const m={l:22,r:30,t:8,b:22},px=fr=>m.l+fr/FRMAX*(W-m.l-m.r),py=u=>m.t+(u+GMAX)/(2*GMAX)*(H-m.t-m.b);
@@ -38,9 +39,11 @@ export function sideShellMap(records,layer,W,H,mode='value'){
   [-1,1].forEach(sd=>{out.push(`<path d="${curve('wl',sd)}" fill="none" stroke="#2F5597" stroke-width="1"/>`,
     `<path d="${curve('b1',sd)}" fill="none" stroke="${MUTED}" stroke-width="0.7" stroke-dasharray="3 2"/>`);});
   if(mode==='markers'){
-    for(const r of records){if(!r.defect)continue;const x=px(r.fr),y=py(recordU(r)),lv=judge(r,'defect').level;
-      out.push(r.defect==='flaking'?`<circle cx="${x}" cy="${y}" r="3.2" fill="${LV_FILL[lv]}" stroke="${INK}" stroke-width="0.5"/>`
-        :`<path d="M${x} ${y-3.6}l3.6 3.6-3.6 3.6-3.6-3.6z" fill="#FFFFFF" stroke="${LV_FILL[Math.max(lv,1)]}" stroke-width="1.4"/>`);}
+    // each icon once as a data URI (this SVG becomes an image for the PDF and could not load a file), then <use> per point
+    const s=8,id=g=>`mk${g}${layer}`;
+    out.push(`<defs>${[1,2,3].map(g=>`<image id="${id(g)}" href="${GRADE_ICON_DATA[g]||GRADE_ICON[g]}" width="${s}" height="${s}"/>`).join('')}</defs>`);
+    const dmg=records.filter(r=>r.defect).map(r=>({r,g:isTop(r,'defect')?3:judge(r,'defect').level})).sort((a,b)=>a.g-b.g);   // worst on top
+    for(const {r,g} of dmg)out.push(`<use href="#${id(g)}" x="${(px(r.fr)-s/2).toFixed(1)}" y="${(py(recordU(r))-s/2).toFixed(1)}"/>`);
   }
   out.push('</g>');
   out.push(`<path d="${outline}" fill="none" stroke="#5B6474" stroke-width="1"/>`);

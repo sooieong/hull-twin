@@ -7,6 +7,7 @@
    같은 seed면 항상 같은 값이 나온다.
    ========================================================= */
 import { L, T, section, girthAtZ } from '../hull.js';
+import { CRITERIA } from './criteria.js';
 
 /* 구역별 설계 도막 두께(µm), 원두께(mm): 선저, 빌지, 선측, 흘수선, 건현, 선수, 선미 */
 const DFT_DESIGN={'선저':350,'빌지':350,'선측':320,'흘수선':350,'건현':250,'선수':320,'선미':320};
@@ -48,12 +49,17 @@ export function createSynth(seed=2491){
     if(defect==='flaking'){defectArea=0.15+rnd()*1.2*c;ratio=Math.min(ratio,0.25+0.3*rnd());}
     else if(defect==='scratch')defectArea=0.03+rnd()*0.35;
     const loss=Math.max(0,Math.min(0.4,0.015+0.04*rnd()+0.27*p+(rnd()-0.5)*0.02));
-    const prevLoss=loss*(0.4+0.2*rnd());   // at the 1st redocking (5 of the 10 years since delivery): about half of today's loss
+    // "1차" = 1차 리도킹(2021.10) 출거 시점, 정비를 마친 뒤의 두께
+    // 강판: 그때 측정한 감소(인도 후 10년 중 5년: 지금의 약 절반)가 경고 기준 이상이면 교체 → 원두께, 아니면 그대로
+    const prevLoss=loss*(0.4+0.2*rnd()),prevAfter=prevLoss>=CRITERIA.plate.crit?0:prevLoss;
     const dft=Math.round(design*Math.max(0.05,Math.min(1.1,ratio)));
     return {
-      dft,dftDesign:design,dftPrev:Math.round(Math.max(design*(0.96+0.08*rnd()),dft*1.04)),
-      plate:r1(orig*(1-loss)),plateOrig:orig,platePrev:r1(orig*(1-prevLoss)),
-      defect,defectArea:defect?Math.round(defectArea*100)/100:0
+      // 도막: 그때 다시 칠했다 → 설계 이상 (100–112%), 지금보다 얇을 수는 없다
+      dft,dftDesign:design,dftPrev:Math.round(Math.max(design*(1+0.12*rnd()),dft)),
+      plate:r1(orig*(1-loss)),plateOrig:orig,platePrev:r1(orig*(1-prevAfter)),
+      defect,defectArea:defect?Math.round(defectArea*100)/100:0,
+      // AI 손상 판별 신뢰도 (%) — 모델이 아직 없어 85–98% 예시값. 실제 모델 결과(JSON)의 값으로 이 필드만 바꾸면 된다
+      aiConfidence:defect?Math.round(85+13*rnd()):null
     };
   };
 }

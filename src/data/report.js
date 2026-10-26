@@ -22,7 +22,7 @@ export function logDataSummary(store,top=5){
       위치:zoneLoc(z),
       측정점:z.count,
       최악값:value(z.worst,layer),
-      판정:gradeLabel(z.level,z.top),
+      판정:gradeLabel(z.level,z.top,layer),
       복합:z.compound?'●':'',   // 도막·강판 이상이 함께 있는 점 포함 (최우선 보수 판정은 '판정' 칸)
       점수:Math.round(z.score),
       권장조치:z.action

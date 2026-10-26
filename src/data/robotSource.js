@@ -5,7 +5,7 @@
    이벤트
    - 'pose'        {ts, X, Y, Z, fr, strake, side, zone, heading:{X,Y,Z}, k, progress}
                    k = 계획 경로(plan.points)에서 지나온 점 번호, progress = 0–1
-   - 'measurement' 측정 레코드 (SPEC 3.1)
+   - 'measurement' 측정 레코드 (SPEC 3.1). 손상 레코드에는 aiConfidence (AI 손상 판별 신뢰도 %, 손상이 없으면 null)
    - 'state'       {state:'idle'|'mapping'|'paused'|'done', progress, ts, fresh?}
                    fresh:true = 처음부터 새로 시작한 매핑 (UI는 기존 결과를 비운다). 이어서 매핑할 때는 없다.
 

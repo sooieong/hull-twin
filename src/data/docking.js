@@ -10,5 +10,5 @@ export const DOCKINGS=[
 ];
 export const CURRENT_DOCK=DOCKINGS[0],PREV_DOCK=DOCKINGS[1];
 export const NEXT_DOCK_DATE='2031.10';
-/* "1차 리도킹(2021.10)" */
+/* "1차 리도킹(2021.10)" — 화면·보고서의 "1차" 값은 이 도킹의 출거 시점(정비를 마친 뒤) 두께 */
 export const prevDockLabel=`${PREV_DOCK.name}(${PREV_DOCK.date})`;

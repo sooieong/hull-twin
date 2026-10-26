@@ -7,14 +7,15 @@
    - 도막 두께 · 강판 두께 (private/시안_v4_수정.png): 왼쪽 단면 그림 + 치수선 3개(sectionSvg.js)가 패널 높이를 채운다.
      오른쪽 칸: 카드 2개 — "원두께 대비"(도막은 "설계 대비") 줄어든 두께(판정색), "1차 리도킹 대비" 줄어든 두께(주황, 조금 작게).
      "○○ 대비"는 화면 전체에서 줄어든 양(부호 포함)만 뜻한다.
-   - 도막 손상: 실제 손상 사진을 잘리지 않게 전체 표시(contain), 누르면 라이트박스. 사진이 없으면 "사진 없음" (가짜 이미지는 만들지 않는다)
+   - 도막 손상: 두께 레이어와 같은 배치 — 왼쪽 손상 사진(cover로 꽉 채움, 누르면 라이트박스에서 전체), 오른쪽 카드 2개
+     "종류"(도막 떨어짐 / 스크래치, 판정색) · "AI 신뢰도"(레코드의 aiConfidence, %). 사진이 없으면 "사진 없음" (가짜 이미지는 만들지 않는다)
    ========================================================= */
-import { judge, isTop, actionFor, gradeOf, CRIT } from './data/criteria.js';
-import { gradeLabel, DEFECT_LABEL, recLoc, area, dropHtml } from './format.js';
+import { judge, isTop, gradeOf, CRIT } from './data/criteria.js';
+import { DEFECT_LABEL, recLoc, area, dropHtml } from './format.js';
 import { thickness, sectionSvg, THEME } from './sectionSvg.js';
 import { emptyState, mappingState, PICK_HINT } from './emptyState.js';
 
-const LV_COLOR=THEME.dark.level,PREV_COLOR=LV_COLOR[1];   // 1차 리도킹 대비: 주황   // 정상 · 주의 · 심각 (히트맵 계열, UI 오렌지와 구분)
+const LV_COLOR=THEME.dark.level,PREV_COLOR=LV_COLOR[1];   // 1차 리도킹 대비: 주황   // 정상 · 주의 · 경고 (히트맵 계열, UI 오렌지와 구분)
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 const ICON_PHOTO='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-2.5h6L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/><path d="M3 3l18 18"/></svg>';
@@ -38,10 +39,8 @@ function createLightbox(){
 
 export function createDetailPanel(body,store,ui){
   let timer=null;const lightbox=createLightbox();
-  function cards(list,level){
-    // numbers in the mono face, words (종류, 판정, 조치) in the UI face so they can wrap
-    return `<div class="dt-cards">${list.map(([k,v,hl])=>`<div class="dt-card"><span>${esc(k)}</span><b class="${/^[\d—−+≈]/.test(String(v))?'':'tx'}"${hl?` style="color:${LV_COLOR[level]}"`:''}>${esc(v)}</b></div>`).join('')}</div>`;
-  }
+  /* right-hand card: small grey title, value below (a number in the shared .num-drop style, or a word) */
+  const sideCard=(title,value,cls='')=>`<div class="dt-card ${cls}"><span>${title}</span>${value}</div>`;
   const mapping=()=>store.mapState==='mapping'||store.mapState==='paused';
   /* latest abnormal measurement of the layer (records are kept in arrival order) */
   function latestAbnormal(layer){
@@ -60,15 +59,17 @@ export function createDetailPanel(body,store,ui){
     if(last&&last.r===r&&last.layer===layer&&last.empty===empty)return;
     last={r,layer,empty};
     if(!r){body.innerHTML=empty;return;}
-    const {level}=judge(r,layer),top=isTop(r,layer),action=actionFor(r,layer,level,top);
-    const colorLevel=Math.min(gradeOf(level,top),CRIT);   // 최우선 보수 is drawn in the 심각 colour, like its chip
+    const {level}=judge(r,layer),top=isTop(r,layer);
+    const colorLevel=Math.min(gradeOf(level,top),CRIT);   // 최우선 보수 is drawn in the 경고 colour, like its chip
     if(layer==='defect'){
       const has=!!r.defect,caption=has?`${DEFECT_LABEL[r.defect]}·${area(r.defectArea)}·${recLoc(r)}`:'';
       const media=!has?state(ICON_OK,'손상 없음','이 지점에서 발견된 도막 손상이 없습니다')
         :r.photo?`<button class="dt-img" title="크게 보기" aria-label="사진 크게 보기"><img src="${esc(r.photo)}" alt="${esc(DEFECT_LABEL[r.defect])} 사진·${recLoc(r)}"></button>`
         :state(ICON_PHOTO,'사진 없음','이 손상에 연결된 사진이 없습니다');
-      body.innerHTML=`<div class="dt"><div class="dt-media">${media}</div>
-        ${cards([['종류',has?DEFECT_LABEL[r.defect]:'없음'],['면적',has?area(r.defectArea):'—',1],['판정',gradeLabel(level,top),1],['권장 조치',action||'—',1]],colorLevel)}</div>`;
+      const kind=`<b class="dt-word"${has?` style="color:${LV_COLOR[colorLevel]}"`:''}>${has?esc(DEFECT_LABEL[r.defect]):'없음'}</b>`;
+      const conf=has&&r.aiConfidence!=null?dropHtml(r.aiConfidence,'%'):'<b class="dt-word">—</b>';
+      body.innerHTML=`<div class="dt"><div class="dt-main"><div class="dt-media">${media}</div>
+        <div class="dt-side">${sideCard('종류',kind,'kind')}${sideCard('AI 신뢰도',conf,'ai')}</div></div></div>`;
       const btn=body.querySelector('.dt-img'),img=btn&&btn.querySelector('img');
       if(img){
         img.addEventListener('error',()=>{img.closest('.dt-media').innerHTML=state(ICON_PHOTO,'사진 없음','사진 파일을 불러올 수 없습니다');},{once:true});
