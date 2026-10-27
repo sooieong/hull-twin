@@ -1,0 +1,8 @@
+/* =========================================================
+   Pretendard (npm pretendard) — 쓰는 굵기만: 400 · 500 · 600 · 700.
+   굵기별 CSS는 글자 범위별로 나뉜 파일(dynamic subset)이라 화면에 나온 글자의 범위만 내려받는다.
+   ========================================================= */
+@import 'pretendard/dist/web/static/Pretendard-Regular.css';
+@import 'pretendard/dist/web/static/Pretendard-Medium.css';
+@import 'pretendard/dist/web/static/Pretendard-SemiBold.css';
+@import 'pretendard/dist/web/static/Pretendard-Bold.css';

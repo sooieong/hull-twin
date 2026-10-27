@@ -1,16 +1,16 @@
 /* =========================================================
-   보고서 차트 (SVG, 인쇄용 흰 바탕): S.SHELL 외판 전개도, 히스토그램, 판정 비율 막대
+   보고서 차트 (SVG, 인쇄용 흰 바탕): S.SHELL 전개도, 히스토그램, 판정 비율 막대
    축·단위·기준선(주의·경고 경계)을 항상 표시한다 (SPEC 6.1).
    ========================================================= */
 import { T, R, FS, FRMIN, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, section, girthAtZ, recordU } from '../hull.js';
 import { OK, judge, isTop } from '../data/criteria.js';
 import { GRADE_ICON, GRADE_ICON_DATA } from '../gradeUi.js';
 import { heatOf, heatRGB } from '../heatmap.js';
-import { COLOR, FONT as TF } from '../styles/tokens.js';
+import { COLOR, FONT as TF } from '../styles/tokens.js';   // one font (Pretendard)
 import { GRID } from '../data/baseline.js';
 
 export const LV_FILL=COLOR.rp.lvFill;   // 정상 · 주의 · 경고 (대시보드와 같은 판정색)
-const INK=COLOR.rp.text,MUTED=COLOR.rp.muted,GRIDC=COLOR.rp.line,FONT=TF.ui,MONO=TF.mono;   // styles/tokens.js
+const INK=COLOR.rp.text,MUTED=COLOR.rp.muted,GRIDC=COLOR.rp.line,FONT=TF,MONO=TF;   // MONO: number labels (same font, tabular figures)   // styles/tokens.js
 const rgb=c=>`rgb(${c.map(Math.round).join(',')})`;
 
 let F=null,GMAX=0;

@@ -11,7 +11,7 @@
    3D hull        --zone-label --zone-label-bg --hull --hull-below --hull-above
    translucent    --orange-a10 --orange-a18 --orange-a35 --orange-a60 --orange-a0 --peach-a35
                   --warn-bg --warn-line --crit-bg --crit-line --shadow --backdrop
-   fonts          --font-ui (IBM Plex Sans KR) · --font-mono (IBM Plex Mono)
+   font           --font (Pretendard — words and numbers; numbers add tabular-nums)
    type scale     --fs-title · --fs-sub · --fs-body · --fs-meta · --fs-num-s · --fs-num-l · --fs-num-xl · --fs-tick
                   --unit (× the number's size) · --unit-min (smallest unit) · --ls-label (English labels)
    report         --rp-bg --rp-text --rp-text-2 --rp-muted --rp-line --rp-line-2 --rp-line-3 --rp-line-strong

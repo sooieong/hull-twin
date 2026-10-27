@@ -12,7 +12,7 @@ const MAP_W=500,MAP_H=236;   // box content width of a half-page column
 import { sideShellMap, histogram, ratioBar, LV_FILL } from './charts.js';
 import { thickness, sectionSvg, THEME } from '../sectionSvg.js';
 
-/* locations with their numbers in Mono (FR in Mono 600) */
+/* locations with their numbers marked (FR 600, tabular figures) */
 const ptLocH=r=>numHtml(recLoc(r)),zoneLocH=z=>numHtml(zoneLoc(z));
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 /* judgement chip: 최우선 보수 / 경고 / 주의 / 정상 — cx: 최우선 보수 (a point: isTop(r, layer), a zone: z.top) */
@@ -73,7 +73,7 @@ function page2(d,imgs){
   const thin=table(['#순위','위치','#현재 / 설계 (µm)','#현재 / 설계','판정'],d.dft.thinnest.map((r,i)=>{const l=judge(r,'dft').level;
     return `<tr>${td(i+1,'n')}${td(ptLocH(r))}${td(`${thickNum(r.dft,'dft')} / ${thickNum(r.dftDesign,'dft')}`,'n m')}${td(designRatio(r),'n m')}${td(chip(l,isTop(r,'dft')))}</tr>`;}));
   return `<div class="rp-grid2">
-      <div class="rp-col">${box('S.SHELL 외판 전개도·현재 / 설계 도막 두께',sideShellMap(d.records,'dft',MAP_W,MAP_H)+legend([[COLOR.rp.normalFill,'정상'],[LV_FILL[1],`주의·${c.warn*100}% 미만`],[LV_FILL[2],`경고·${c.crit*100}% 미만`]]))}
+      <div class="rp-col">${box('S.SHELL 전개도·현재 / 설계 도막 두께',sideShellMap(d.records,'dft',MAP_W,MAP_H)+legend([[COLOR.rp.normalFill,'정상'],[LV_FILL[1],`주의·${c.warn*100}% 미만`],[LV_FILL[2],`경고·${c.crit*100}% 미만`]]))}
         ${views(imgs,'dft')}</div>
       <div class="rp-col">${box('분포·현재 / 설계 (%)',hist)}${box('구역별',zt)}</div>
     </div>
@@ -91,7 +91,7 @@ function page3(d,imgs){
   const pred=pr.length?table(['위치','#현재 감소율','#예상 감소율','현재'],pr.slice(0,5).map(x=>`<tr>${td(ptLocH(x.r))}${td(lossRatio(x.r),'n m')}${td(ratio(x.pred),'n m')}${td(chip(judge(x.r,'plate').level,isTop(x.r,'plate')))}</tr>`))
     :'<p class="rp-none">지금 속도로는 다음 도킹까지 경고 등급에 도달할 곳이 없습니다.</p>';
   return `<div class="rp-grid2">
-      <div class="rp-col">${box('S.SHELL 외판 전개도·감소율 (원두께 기준)',sideShellMap(d.records,'plate',MAP_W,MAP_H)+legend([[COLOR.rp.normalFill,'정상'],[LV_FILL[1],`주의·${c.warn*100}% 이상`],[LV_FILL[2],`경고·${c.crit*100}% 이상`]]))}
+      <div class="rp-col">${box('S.SHELL 전개도·감소율 (원두께 기준)',sideShellMap(d.records,'plate',MAP_W,MAP_H)+legend([[COLOR.rp.normalFill,'정상'],[LV_FILL[1],`주의·${c.warn*100}% 이상`],[LV_FILL[2],`경고·${c.crit*100}% 이상`]]))}
         ${views(imgs,'plate')}</div>
       <div class="rp-col">${box('감소율 상위 3곳·단면 비교',`<div class="rp-secs">${secs}</div>`)}${box('구역별',zt)}</div>
     </div>
@@ -110,7 +110,7 @@ function page4(d,imgs){
     return `<figure class="rp-ph">${r.photo?`<img src="${esc(r.photo)}" alt="">`:'<div class="rp-nophoto">사진 없음</div>'}
       <figcaption><span>${ptLocH(r)}</span><span>${area(r.defectArea)} ${chip(l,isTop(r,'defect'),'defect')}</span></figcaption></figure>`;}).join('');
   return `<div class="rp-grid2">
-      <div class="rp-col">${box('S.SHELL 외판 전개도·손상 위치',sideShellMap(d.records,'defect',MAP_W,MAP_H,'markers')+dmgLegend)}
+      <div class="rp-col">${box('S.SHELL 전개도·손상 위치',sideShellMap(d.records,'defect',MAP_W,MAP_H,'markers')+dmgLegend)}
         ${views(imgs,'defect')}</div>
       <div class="rp-col">${box(`종류별·구역별·총 ${d.defect.count}건`,agg)}${box('대표 손상 사진·급한 순',`<div class="rp-phs">${photos}</div>`)}</div>
     </div>`;

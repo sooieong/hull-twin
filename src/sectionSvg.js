@@ -36,7 +36,7 @@ let uid=0;
 
 export function sectionSvg(m,level,W,H,theme=THEME.dark,maxK=2.2,opts={}){
   const k=Math.max(opts.minK||1,Math.min(maxK,W/380,H/230)),col=theme.level[level],pid=`secHatch${++uid}`;
-  const fsCur=13*k,fsDim=11*k,MONO=FONT.mono;   // sizes scale with the figure
+  const fsCur=13*k,fsDim=11*k;   // sizes scale with the figure
   const rel=v=>Math.min(1.25,Math.max(0.2,1-EXAG*(m.ref-v)/m.ref));
   const lines=[{key:'ref',v:m.ref,label:m.refLabel},{key:'prev',v:m.prev,label:'1차'},{key:'cur',v:m.cur,label:'현재'}].filter(l=>l.v!=null);
   lines.forEach(l=>{const cur=l.key==='cur';l.fs=cur?fsCur:fsDim;
@@ -77,7 +77,7 @@ export function sectionSvg(m,level,W,H,theme=THEME.dark,maxK=2.2,opts={}){
     // outside on the right: other dimension lines' extension lines pass behind the text, so it gets a backing
     const back=l.place==='right'?`<rect x="${tx-3*k}" y="${ty-l.fs*0.7}" width="${l.tw+6*k}" height="${l.fs*1.4}" fill="${theme.bg}"/>`:'';
     return `<g stroke="${c}" stroke-width="${sw}">${ln}</g>${arrow(x0,l.y,-1,c)}${arrow(x1,l.y,1,c)}${back}
-      <text x="${tx}" y="${ty}" text-anchor="${l.place==='right'?'start':'middle'}" dominant-baseline="central" font-family="${MONO}"
+      <text x="${tx}" y="${ty}" text-anchor="${l.place==='right'?'start':'middle'}" dominant-baseline="central" font-family="${FONT}" style="font-variant-numeric:tabular-nums"
         font-size="${l.fs}" font-weight="${l.key==='cur'?600:400}" fill="${tc}">${l.text}</text>`;
   };
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${m.title} 단면: ${m.refLabel} ${thick(m.ref,m.layer)}${prev?`, 1차 리도킹 ${thick(m.prev,m.layer)}`:''}, 현재 ${thick(m.cur,m.layer)}">

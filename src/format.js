@@ -72,8 +72,8 @@ export const dropHtml=(n,unit,color)=>
   `<span class="num-drop"${color?` style="color:${escAttr(color)}"`:''}>${n}${unit?`<span class="u${unit==='%'?' pct':''}">${unit}</span>`:''}</span>`;
 
 /* ---------- numbers inside text ----------
-   text → HTML with its numbers in Mono: a frame reference (FR152+0.36 m, FR50–55) as .fr (Mono 600),
-   other numbers with their unit as .n (Mono). The words stay in Sans. Escaped. */
+   text → HTML with its numbers marked: a frame reference (FR152+0.36 m, FR50–55) as .fr (600, tabular figures),
+   other numbers with their unit as .n (tabular figures). Escaped. */
 const escHtml=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const NUM_RE=/(FR[−-]?\d+(?:[+−]\d+(?:\.\d+)?(?: m)?|–[−-]?\d+)?)|((?<![A-Za-z\d-])[−+]?\d[\d,]*(?:[.:]\d+)*(?: ?(?:µm|mm|m²|m|%))?)/g;   // digits inside an ID (RBT-01) stay text
 export const numHtml=s=>escHtml(s).replace(NUM_RE,(m,fr)=>fr?`<b class="fr">${m}</b>`:`<span class="n">${m}</span>`);

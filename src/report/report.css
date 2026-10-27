@@ -1,7 +1,7 @@
 /* 진단 보고서 (인쇄용 흰 바탕). 색·글꼴은 styles/tokens.css 변수만 쓴다 (값은 hex · rgba — html2canvas가 읽을 수 있게 color-mix, oklch, lab 금지). */
 .rp-root{display:flex;flex-direction:column;align-items:center;gap:24px}
 .rp-page{width:1123px;height:794px;box-sizing:border-box;flex:none;display:flex;flex-direction:column;background:var(--rp-bg);color:var(--rp-text);
-  font:12px/1.4 var(--font-ui);border-top:6px solid var(--ho-orange);overflow:hidden}
+  font:12px/1.4 var(--font);font-variant-numeric:tabular-nums;border-top:6px solid var(--ho-orange);overflow:hidden}
 .rp-page *{box-sizing:border-box}
 .rp-head{display:flex;align-items:center;gap:18px;height:52px;padding:0 32px;border-bottom:1px solid var(--rp-line-3);flex:none}
 .rp-brand{display:flex;align-items:center;gap:7px}
@@ -10,11 +10,11 @@
 .rp-doc b{font-size:13px}
 .rp-doc span{font-size:11px;color:var(--rp-muted)}
 .rp-ch{margin-left:auto;display:flex;align-items:center;gap:8px}
-.rp-ch i{font-style:normal;display:grid;place-items:center;width:26px;height:26px;border-radius:4px;background:var(--ho-orange);color:var(--k100);font-family:var(--font-mono);font-weight:600;font-size:16px}
+.rp-ch i{font-style:normal;display:grid;place-items:center;width:26px;height:26px;border-radius:4px;background:var(--ho-orange);color:var(--k100);font-weight:600;font-size:16px}
 .rp-ch b{font-size:16px}
 .rp-body{flex:1;min-height:0;padding:12px 32px 8px;display:flex;flex-direction:column;gap:10px}
 .rp-foot{display:flex;gap:22px;align-items:center;height:26px;padding:0 32px;border-top:1px solid var(--rp-fill-3);font-size:10px;color:var(--rp-muted);flex:none}
-.rp-foot b{margin-left:auto;color:var(--rp-text);font-family:var(--font-mono);font-weight:600}
+.rp-foot b{margin-left:auto;color:var(--rp-text);font-weight:600}
 
 .rp-box{border:1px solid var(--rp-line);border-radius:6px;padding:8px 10px;min-width:0}
 .rp-box h3{margin:0 0 6px;font-size:12px;font-weight:600;color:var(--rp-text);padding-left:7px;border-left:3px solid var(--ho-orange);line-height:1.2}
@@ -26,7 +26,7 @@
 .rp-tbl th{text-align:left;font-weight:600;color:var(--rp-text-2);background:var(--rp-fill);padding:4px 6px;border-bottom:1px solid var(--rp-line-strong);white-space:nowrap}
 .rp-tbl td{padding:3px 6px;border-bottom:1px solid var(--rp-line-2);vertical-align:middle;white-space:nowrap}
 .rp-tbl .n{text-align:right}
-.rp-tbl .m{font-family:var(--font-mono);font-size:10.5px}
+.rp-tbl .m{font-size:10.5px}
 .rp-tbl .rp-sum td{font-weight:600;border-top:1px solid var(--rp-line-strong);background:var(--rp-fill-2)}
 .rp-lv{display:inline-flex;align-items:center;gap:3px;vertical-align:middle;padding:0 6px;border-radius:3px;font-size:10px;font-weight:600;line-height:16px}
 .rp-lv0{background:var(--rp-fill-3);color:var(--rp-text-2)}
@@ -63,8 +63,8 @@
 .rp-cnt{display:flex;gap:16px;margin-bottom:4px}
 .rp-cnt span{display:flex;align-items:baseline;gap:4px}
 .rp-cnt small{font-size:10px;color:var(--rp-muted)}
-.rp-cnt b{font-family:var(--font-mono);font-size:20px;font-weight:600}
-.rp-pcts{display:flex;gap:6px;font-family:var(--font-mono);font-size:10px;color:var(--rp-muted);margin-top:2px}
+.rp-cnt b{font-size:20px;font-weight:600}
+.rp-pcts{display:flex;gap:6px;font-size:10px;color:var(--rp-muted);margin-top:2px}
 .rp-worst{margin:4px 0 0;font-size:11px;color:var(--rp-text-2)}
 .rp-worst b{font-size:14px;color:var(--rp-text);margin:0 6px 0 2px}
 .rp-worst small{color:var(--rp-muted)}
@@ -100,8 +100,8 @@
 .rp-qty{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .rp-qty div{border:1px solid var(--rp-line);border-left:4px solid var(--rp-text);border-radius:6px;padding:6px 12px;display:flex;flex-direction:column}
 .rp-qty small{font-size:10.5px;color:var(--rp-muted)}
-.rp-qty b{font-family:var(--font-mono);font-size:24px;font-weight:600;line-height:1.1}
-.rp-qty b i{font-style:normal;font-size:max(var(--unit-min),calc(var(--unit) * 1em));margin-left:3px;font-family:var(--font-mono);font-weight:600}   /* unit: 0.55 × the number (at least 10px), same colour */
+.rp-qty b{font-size:24px;font-weight:600;line-height:1.1}
+.rp-qty b i{font-style:normal;font-size:max(var(--unit-min),calc(var(--unit) * 1em));margin-left:3px;font-weight:600}   /* unit: 0.55 × the number (at least 10px), same colour */
 .rp-qty span{font-size:10px;color:var(--rp-muted)}
 .rp-watch p{margin:0 0 4px;font-size:11.5px}
 .rp-watch ul{margin:0;padding-left:18px;font-size:11px;line-height:1.5}
@@ -116,7 +116,7 @@ body.rp-preview{overflow:auto;background:var(--rp-preview-bg)}
 body.rp-preview .app,body.rp-preview .toast{display:none!important}
 .rp-pv{min-height:100%;padding:0 0 40px}
 .rp-pv-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;padding:10px 20px;margin-bottom:20px;background:var(--rp-text);color:var(--text);font-size:13px}
-.rp-pv-bar b{font-family:var(--font-ui);font-weight:600;font-size:14px}
+.rp-pv-bar b{font-weight:600;font-size:14px}
 .rp-pv-bar span{color:var(--text-2)}
 .rp-pv-bar a{margin-left:auto;color:var(--ho-peach)}
 .rp-pv-wait{color:var(--text);text-align:center;padding:60px 0;font-size:14px}

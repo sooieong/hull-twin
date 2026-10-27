@@ -1,16 +1,17 @@
+@import "./styles/fonts.css";    /* Pretendard 400 · 500 · 600 · 700 */
 @import "./styles/tokens.css";   /* variable names only; values from styles/tokens.js (applyTokens) */
 :root{color-scheme:dark}
 /* Layout: top bar / 3-column grid (main 3D | side shell + detail | KPI) / status bar
-   Type (tokens.css): text colours --text / --text-2 / --muted · Sans for words, Mono for numbers ·
+   Type (tokens.css): text colours --text / --text-2 / --muted · one font (Pretendard), numbers in tabular figures ·
    sizes: title 14 · sub 13 · body 12 · meta 11 · numbers S 15 / L 22 / XL 28 · units 0.55 × their number */
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--text);font:var(--fs-body)/1.45 var(--font-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--bg);color:var(--text);font:var(--fs-body)/1.45 var(--font);overflow:hidden;-webkit-font-smoothing:antialiased}
 button,select,input{font:inherit;color:inherit}
-/* numbers inside text (format.numHtml): Mono; a frame number is Mono 600 everywhere */
-.n{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
-.fr{font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums}
+/* numbers inside text (format.numHtml): tabular figures; a frame number is 600 everywhere */
+.n{font-variant-numeric:tabular-nums}
+.fr{font-weight:600;font-variant-numeric:tabular-nums}
 :focus-visible{outline:2px solid var(--ho-orange);outline-offset:2px}
 
 .app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:8px;
@@ -86,7 +87,7 @@ button,select,input{font:inherit;color:inherit}
 .pane-head{display:flex;align-items:center;gap:10px;height:44px;padding:0 10px 0 14px;border-bottom:1px solid var(--line);flex:none;min-width:0}
 .pane-title{font-weight:700;font-size:var(--fs-title);white-space:nowrap}
 .pane-count{font-size:var(--fs-body);color:var(--muted);white-space:nowrap}
-.chip{font-family:var(--font-mono);font-size:var(--fs-meta);color:var(--text-2);border:1px solid var(--line-strong);padding:1px 7px;border-radius:4px;white-space:nowrap}
+.chip{font-variant-numeric:tabular-nums;font-size:var(--fs-meta);color:var(--text-2);border:1px solid var(--line-strong);padding:1px 7px;border-radius:4px;white-space:nowrap}
 .pane-ctl{margin-left:auto;display:flex;gap:2px;align-items:center;flex:none}
 .pane.collapsed .pane-body{display:none}
 .pane.collapsed .pane-head{border-bottom:0}
@@ -107,7 +108,7 @@ button,select,input{font:inherit;color:inherit}
 .pop{position:absolute;top:48px;z-index:40;width:max-content;max-width:calc(100% - 16px);padding:12px 14px;border-radius:9px;background:var(--pop-bg);border:1px solid var(--line-strong);box-shadow:0 12px 30px var(--shadow);display:flex;flex-direction:column;gap:6px}
 .lg-ttl{font-size:var(--fs-sub);font-weight:600;color:var(--text)}
 .pop.pop-fixed{position:fixed;top:auto;z-index:60}   /* status bar ? (coordinate system), 보수 목록 ? (value note), group ! (action) */
-.cs-k{flex:none;width:14px;font-family:var(--font-mono);font-weight:600;color:var(--text)}
+.cs-k{flex:none;width:14px;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text)}
 .help-btn.sm{width:18px;height:18px}
 .lg-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;font-size:var(--fs-body);color:var(--text-2)}
 .lg-row>span+i{margin-left:8px}   /* gap between the two pairs on a row */
@@ -163,16 +164,16 @@ button,select,input{font:inherit;color:inherit}
 .tog:has(input:disabled){opacity:.45;cursor:not-allowed}   /* 단면 절단 while mapping (main.js) */
 .tog input:disabled{cursor:not-allowed}
 .ov-sec .row1 .icon-btn{margin-left:auto;margin-right:-6px}
-.sec-mini{display:none;align-items:center;gap:6px;height:30px;padding:0 10px;border:0;background:none;color:var(--text);cursor:pointer;font-family:var(--font-mono);font-weight:600;font-size:var(--fs-num-s)}   /* FR number: S */
-.sec-mini small{font-family:var(--font-ui);font-size:var(--fs-meta);font-weight:600;color:var(--ho-coral);letter-spacing:var(--ls-label)}
+.sec-mini{display:none;align-items:center;gap:6px;height:30px;padding:0 10px;border:0;background:none;color:var(--text);cursor:pointer;font-variant-numeric:tabular-nums;font-weight:600;font-size:var(--fs-num-s)}   /* FR number: S */
+.sec-mini small{font-size:var(--fs-meta);font-weight:600;color:var(--ho-coral);letter-spacing:var(--ls-label)}
 .sec-mini .ic{color:var(--text-2)}
 .ov-sec .row1 .icon-btn .ic{transform:rotate(180deg)}
 .ov-sec.collapsed{width:max-content;right:auto;padding:0}   /* just the chip, at any screen width */
 .ov-sec.collapsed>:not(.sec-mini){display:none}
 .ov-sec.collapsed .sec-mini{display:flex}
-.ov-sec .fr{font-family:var(--font-mono);font-weight:600;font-size:var(--fs-num-xl);line-height:1;color:var(--text)}   /* FR number: XL */
+.ov-sec .fr{font-variant-numeric:tabular-nums;font-weight:600;font-size:var(--fs-num-xl);line-height:1;color:var(--text)}   /* FR number: XL */
 .ov-sec .fr{display:flex;align-items:baseline}
-.ov-sec .fr small{font-family:var(--font-ui);font-size:var(--fs-meta);font-weight:600;color:var(--ho-coral);letter-spacing:var(--ls-label);margin-right:5px}
+.ov-sec .fr small{font-size:var(--fs-meta);font-weight:600;color:var(--ho-coral);letter-spacing:var(--ls-label);margin-right:5px}
 /* frame number: reads as text, click to type (Enter applies) */
 .ov-sec .fr input{width:3ch;padding:0 2px;margin:0 0 0 -2px;border:0;border-bottom:1px dashed transparent;border-radius:0;background:none;
   font:inherit;letter-spacing:inherit;line-height:1;color:inherit;cursor:text;outline:none;box-sizing:content-box}
@@ -181,8 +182,8 @@ button,select,input{font:inherit;color:inherit}
 .ov-sec .zone{font-size:var(--fs-meta);color:var(--ho-peach);border:1px solid var(--peach-a35);padding:1px 7px;border-radius:4px;white-space:nowrap}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:10px 0 10px;font-size:var(--fs-body)}
 .kv dt{color:var(--text-2)}
-.kv dd{margin:0;text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--text)}
-.kv dd .zone{font-family:var(--font-ui)}
+.kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;color:var(--text)}
+.kv dd .zone{}
 .slider{width:100%;accent-color:var(--ho-orange);margin:2px 0 0;display:block}
 
 
@@ -190,12 +191,12 @@ button,select,input{font:inherit;color:inherit}
 #gizmo{width:100%;height:100%;display:block}
 
 .tip{position:absolute;z-index:5;pointer-events:none;min-width:236px;padding:9px 11px;border-radius:8px;background:var(--tip-bg);border:1px solid var(--ho-orange);font-size:var(--fs-body);transform:translate(14px,14px)}
-.tip .t1{font-family:var(--font-mono);font-weight:600;font-size:var(--fs-num-s);color:var(--text)}   /* first line: FR (numbers S) */
-.tip .t1 em{font-family:var(--font-ui);font-weight:400;font-size:var(--fs-body);font-style:normal;color:var(--ho-peach)}
+.tip .t1{font-variant-numeric:tabular-nums;font-weight:600;font-size:var(--fs-num-s);color:var(--text)}   /* first line: FR (numbers S) */
+.tip .t1 em{font-weight:400;font-size:var(--fs-body);font-style:normal;color:var(--ho-peach)}
 .tip .t2{color:var(--ho-coral);margin:1px 0 5px}
-.tip .t3{font-family:var(--font-mono);font-size:var(--fs-meta);color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tip .t3{font-variant-numeric:tabular-nums;font-size:var(--fs-meta);color:var(--text-2);white-space:nowrap}
 .tip .tv{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 6px;font-size:var(--fs-body);color:var(--text)}
-.tip .tv b{font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tip .tv b{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
 .tip .none{color:var(--muted);margin:2px 0 6px}
 /* judgement (gradeUi.js): amber 주의 / red 경고 · 최우선 보수, told apart by fill and icon shape — never the UI orange */
 .gi{width:12px;height:12px;flex:none;display:block;object-fit:contain}   /* judgement icon (PNG, gradeUi.js) */
@@ -205,9 +206,9 @@ button,select,input{font:inherit;color:inherit}
 .lv2{background:var(--crit-bg);border-color:var(--crit-line);color:var(--lv-crit)}
 .lv3{background:var(--lv-top);border-color:var(--lv-top);color:var(--text)}
 
-.lbl3d{position:absolute;z-index:2;pointer-events:none;font-family:var(--font-mono);font-weight:600;font-size:var(--fs-meta);color:var(--ho-peach);transform:translate(-50%,-100%);white-space:nowrap;opacity:.8}
+.lbl3d{position:absolute;z-index:2;pointer-events:none;font-variant-numeric:tabular-nums;font-weight:600;font-size:var(--fs-meta);color:var(--ho-peach);transform:translate(-50%,-100%);white-space:nowrap;opacity:.8}
 .lbl3d.sel{color:var(--k100);background:var(--ho-orange);padding:1px 7px;border-radius:3px;font-weight:600;opacity:1}
-.lbl3d.zl{font-family:var(--font-ui);font-weight:400;font-size:var(--fs-meta);color:var(--zone-label);background:var(--zone-label-bg);padding:0 5px;border-radius:3px;opacity:1;transform:translate(-50%,-50%)}
+.lbl3d.zl{font-weight:400;font-size:var(--fs-meta);color:var(--zone-label);background:var(--zone-label-bg);padding:0 5px;border-radius:3px;opacity:1;transform:translate(-50%,-50%)}
 #labels{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:2}
 .vp-msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--text-2);padding:24px}
 
@@ -223,7 +224,7 @@ button,select,input{font:inherit;color:inherit}
 .dt-side{flex:none;width:clamp(100px,25%,128px);display:flex;flex-direction:column;justify-content:center;gap:8px}
 .dt-side .dt-card{flex:none;height:74px;justify-content:space-between;padding:7px 9px}
 .dt-side .dt-card>span:not(.num-drop){font-size:var(--fs-meta)}
-.dt-side .dt-word{font-family:var(--font-ui);font-size:var(--fs-sub);font-weight:600;line-height:1.2;color:var(--text)}   /* a word value (손상 종류), same card as the numbers */
+.dt-side .dt-word{font-size:var(--fs-sub);font-weight:600;line-height:1.2;color:var(--text)}   /* a word value (손상 종류), same card as the numbers */
 .dt-fig svg{position:absolute;inset:0;display:block}
 .dt-media{flex:1;min-height:0;display:flex;border-radius:7px;overflow:hidden;background:var(--surface-2)}
 .dt-img{flex:1;display:block;min-height:0;padding:0;border:0;background:none;cursor:zoom-in}
@@ -237,10 +238,10 @@ button,select,input{font:inherit;color:inherit}
 .dt-card{display:flex;flex-direction:column;justify-content:space-between;gap:1px;min-height:61px;padding:6px 8px;border-radius:6px;background:var(--surface-2);border:1px solid var(--line);min-width:0}
 .dt-card>span:not(.num-drop){font-size:var(--fs-meta);line-height:1.25;color:var(--text-2)}
 /* reduction numbers (detail side cards, repair list): one mono face, tabular figures, the unit smaller at a fixed ratio */
-.num-drop{font-family:var(--font-mono);font-weight:600;font-size:var(--fs-num-l);line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:0}   /* numbers L */
-.num-drop .u{font-size:max(var(--unit-min),calc(var(--unit) * 1em));margin-left:.3em}   /* unit: 0.55 × the number (at least 10px), Mono 600, same colour */
+.num-drop{font-variant-numeric:tabular-nums;font-weight:600;font-size:var(--fs-num-l);line-height:1;white-space:nowrap;letter-spacing:0}   /* numbers L */
+.num-drop .u{font-size:max(var(--unit-min),calc(var(--unit) * 1em));margin-left:.3em}   /* unit: 0.55 × the number (at least 10px), 600, same colour */
 .num-drop .u.pct{margin-left:0}
-.dt-card b{font-family:var(--font-mono);font-weight:600;font-size:var(--fs-sub);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dt-card b{font-variant-numeric:tabular-nums;font-weight:600;font-size:var(--fs-sub);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* shared empty state (emptyState.js): KPI list, detail, side shell — same size, colours, centred, same dots */
 .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:16px;text-align:center;
   border:1px dashed var(--line-strong);border-radius:7px;margin:10px;color:var(--text-2);min-height:0}
@@ -266,8 +267,8 @@ button,select,input{font:inherit;color:inherit}
 .kc-name{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0;line-height:1.2}
 .kc-name .gi{width:24px;height:24px}
 .kc-n{display:flex;align-items:baseline;justify-content:center;gap:2px}
-.kc-n b{font-family:var(--font-mono);font-weight:600;font-size:var(--fs-num-l);line-height:1.05;color:var(--text);font-variant-numeric:tabular-nums}   /* numbers L */
-.kc-n i{font-style:normal;font-family:var(--font-mono);font-weight:600;font-size:max(var(--unit-min),calc(var(--fs-num-l) * var(--unit)));color:var(--text)}   /* 건: a unit */
+.kc-n b{font-variant-numeric:tabular-nums;font-weight:600;font-size:var(--fs-num-l);line-height:1.05;color:var(--text)}   /* numbers L */
+.kc-n i{font-style:normal;font-variant-numeric:tabular-nums;font-weight:600;font-size:max(var(--unit-min),calc(var(--fs-num-l) * var(--unit)));color:var(--text)}   /* 건: a unit */
 .kpi-list{list-style:none;margin:0;padding:4px 8px 6px 10px;overflow-y:auto;min-height:0;flex:1;scrollbar-width:thin}
 .kpi-list.is-empty{display:flex;flex-direction:column;padding:0}
 .kpi-empty{flex:1;display:flex;min-height:0}
@@ -278,7 +279,7 @@ button,select,input{font:inherit;color:inherit}
 .zg-head .zgi{display:flex}
 .zg-head .gi{width:13px;height:13px}
 .zg-head b{font-weight:600;color:var(--text-2)}   /* judgement name; only the icon carries the colour */
-.zg-head .zg-n{font-size:var(--fs-body);color:var(--muted)}   /* count: number in Mono (.n) */
+.zg-head .zg-n{font-size:var(--fs-body);color:var(--muted)}   /* count: the number as .n */
 .zg-head .act-btn{margin-left:2px}   /* ! → the group's recommended action as a popover (#actPop, kpi.js) */
 /* one-line item (~32px): rank · location (frame bold white, the rest grey) · [own action] · value */
 /* "더 보기 (+N건) ⌄" / "접기 ⌃" under a group's 3rd item: smaller grey text, centred */
@@ -289,9 +290,9 @@ button,select,input{font:inherit;color:inherit}
 .z{display:flex;align-items:center;gap:8px;height:32px;padding:0 8px 0 4px;border-radius:6px;border:1px solid transparent;cursor:pointer}
 .z:hover{background:var(--surface-2)}
 .z.sel{border-color:var(--ho-orange);background:var(--orange-a10)}
-.z .rk{flex:none;width:18px;font-family:var(--font-mono);font-size:var(--fs-meta);color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.z .rk{flex:none;width:18px;font-variant-numeric:tabular-nums;font-size:var(--fs-meta);color:var(--muted);text-align:right}
 .z .zl{flex:1;min-width:0;font-size:var(--fs-body);color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.z .zl b{font-family:var(--font-mono);font-weight:600;color:var(--text)}
+.z .zl b{font-variant-numeric:tabular-nums;font-weight:600;color:var(--text)}
 .z .ztag{flex:none;padding:0 5px;border-radius:3px;border:1px solid var(--line-strong);font-size:var(--fs-meta);line-height:15px;color:var(--muted);white-space:nowrap}
 .z .dv{flex:none;min-width:64px;text-align:right}
 .z .dv .num-drop{font-size:var(--fs-num-s)}   /* numbers S */
@@ -299,8 +300,8 @@ button,select,input{font:inherit;color:inherit}
 .z.lvl1 .dv{color:var(--lv-warn)}
 
 /* ---------- status bar ---------- */
-.statusbar{display:flex;gap:22px;align-items:center;height:32px;padding:0 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;font-size:var(--fs-meta);color:var(--text-2);white-space:nowrap;overflow-x:auto;font-variant-numeric:tabular-nums}   /* words Sans, numbers Mono (.n / .fr) */
-.statusbar .k{color:var(--muted);margin-right:6px;font-family:var(--font-ui)}
+.statusbar{display:flex;gap:22px;align-items:center;height:32px;padding:0 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;font-size:var(--fs-meta);color:var(--text-2);white-space:nowrap;overflow-x:auto;font-variant-numeric:tabular-nums}   /* numbers in tabular figures (.n / .fr) */
+.statusbar .k{color:var(--muted);margin-right:6px}
 .statusbar .rb{display:flex;align-items:center;gap:8px;color:var(--ho-peach)}
 .statusbar .rb i{width:7px;height:7px;border-radius:50%;background:var(--ho-orange)}
 .statusbar .rb.idle{color:var(--text-2)}

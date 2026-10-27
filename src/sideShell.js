@@ -1,5 +1,5 @@
 /* =========================================================
-   보조 시각화 1: S.SHELL 외판 전개도 (SPEC 5.1)
+   보조 시각화 1: S.SHELL 전개도 (SPEC 5.1)
    가로 = 프레임 번호(선미 → 선수), 세로 = 킬 중심선에서의 거스. 위 절반 우현, 가운데 킬 중심선, 아래 절반 좌현.
    로봇 경로(우현 갑판 → 킬 → 좌현 갑판)가 위에서 아래로 진행한다.
    표시(단순화): 선체 외곽선, 가운데 K 선 하나(주황, 왼쪽 K 글자가 라벨), 오른쪽 "우현 / 좌현", 아래 프레임 눈금(100 단위),
@@ -18,7 +18,7 @@ import { ROBOT_MARGIN } from './data/scanPath.js';
 
 const C={bg:COLOR.popBg,shell:COLOR.draw.shell,outline:COLOR.draw.outline,keel:COLOR.orange,dwl:COLOR.draw.dwl,tick:COLOR.muted,frLabel:COLOR.peach,text:COLOR.text2,
   hatch:COLOR.hatchLine};
-const LABEL=font(600,TYPE.meta),LETTER=font(400,TYPE.meta),TICK=font(600,TYPE.tick,'mono');   // K · 우현/좌현 · strake letters · frame numbers
+const LABEL=font(600,TYPE.meta),LETTER=font(400,TYPE.meta),TICK=font(600,TYPE.tick);   // K · 우현/좌현 · strake letters · frame numbers
 const M={l:26,r:30,t:12,b:20};   // plot margins (px)
 const PICK_PX=9;                  // click / hover tolerance around an anomaly point
 const HEAT_PX=3;                  // heat grid cell (CSS px); drawn scaled up with smoothing
@@ -33,7 +33,7 @@ const G_MAX=Math.max(...F.map(f=>f.g));
 let nStrakes=0;while(nStrakes<LETTERS.length&&KEEL_HALF+STRAKE_W*nStrakes<G_MAX)nStrakes++;
 
 export function createSideShell(body,store,ui){
-  body.innerHTML='<canvas class="ss-cv" aria-label="S.SHELL 외판 전개도: 가로 프레임 번호, 세로 외판열. 위 우현, 아래 좌현. 이상 지점을 누르면 선택합니다."></canvas>';
+  body.innerHTML='<canvas class="ss-cv" aria-label="S.SHELL 전개도: 가로 프레임 번호, 세로 외판열. 위 우현, 아래 좌현. 이상 지점을 누르면 선택합니다."></canvas>';
   const cv=body.querySelector('canvas'),ctx=cv.getContext('2d');
   // static layers: under the heat (background, shell fill, keel blocks) and over it (lines, labels)
   const under=document.createElement('canvas'),over=document.createElement('canvas'),heat=document.createElement('canvas');
@@ -136,7 +136,9 @@ export function createSideShell(body,store,ui){
     drawBase();rebuildHeat();draw();
   }
   new ResizeObserver(resize).observe(cv);
-  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resize);
+  // the drawing caches its text: draw again once the web font is in (a canvas does not repaint by itself)
+  if(document.fonts){document.fonts.ready.then(resize);document.fonts.addEventListener('loadingdone',resize);
+    Promise.all([LABEL,LETTER,TICK].map(f=>document.fonts.load(f))).then(resize,()=>{});}
 
   /* click selection (anomaly point first, else nearest measurement within 3 m); no hover readout — the cursor only marks a point */
   function hit(e){

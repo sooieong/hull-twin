@@ -8,6 +8,8 @@ import { LAYERS } from '../data/criteria.js';
 import { nV, pos, girth, index, SUPER_BOXES } from '../hullMesh.js';
 import { heatOf, heatRGB, heatAlpha, buildIndex, idw } from '../heatmap.js';
 
+/* 장면 전용 색 (보고서 3D 그림): 흰 배경·조명·선체 회색·굴뚝 띠·프레임선. 히트맵 판정색은 heatmap.js(styles/tokens.js)를 쓴다. */
+const SCENE={bg:0xffffff,hemiSky:0xffffff,hemiGround:0x8a94a6,key:0xffffff,under:0xffffff,hull:0xcfd4db,band:0x222222,frame:0x7d8798};
 const VIEWS={iso:{p:[240,125,275],t:[0,8,0]},bottom:{p:[150,-340,170],t:[0,4,0]}};
 const BASE=[0.89,0.9,0.92];   // light grey hull
 
@@ -35,10 +37,10 @@ export function renderHullViews(records,jobs){
   const out={},canvas=document.createElement('canvas');
   const renderer=new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});
   renderer.setPixelRatio(2);
-  const scene=new THREE.Scene();scene.background=new THREE.Color(0xffffff);
-  scene.add(new THREE.HemisphereLight(0xffffff,0x8a94a6,0.75));
-  const key=new THREE.DirectionalLight(0xffffff,0.6);key.position.set(220,320,260);scene.add(key);
-  const under=new THREE.DirectionalLight(0xffffff,0.45);under.position.set(80,-300,140);scene.add(under);
+  const scene=new THREE.Scene();scene.background=new THREE.Color(SCENE.bg);
+  scene.add(new THREE.HemisphereLight(SCENE.hemiSky,SCENE.hemiGround,0.75));
+  const key=new THREE.DirectionalLight(SCENE.key,0.6);key.position.set(220,320,260);scene.add(key);
+  const under=new THREE.DirectionalLight(SCENE.under,0.45);under.position.set(80,-300,140);scene.add(under);
   const geo=()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setIndex(index);g.computeVertexNormals();
     g.setAttribute('color',new THREE.BufferAttribute(new Float32Array(nV*3),3));return g;};
   const mat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.8,metalness:0,side:THREE.DoubleSide});
@@ -46,12 +48,12 @@ export function renderHullViews(records,jobs){
   // deck, superstructure and every-50-frame lines for orientation
   const deckPos=[],deckIdx=[];for(let i=0;i<=NX;i++){const s=stSec[i],X=stX[i];deckPos.push(X-XC,s.Zs[G-1],-s.Ys[G-1],X-XC,s.Zs[G-1],s.Ys[G-1]);if(i<NX){const a=i*2;deckIdx.push(a,a+2,a+1,a+1,a+2,a+3);}}
   const dg=new THREE.BufferGeometry();dg.setAttribute('position',new THREE.Float32BufferAttribute(deckPos,3));dg.setIndex(deckIdx);dg.computeVertexNormals();
-  const grey=new THREE.MeshStandardMaterial({color:0xcfd4db,roughness:0.85,side:THREE.DoubleSide});scene.add(new THREE.Mesh(dg,grey));
-  SUPER_BOXES.forEach(([x0,x1,z0,z1,w,band])=>{const m=new THREE.Mesh(new THREE.BoxGeometry(x1-x0,z1-z0,w),band?new THREE.MeshStandardMaterial({color:0x222222}):grey);m.position.set((x0+x1)/2-XC,(z0+z1)/2,0);scene.add(m);});
+  const grey=new THREE.MeshStandardMaterial({color:SCENE.hull,roughness:0.85,side:THREE.DoubleSide});scene.add(new THREE.Mesh(dg,grey));
+  SUPER_BOXES.forEach(([x0,x1,z0,z1,w,band])=>{const m=new THREE.Mesh(new THREE.BoxGeometry(x1-x0,z1-z0,w),band?new THREE.MeshStandardMaterial({color:SCENE.band}):grey);m.position.set((x0+x1)/2-XC,(z0+z1)/2,0);scene.add(m);});
   const lines=[];for(let n=50;n<=FRMAX;n+=50){const s=section(n*FS);for(let j=0;j<G-1;j++){const ok=k=>k<=NB?s.yb>0.02:s.Ys[k]>0.02;if(!ok(j)||!ok(j+1))continue;
     [1,-1].forEach(sd=>lines.push(n*FS-XC,s.Zs[j],sd*(s.Ys[j]+0.08),n*FS-XC,s.Zs[j+1],sd*(s.Ys[j+1]+0.08)));}}
   const lg=new THREE.BufferGeometry();lg.setAttribute('position',new THREE.Float32BufferAttribute(lines,3));
-  scene.add(new THREE.LineSegments(lg,new THREE.LineBasicMaterial({color:0x7d8798,transparent:true,opacity:0.6})));
+  scene.add(new THREE.LineSegments(lg,new THREE.LineBasicMaterial({color:SCENE.frame,transparent:true,opacity:0.6})));
   const camera=new THREE.PerspectiveCamera(30,1,1,5000);
   const cache={};
   for(const j of jobs){

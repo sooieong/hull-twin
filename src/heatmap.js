@@ -3,6 +3,7 @@
    측정점 사이는 곡면 거리 기준 IDW로 보간한다. 곡면 거리는 (X, 부호 있는 거스 u) 평면 거리로 근사한다.
    ========================================================= */
 import { judge, OK } from './data/criteria.js';
+import { COLOR, rgbOf } from './styles/tokens.js';
 
 export const HEAT={
   radius:4.5,       // 보간에 쓰는 측정점 반경 (m)
@@ -13,7 +14,7 @@ export const HEAT={
   alphaMax:0.94
 };
 /* 히트 값 h: 정상 0, 주의 0.2–0.6, 경고 0.6–1 (판정 경계가 정확히 0.6) */
-export const HEAT_STOPS=[[0.2,[242,181,58]],[0.6,[255,90,95]],[1.0,[226,61,75]]];   // #F2B53A → #FF5A5F → #E23D4B
+export const HEAT_STOPS=[[0.2,rgbOf(COLOR.lv[1])],[0.6,rgbOf(COLOR.lv[2])],[1.0,rgbOf(COLOR.lv[3])]];   // 주의 → 경고 → 최우선 보수 (styles/tokens.js)
 
 export function heatOf(r,layer){const j=judge(r,layer);return j.level===OK?0:0.2+0.8*j.degree;}
 

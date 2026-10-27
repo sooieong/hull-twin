@@ -23,6 +23,19 @@ import { dockOf, dockLabel } from './data/docking.js';
 import { loadDefectPhotos } from './data/photos.js';
 import { logDataSummary } from './data/report.js';
 
+/* 장면 전용 색 — 3D 장식(배경·안개·조명·도크·그리드·선체 재질·선)으로 2D 화면에 같은 뜻이 없는 색.
+   2D와 뜻이 이어진 색(히트맵 판정색, 한화 오렌지 계열, 로봇, 선택 마커, 마우스 올린 선, 설계 흘수선)은 styles/tokens.js의 COLOR를 쓴다. */
+const SCENE={
+  bg:0x04070d,fog:0x04070d,
+  hemiSky:0xb8c7e6,hemiGround:0x5a6478,key:0xffffff,rim:0xC9D3E6,fill:0xd5dcea,   // lights
+  hullBp:0x0c1528,back:0x0a1222,                                                 // 도면 hull, the shell's inside
+  deck:0xAAB2BD,deckBp:0x0c1528,transom:0xC4CAD2,transomBp:0x0c1528,
+  frame:0x5C687D,frameMaj:0x34415A,sheer:0x34415A,seam:0x5C687D,                 // shell lines (실선·실제)
+  zone:0x1F2D4A,zoneBp:0xC9D3E3,                                                 // 구역 경계 lines
+  sup:0xC9CED6,supBp:0x0f1a30,supEdge:0x5F6A7C,band:0x0b0b0b,                    // superstructure, funnel band
+  floor:0x060b15,gridMin:0x0c1527,gridMaj:0x172540,dockWall:0x22355a,block:0x2a303c,blockCap:0x5a3a22   // dock
+};
+
 (function(){
 "use strict";
 const $=s=>document.querySelector(s);
@@ -77,8 +90,8 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
 renderer.localClippingEnabled=true;
 host.appendChild(renderer.domElement);
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x04070d);
-scene.fog=new THREE.Fog(0x04070d,480*SX,1250*SX);   // scaled with the ship (hull.js SX)
+scene.background=new THREE.Color(SCENE.bg);
+scene.fog=new THREE.Fog(SCENE.fog,480*SX,1250*SX);   // scaled with the ship (hull.js SX)
 const camera=new THREE.PerspectiveCamera(32,1,1,5000);
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.dampingFactor=0.08;controls.minDistance=8;controls.maxDistance=1200;controls.rotateSpeed=0.7;
@@ -94,10 +107,10 @@ function fitDir(dir,t){
 }
 let curView='iso';
 
-scene.add(new THREE.HemisphereLight(0xb8c7e6,0x5a6478,0.62));   // lit ground colour so the bottom and its heatmap stay readable
-const key=new THREE.DirectionalLight(0xffffff,0.85);key.position.set(220,320,260);scene.add(key);
-const rim=new THREE.DirectionalLight(0xC9D3E6,0.38);rim.position.set(-320,140,-220);scene.add(rim);
-const fill=new THREE.DirectionalLight(0xd5dcea,0.45);fill.position.set(-80,-200,120);scene.add(fill);
+scene.add(new THREE.HemisphereLight(SCENE.hemiSky,SCENE.hemiGround,0.62));   // lit ground colour so the bottom and its heatmap stay readable
+const key=new THREE.DirectionalLight(SCENE.key,0.85);key.position.set(220,320,260);scene.add(key);
+const rim=new THREE.DirectionalLight(SCENE.rim,0.38);rim.position.set(-320,140,-220);scene.add(rim);
+const fill=new THREE.DirectionalLight(SCENE.fill,0.45);fill.position.set(-80,-200,120);scene.add(fill);
 
 const clipPlane=new THREE.Plane(new V3(-1,0,0),0);
 const clipMats=[];
@@ -105,7 +118,7 @@ function cm(m){clipMats.push(m);return m;}
 
 /* hull shell */
 const colReal=new Float32Array(nV*3),colBp=new Float32Array(nV*3),colActual=new Float32Array(nV*3);
-const cHull=new THREE.Color(COLOR.hull),cBp=new THREE.Color(0x0c1528);   // 실선: light achromatic hull (SPEC 4.4) · 도면: dark navy
+const cHull=new THREE.Color(COLOR.hull),cBp=new THREE.Color(SCENE.hullBp);   // 실선: light achromatic hull (SPEC 4.4) · 도면: dark navy
 for(let k=0;k<nV;k++){cHull.toArray(colReal,k*3);cBp.toArray(colBp,k*3);}
 // 실제: painted like the real ship — antifouling red-brown below the design waterline, grey above (pos y = ship Z)
 {const below=new THREE.Color(COLOR.hullBelow),above=new THREE.Color(COLOR.hullAbove);
@@ -118,7 +131,7 @@ function sideGeo(){const g=new THREE.BufferGeometry();g.setAttribute('position',
   g.setIndex(hullGeo.index);g.setAttribute('color',new THREE.BufferAttribute(colReal.slice(),3));g.boundingSphere=hullGeo.boundingSphere;return g;}
 const geoS=sideGeo(),geoP=sideGeo();
 const hullMat=cm(new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.7,metalness:0.05,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1}));
-const backMat=cm(new THREE.MeshBasicMaterial({color:0x0a1222,side:THREE.BackSide}));
+const backMat=cm(new THREE.MeshBasicMaterial({color:SCENE.back,side:THREE.BackSide}));
 const hullS=new THREE.Mesh(geoS,hullMat),hullP=new THREE.Mesh(geoP,hullMat);hullP.scale.z=-1;
 hullS.userData.side='S';hullP.userData.side='P';
 const backS=new THREE.Mesh(hullGeo,backMat),backP=new THREE.Mesh(hullGeo,backMat);backP.scale.z=-1;
@@ -154,11 +167,11 @@ const deckPos=[],deckIdx=[];
 for(let i=0;i<=NX;i++){const s=stSec[i],X=stX[i];const Y=s.Ys[G-1],Z=s.Zs[G-1];deckPos.push(X-XC,Z,-Y,X-XC,Z,Y);
   if(i<NX){const a=i*2;deckIdx.push(a,a+2,a+1,a+1,a+2,a+3);}}
 const deckGeo=new THREE.BufferGeometry();deckGeo.setAttribute('position',new THREE.Float32BufferAttribute(deckPos,3));deckGeo.setIndex(deckIdx);deckGeo.computeVertexNormals();
-const deckMat=cm(new THREE.MeshStandardMaterial({color:0xAAB2BD,roughness:0.85,metalness:0.1,side:THREE.DoubleSide}));
+const deckMat=cm(new THREE.MeshStandardMaterial({color:SCENE.deck,roughness:0.85,metalness:0.1,side:THREE.DoubleSide}));
 const deck=new THREE.Mesh(deckGeo,deckMat);hullGroup.add(deck);
 const trPos=[],trIdx=[];{const s=stSec[0];for(let j=0;j<G;j++){trPos.push(-XC,s.Zs[j],-s.Ys[j],-XC,s.Zs[j],s.Ys[j]);if(j<G-1){const a=j*2;trIdx.push(a,a+1,a+2,a+1,a+3,a+2);}}}
 const trGeo=new THREE.BufferGeometry();trGeo.setAttribute('position',new THREE.Float32BufferAttribute(trPos,3));trGeo.setIndex(trIdx);trGeo.computeVertexNormals();
-const trMat=cm(new THREE.MeshStandardMaterial({color:0xC4CAD2,roughness:0.6,metalness:0.18,side:THREE.DoubleSide}));
+const trMat=cm(new THREE.MeshStandardMaterial({color:SCENE.transom,roughness:0.6,metalness:0.18,side:THREE.DoubleSide}));
 hullGroup.add(new THREE.Mesh(trGeo,trMat));
 
 /* line helpers */
@@ -170,16 +183,16 @@ function sectionSegs(X,out,off=0.06){
     out.push(X-XC,z1,y1,X-XC,z2,y2, X-XC,z1,-y1,X-XC,z2,-y2);}
 }
 // lines: dark slate so they read on the light hull
-const frameMat=cm(new THREE.LineBasicMaterial({color:0x5C687D,transparent:true,opacity:0.3}));
-const frameMajMat=cm(new THREE.LineBasicMaterial({color:0x34415A,transparent:true,opacity:0.7}));
+const frameMat=cm(new THREE.LineBasicMaterial({color:SCENE.frame,transparent:true,opacity:0.3}));
+const frameMajMat=cm(new THREE.LineBasicMaterial({color:SCENE.frameMaj,transparent:true,opacity:0.7}));
 const fA=[],fB=[];for(let n=Math.ceil(FRMIN/5)*5;n<=FRMAX;n+=5)if(n)sectionSegs(n*FS,n%50===0?fB:fA);   // a line every 5 frames
 const frames=new THREE.Group();frames.add(lineSeg(fA,frameMat),lineSeg(fB,frameMajMat));
 // sheer line (deck edge)
 const sheer=[];for(let i=0;i<NX;i++){const a=stSec[i],b=stSec[i+1];const ya=a.Ys[G-1],yb=b.Ys[G-1];if(ya<0.02&&yb<0.02)continue;sheer.push(stX[i]-XC,a.Zs[G-1],ya,stX[i+1]-XC,b.Zs[G-1],yb,stX[i]-XC,a.Zs[G-1],-ya,stX[i+1]-XC,b.Zs[G-1],-yb);}
-const sheerMat=cm(new THREE.LineBasicMaterial({color:0x34415A,transparent:true,opacity:0.7}));
+const sheerMat=cm(new THREE.LineBasicMaterial({color:SCENE.sheer,transparent:true,opacity:0.7}));
 hullGroup.add(lineSeg(sheer,sheerMat));
 // strake seams
-const seamMat=cm(new THREE.LineBasicMaterial({color:0x5C687D,transparent:true,opacity:0.26}));
+const seamMat=cm(new THREE.LineBasicMaterial({color:SCENE.seam,transparent:true,opacity:0.26}));
 const seamArr=[];
 function seamPt(s,g){if(g>s.gs[G-1])return null;let j=0;while(j<G-2&&s.gs[j+1]<g)j++;const valid=k=>k<=NB?s.yb>0.02:s.Ys[k]>0.02;if(!valid(j)||!valid(j+1))return null;
   const t=(g-s.gs[j])/((s.gs[j+1]-s.gs[j])||1);const Y=s.Ys[j]+(s.Ys[j+1]-s.Ys[j])*t,Z=s.Zs[j]+(s.Zs[j+1]-s.Zs[j])*t;const onB=j<NB;return [onB?Y:Y+0.06,onB?Z-0.06:Z];}
@@ -188,10 +201,10 @@ for(let k=0;k<LETTERS.length;k++){const g=KEEL_HALF+STRAKE_W*k;let prev=null;
 const seams=lineSeg(seamArr,seamMat);
 // DWL
 const dwlArr=[];for(let X=XMIN;X<XMAX;X+=0.5){const y1=HB(X,T),y2=HB(X+0.5,T);if(y1<0.02||y2<0.02)continue;dwlArr.push(X-XC,T,y1+0.1,X+0.5-XC,T,y2+0.1,X-XC,T,-y1-0.1,X+0.5-XC,T,-y2-0.1);}
-const dwlMat=cm(new THREE.LineBasicMaterial({color:0x2F5597}));
+const dwlMat=cm(new THREE.LineBasicMaterial({color:COLOR.dwl}));
 const dwl=lineSeg(dwlArr,dwlMat);
 // design lines (waterlines + stations): shown in the 도면 look only
-const bpMat=cm(new THREE.LineBasicMaterial({color:0xFBB584,transparent:true,opacity:0.4}));
+const bpMat=cm(new THREE.LineBasicMaterial({color:COLOR.peach,transparent:true,opacity:0.4}));
 const bpArr=[];WLS.forEach(Z=>{for(let X=XMIN;X<XMAX;X+=0.6){const y1=HB(X,Z),y2=HB(X+0.6,Z);if(y1<0.02||y2<0.02)continue;bpArr.push(X-XC,Z,y1+0.06,X+0.6-XC,Z,y2+0.06,X-XC,Z,-y1-0.06,X+0.6-XC,Z,-y2-0.06);}});
 for(let i=0;i<=20;i++)sectionSegs(XMIN+i*(XMAX-XMIN)/20,bpArr,0.07);
 const bpLines=lineSeg(bpArr,bpMat);bpLines.visible=false;
@@ -205,15 +218,15 @@ const zoneArr=[],ZX0=STERN_FR*FS,ZX1=BOW_FR*FS;
 [0.15,R+0.6,DRAFT_LIGHT,WL_TOP].forEach(Z=>{for(let X=ZX0;X<ZX1;X+=0.5){const y1=HB(X,Z),y2=HB(X+0.5,Z);if(y1<0.02||y2<0.02)continue;
   zoneArr.push(X-XC,Z,y1+0.12,X+0.5-XC,Z,y2+0.12,X-XC,Z,-y1-0.12,X+0.5-XC,Z,-y2-0.12);}});
 [ZX0,ZX1].forEach(X=>sectionSegs(X,zoneArr,0.12));
-const zoneMat=cm(new THREE.LineDashedMaterial({color:0x1F2D4A,dashSize:1.6,gapSize:1.1}));
+const zoneMat=cm(new THREE.LineDashedMaterial({color:SCENE.zone,dashSize:1.6,gapSize:1.1}));
 const zoneLines=lineSeg(zoneArr,zoneMat);zoneLines.computeLineDistances();zoneLines.visible=false;
 hullGroup.add(zoneLines);
 
 /* superstructure */
 const superGroup=new THREE.Group();
-const supMat=cm(new THREE.MeshStandardMaterial({color:0xC9CED6,roughness:0.75,metalness:0.15}));
-const supEdgeMat=cm(new THREE.LineBasicMaterial({color:0x5F6A7C,transparent:true,opacity:0.9}));
-const bandMat=cm(new THREE.MeshStandardMaterial({color:0x0b0b0b,roughness:0.5}));   // K100: orange is reserved for UI accents
+const supMat=cm(new THREE.MeshStandardMaterial({color:SCENE.sup,roughness:0.75,metalness:0.15}));
+const supEdgeMat=cm(new THREE.LineBasicMaterial({color:SCENE.supEdge,transparent:true,opacity:0.9}));
+const bandMat=cm(new THREE.MeshStandardMaterial({color:SCENE.band,roughness:0.5}));   // K100: orange is reserved for UI accents
 function box(x0,x1,z0,z1,w,mat=supMat,yc=0){const g=new THREE.BoxGeometry(x1-x0,z1-z0,w);const m=new THREE.Mesh(g,mat);m.position.set((x0+x1)/2-XC,(z0+z1)/2,yc);superGroup.add(m);
   const e=new THREE.LineSegments(new THREE.EdgesGeometry(g),supEdgeMat);e.position.copy(m.position);superGroup.add(e);return m;}
 SUPER_BOXES.forEach(([x0,x1,z0,z1,w,band])=>box(x0,x1,z0,z1,w,band?bandMat:supMat));
@@ -222,18 +235,18 @@ scene.add(superGroup);
 /* dock: floor, grid, walls, keel blocks */
 const dockGroup=new THREE.Group();
 const FLOOR=-1.8;
-const floor=new THREE.Mesh(new THREE.PlaneGeometry(380*SX,120*SY),new THREE.MeshBasicMaterial({color:0x060b15}));floor.rotation.x=-Math.PI/2;floor.position.y=FLOOR-0.02;dockGroup.add(floor);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(380*SX,120*SY),new THREE.MeshBasicMaterial({color:SCENE.floor}));floor.rotation.x=-Math.PI/2;floor.position.y=FLOOR-0.02;dockGroup.add(floor);
 const gMin=[],gMaj=[];
 for(let x=-300;x<=300;x+=5){const a=x%25===0?gMaj:gMin;a.push(x,FLOOR,-170,x,FLOOR,170);}
 for(let z=-170;z<=170;z+=5){const a=z%25===0?gMaj:gMin;a.push(-300,FLOOR,z,300,FLOOR,z);}
-scene.add(lineSeg(gMin,new THREE.LineBasicMaterial({color:0x0c1527})));
-scene.add(lineSeg(gMaj,new THREE.LineBasicMaterial({color:0x172540})));
+scene.add(lineSeg(gMin,new THREE.LineBasicMaterial({color:SCENE.gridMin})));
+scene.add(lineSeg(gMaj,new THREE.LineBasicMaterial({color:SCENE.gridMaj})));
 const dw=[];const DX0=-190*SX,DX1=190*SX,DZ=60*SY,DH=18*SZ;
 [[FLOOR],[DH]].forEach(([y])=>{dw.push(DX0,y,-DZ,DX1,y,-DZ,DX0,y,DZ,DX1,y,DZ,DX0,y,-DZ,DX0,y,DZ);});
 for(let x=DX0;x<=DX1+1e-6;x+=(DX1-DX0)/19){dw.push(x,FLOOR,-DZ,x,DH,-DZ,x,FLOOR,DZ,x,DH,DZ);}
-dockGroup.add(lineSeg(dw,new THREE.LineBasicMaterial({color:0x22355a,transparent:true,opacity:0.7})));
-const blkMat=new THREE.MeshStandardMaterial({color:0x2a303c,roughness:0.9});
-const capMat=new THREE.MeshStandardMaterial({color:0x5a3a22,roughness:0.9});
+dockGroup.add(lineSeg(dw,new THREE.LineBasicMaterial({color:SCENE.dockWall,transparent:true,opacity:0.7})));
+const blkMat=new THREE.MeshStandardMaterial({color:SCENE.block,roughness:0.9});
+const capMat=new THREE.MeshStandardMaterial({color:SCENE.blockCap,roughness:0.9});
 const blkG=new THREE.BoxGeometry(BLOCK_SIZE.dx,1.5,BLOCK_SIZE.dy),capG=new THREE.BoxGeometry(BLOCK_SIZE.dx,0.3,BLOCK_SIZE.dy);
 KEEL_BLOCKS.forEach(k=>{const b=new THREE.Mesh(blkG,blkMat);b.position.set(k.X-XC,FLOOR+0.75,-k.Y);const c=new THREE.Mesh(capG,capMat);c.position.set(k.X-XC,-0.15,-k.Y);dockGroup.add(b,c);});
 scene.add(dockGroup);
@@ -243,16 +256,16 @@ scene.add(dockGroup);
 const RB=1.5;
 const robotGroup=new THREE.Group();
 {const bodyG=new THREE.BoxGeometry(1.9*RB,1.2*RB,0.6*RB);
-  const body=new THREE.Mesh(bodyG,new THREE.MeshStandardMaterial({color:0x050505,roughness:0.5,metalness:0.3}));body.position.z=0.3*RB;
-  const edge=new THREE.LineSegments(new THREE.EdgesGeometry(bodyG),new THREE.LineBasicMaterial({color:0xffffff}));edge.position.copy(body.position);
-  const top=new THREE.Mesh(new THREE.BoxGeometry(1.1*RB,0.7*RB,0.25*RB),new THREE.MeshStandardMaterial({color:0x1a1f2a,roughness:0.6}));top.position.z=0.72*RB;
-  const eye=new THREE.Mesh(new THREE.SphereGeometry(0.16*RB,12,8),new THREE.MeshBasicMaterial({color:0xffffff}));eye.position.set(0.95*RB,0,0.4*RB);
-  const wheelG=new THREE.CylinderGeometry(0.26*RB,0.26*RB,0.2*RB,14),wheelM=new THREE.MeshStandardMaterial({color:0x111622,roughness:0.8});
+  const body=new THREE.Mesh(bodyG,new THREE.MeshStandardMaterial({color:COLOR.robot.body,roughness:0.5,metalness:0.3}));body.position.z=0.3*RB;
+  const edge=new THREE.LineSegments(new THREE.EdgesGeometry(bodyG),new THREE.LineBasicMaterial({color:COLOR.draw.marker}));edge.position.copy(body.position);
+  const top=new THREE.Mesh(new THREE.BoxGeometry(1.1*RB,0.7*RB,0.25*RB),new THREE.MeshStandardMaterial({color:COLOR.robot.top,roughness:0.6}));top.position.z=0.72*RB;
+  const eye=new THREE.Mesh(new THREE.SphereGeometry(0.16*RB,12,8),new THREE.MeshBasicMaterial({color:COLOR.draw.marker}));eye.position.set(0.95*RB,0,0.4*RB);
+  const wheelG=new THREE.CylinderGeometry(0.26*RB,0.26*RB,0.2*RB,14),wheelM=new THREE.MeshStandardMaterial({color:COLOR.robot.wheel,roughness:0.8});
   [[-0.7,0.65],[0.7,0.65],[-0.7,-0.65],[0.7,-0.65]].forEach(([x,y])=>{const w=new THREE.Mesh(wheelG,wheelM);w.position.set(x*RB,y*RB,0.26*RB);robotGroup.add(w);});
   robotGroup.add(body,edge,top,eye);}
 // locator rings lying on the shell; scaled with distance so the robot stays findable on the whole-ship view
 const rbLocator=new THREE.Group();
-const ringOnShell=(r0,r1,opacity)=>new THREE.Mesh(new THREE.RingGeometry(r0,r1,48),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false}));
+const ringOnShell=(r0,r1,opacity)=>new THREE.Mesh(new THREE.RingGeometry(r0,r1,48),new THREE.MeshBasicMaterial({color:COLOR.draw.marker,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false}));
 const rbHalo=ringOnShell(2.1*RB,2.35*RB,0.95),rbPulse=ringOnShell(2.35*RB,2.6*RB,0.6);
 rbHalo.position.z=rbPulse.position.z=0.05;rbLocator.add(rbHalo,rbPulse);robotGroup.add(rbLocator);
 const robotWrap=new THREE.Group();robotWrap.add(robotGroup);robotWrap.visible=false;scene.add(robotWrap);
@@ -272,9 +285,9 @@ function buildPath(P){
   plan=P;const arr=new Float32Array(P.points.length*3),v=new V3(),n=new V3();
   P.points.forEach((p,i)=>{shellNormal(p.X,p.Y,p.Z,n);toThree(p.X,p.Y,p.Z,v).addScaledVector(n,0.15).toArray(arr,i*3);});
   const geo=()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(arr,3));g.setDrawRange(0,0);return g;};
-  trailLine=new THREE.Line(geo(),new THREE.LineBasicMaterial({color:0x1F2D4A,transparent:true,opacity:0.18}));
-  rowLine=new THREE.Line(geo(),new THREE.LineBasicMaterial({color:0x000000}));
-  nextLine=new THREE.Line(geo(),new THREE.LineDashedMaterial({color:0x1F2D4A,dashSize:1.2,gapSize:0.9}));nextLine.computeLineDistances();
+  trailLine=new THREE.Line(geo(),new THREE.LineBasicMaterial({color:COLOR.robot.path,transparent:true,opacity:0.18}));
+  rowLine=new THREE.Line(geo(),new THREE.LineBasicMaterial({color:COLOR.k100}));
+  nextLine=new THREE.Line(geo(),new THREE.LineDashedMaterial({color:COLOR.robot.path,dashSize:1.2,gapSize:0.9}));nextLine.computeLineDistances();
   pathGroup.add(trailLine,rowLine,nextLine);
 }
 function showPathAt(k){
@@ -285,10 +298,10 @@ function showPathAt(k){
 }
 
 /* selection ring, hover ring, labels */
-const ringMat=new THREE.MeshBasicMaterial({color:0xF37321});
+const ringMat=new THREE.MeshBasicMaterial({color:COLOR.orange});   // selected frame
 let ringMesh=null;
-const hoverRing=(()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(G*2*3),3));const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xF89B6C,transparent:true,opacity:0.9,depthTest:false}));l.renderOrder=5;l.visible=false;scene.add(l);return l;})();
-const hoverDot=new THREE.Mesh(new THREE.SphereGeometry(0.45,14,10),new THREE.MeshBasicMaterial({color:0x000000,depthTest:false}));hoverDot.renderOrder=6;hoverDot.visible=false;scene.add(hoverDot);
+const hoverRing=(()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(G*2*3),3));const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:COLOR.coral,transparent:true,opacity:0.9,depthTest:false}));l.renderOrder=5;l.visible=false;scene.add(l);return l;})();
+const hoverDot=new THREE.Mesh(new THREE.SphereGeometry(0.45,14,10),new THREE.MeshBasicMaterial({color:COLOR.k100,depthTest:false}));hoverDot.renderOrder=6;hoverDot.visible=false;scene.add(hoverDot);
 function ringPoints(X,off){const s=section(X);const pts=[];
   for(let j=G-1;j>=0;j--)pts.push(new V3(X-XC,s.Zs[j],-(s.Ys[j]+off)));
   for(let j=1;j<G;j++)pts.push(new V3(X-XC,s.Zs[j],s.Ys[j]+off));
@@ -405,10 +418,10 @@ valBtn.addEventListener('click',()=>openVal(valPop.hidden));
 const selMarker=new THREE.Group();
 {const mat=c=>new THREE.MeshBasicMaterial({color:c,side:THREE.DoubleSide,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
   const ring=(r0,r1,c)=>{const m=new THREE.Mesh(new THREE.RingGeometry(r0,r1,40),mat(c));m.renderOrder=4;return m;};
-  const dot=new THREE.Mesh(new THREE.CircleGeometry(0.4,24),mat(0xffffff));dot.renderOrder=4;
-  selMarker.add(ring(1.2,1.65,0xffffff),ring(0.65,1.2,0x000000),dot);}
+  const dot=new THREE.Mesh(new THREE.CircleGeometry(0.4,24),mat(COLOR.draw.marker));dot.renderOrder=4;
+  selMarker.add(ring(1.2,1.65,COLOR.draw.marker),ring(0.65,1.2,COLOR.k100),dot);}   // the same marker as on S.SHELL
 // pulse after a fly-to (SPEC 10.3)
-const selPulse=new THREE.Mesh(new THREE.RingGeometry(1.65,1.95,48),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,side:THREE.DoubleSide,depthWrite:false}));
+const selPulse=new THREE.Mesh(new THREE.RingGeometry(1.65,1.95,48),new THREE.MeshBasicMaterial({color:COLOR.draw.marker,transparent:true,side:THREE.DoubleSide,depthWrite:false}));
 selPulse.renderOrder=4;selPulse.visible=false;selMarker.add(selPulse);
 selMarker.visible=false;scene.add(selMarker);
 function placeMarker(r){
@@ -486,18 +499,18 @@ function setLook(l){
   const sw=document.querySelector('#legendPop .sw-hull');if(sw)sw.classList.toggle('actual',l==='actual');
   document.querySelectorAll('[data-look]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.look===l)));
   hullMat.roughness=bp?0.95:0.7;
-  deckMat.color.setHex(bp?0x0c1528:0xAAB2BD);trMat.color.setHex(bp?0x0c1528:0xC4CAD2);
-  supMat.color.setHex(bp?0x0f1a30:0xC9CED6);supEdgeMat.color.setHex(bp?0xFBB584:0x5F6A7C);supEdgeMat.opacity=bp?0.6:0.9;
+  deckMat.color.set(bp?SCENE.deckBp:SCENE.deck);trMat.color.set(bp?SCENE.transomBp:SCENE.transom);
+  supMat.color.set(bp?SCENE.supBp:SCENE.sup);supEdgeMat.color.set(bp?COLOR.peach:SCENE.supEdge);supEdgeMat.opacity=bp?0.6:0.9;
   bpLines.visible=bp;
-  frameMat.color.setHex(bp?0xFBB584:0x5C687D);frameMat.opacity=bp?0.45:0.3;
-  frameMajMat.color.setHex(bp?0xF89B6C:0x34415A);frameMajMat.opacity=bp?0.85:0.7;
-  seamMat.color.setHex(bp?0xFBB584:0x5C687D);seamMat.opacity=bp?0.3:0.26;
-  sheerMat.color.setHex(bp?0xFBB584:0x34415A);sheerMat.opacity=bp?0.7:0.7;
-  dwlMat.color.setHex(bp?0x7FA6E8:0x2F5597);
-  zoneMat.color.setHex(bp?0xC9D3E3:0x1F2D4A);
+  frameMat.color.set(bp?COLOR.peach:SCENE.frame);frameMat.opacity=bp?0.45:0.3;
+  frameMajMat.color.set(bp?COLOR.coral:SCENE.frameMaj);frameMajMat.opacity=bp?0.85:0.7;
+  seamMat.color.set(bp?COLOR.peach:SCENE.seam);seamMat.opacity=bp?0.3:0.26;
+  sheerMat.color.set(bp?COLOR.peach:SCENE.sheer);sheerMat.opacity=bp?0.7:0.7;
+  dwlMat.color.set(bp?COLOR.dwlBp:COLOR.dwl);
+  zoneMat.color.set(bp?SCENE.zoneBp:SCENE.zone);
   // scan path keeps its contrast on the navy hull
-  if(trailLine){trailLine.material.color.setHex(bp?0xFBB584:0x1F2D4A);trailLine.material.opacity=bp?0.3:0.18;
-    rowLine.material.color.setHex(bp?0xffffff:0x000000);nextLine.material.color.setHex(bp?0xC9D3E3:0x1F2D4A);}
+  if(trailLine){trailLine.material.color.set(bp?COLOR.peach:COLOR.robot.path);trailLine.material.opacity=bp?0.3:0.18;
+    rowLine.material.color.set(bp?COLOR.draw.marker:COLOR.k100);nextLine.material.color.set(bp?COLOR.robot.pathNextBp:COLOR.robot.path);}
   paintHull();
 }
 document.querySelectorAll('[data-look]').forEach(b=>b.addEventListener('click',()=>setLook(b.dataset.look)));
