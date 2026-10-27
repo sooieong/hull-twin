@@ -1,7 +1,7 @@
 /* =========================================================
    KPI 핵심 지표 패널 + 보수 목록 패널 (SPEC 5.3, private/보수목록_새UI.png): 현재 레이어 기준 요약 타일과 보수 구역 목록.
    요약: 카드 하나를 얇은 세로선으로 3칸 — 최우선 보수 · 경고 · 주의. 세 숫자는 겹치지 않는다 (criteria.gradeOf). 측정 진행률은 헤더에만.
-     칸마다 윗줄 판정 아이콘(24px)과 회색 이름을 한 묶음으로 칸 가운데, 아랫줄 숫자 + "구역"도 칸 가운데.
+     칸마다 윗줄 판정 아이콘(24px)과 회색 이름을 한 묶음으로 칸 가운데, 아랫줄 숫자 + "건"도 칸 가운데.
      묶음은 칸보다 넓어지지 않는다 (긴 이름은 줄바꿈). 숫자는 세 칸 모두 흰색 굵게.
    목록 패널 헤더: 제목 옆 "총 N건"(현재 레이어).
    목록: 판정별 그룹(최우선 보수 → 경고 → 주의). 그룹 제목 줄 = 아이콘·이름·건수, 건수 옆 작은 ! 버튼 — 올리거나 누르면
@@ -35,7 +35,7 @@ function groupAction(items){
 
 /* tilesRoot: KPI 핵심 지표 패널 본문 · listRoot: 보수 대상 패널 본문 · countEl: 보수 대상 패널 헤더의 "총 N건" */
 export function createKpiPanel(tilesRoot,listRoot,countEl,store,ui){
-  const cell=(cls,g,key)=>`<div class="kc ${cls}"><div class="kc-h"><span class="kc-name">${gradeIcon(g)}<span data-g="${g}"></span></span></div><div class="kc-n"><b data-k="${key}">0</b><i>구역</i></div></div>`;
+  const cell=(cls,g,key)=>`<div class="kc ${cls}"><div class="kc-h"><span class="kc-name">${gradeIcon(g)}<span data-g="${g}"></span></span></div><div class="kc-n"><b data-k="${key}">0</b><i>건</i></div></div>`;
   tilesRoot.innerHTML=`<div class="kpi-card">${cell('t-top',TOP,'top')}${cell('t-crit',CRIT,'crit')}${cell('t-warn',WARN,'warn')}</div>`;
   listRoot.innerHTML='<ol class="kpi-list" aria-label="보수 목록"></ol>';
   const $k=k=>tilesRoot.querySelector(`[data-k="${k}"]`),list=listRoot.querySelector('.kpi-list');

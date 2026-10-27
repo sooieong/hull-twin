@@ -42,3 +42,37 @@ export function createStore(source){
     setSpeed:k=>source.setSpeed(k)
   };
 }
+
+/* 기록 보기 저장소: 이미 매핑을 마친 측정 결과 (state 'done' 고정, 매핑 명령은 받지 않는다) — 1차 리도킹 · 신조 인도(빈 기록) */
+export function createRecordStore(records,plan){
+  const byId=new Map(records.map(r=>[r.id,r])),lastTs=records.reduce((m,r)=>Math.max(m,r.ts||0),0)||null,none=()=>{};
+  return {subscribe:()=>none,mapState:'done',pose:null,progress:1,records,version:0,lastTs,get:id=>byId.get(id),plan,
+    connect:none,start:none,pause:none,resume:none,stop:none,setSpeed:none};
+}
+
+/* 도킹 선택: 화면들은 이 저장소 하나만 구독하고, 이것이 고른 도킹의 저장소(현재 매핑 · 기록)를 그대로 보여준다.
+   도킹을 바꾸면 records·state·pose가 모두 바뀐 것으로 한 번에 알린다. 고르지 않은 저장소의 변경은 전하지 않는다
+   (현재 매핑은 뒤에서 계속 진행된다). dockKey: 'current' | 'first' | 'newbuild' (docking.js) */
+export function createDockStore(stores,key='current'){
+  let active=key,epoch=0;const subs=new Set(),cur=()=>stores[active];
+  Object.entries(stores).forEach(([k,s])=>s.subscribe(c=>{if(k===active)subs.forEach(fn=>fn(c));}));
+  return {
+    subscribe(fn){subs.add(fn);return ()=>subs.delete(fn);},
+    get dockKey(){return active;},
+    setDock(k){if(k===active||!stores[k])return;active=k;epoch++;const c=new Set(['records','state','pose']);subs.forEach(fn=>fn(c));},
+    get mapState(){return cur().mapState;},
+    get pose(){return cur().pose;},
+    get progress(){return cur().progress;},
+    get records(){return cur().records;},
+    get version(){return epoch*1e9+cur().version;},
+    get lastTs(){return cur().lastTs;},
+    get:id=>cur().get(id),
+    get plan(){return cur().plan;},
+    connect:()=>cur().connect(),
+    start:()=>cur().start(),
+    pause:()=>cur().pause(),
+    resume:()=>cur().resume(),
+    stop:()=>cur().stop(),
+    setSpeed:k=>stores.current.setSpeed(k)
+  };
+}

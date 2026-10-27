@@ -9,7 +9,7 @@
      · 실패하면 알림에 단계와 오류 종류를 짧게 보여주고 콘솔에 전체 오류를 남긴다
    ========================================================= */
 import './report.css';
-import { buildReportData, SHIP } from './data.js';
+import { buildReportData, dockContext } from './data.js';
 import { renderHullViews } from './render3d.js';
 import { pagesHtml } from './pages.js';
 import { loadIconData } from '../gradeUi.js';
@@ -19,7 +19,8 @@ const VIEW_JOBS=[{key:'all',view:'iso',w:700,h:400},
 const PAGE={w:1123,h:794,mmW:297,mmH:210};   // A4 가로
 const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
-export const reportFileName=d=>`Dr.Dock_Report_${SHIP.hull}_${ymd(d)}.pdf`;
+/* Dr.Dock_Report_H-2491_2021.10_20261027.pdf — hull, the docking shown (현재 or the 1차 리도킹 record), date made */
+export const reportFileName=(d,dockKey)=>{const S=dockContext(dockKey);return `Dr.Dock_Report_${S.hull}_${S.dockInfo.date}_${ymd(d)}.pdf`;};
 
 /* the 5 report pages as one element (images decoded, ready to show or to rasterise) */
 export async function buildReportPages(store,now=new Date()){
@@ -70,7 +71,7 @@ export async function makeReportPdf(store,now=new Date()){
       if(i)pdf.addPage();
       pdf.addImage(page.toDataURL('image/jpeg',0.92),'JPEG',0,0,PAGE.mmW,PAGE.mmH);
     });
-    pdf.setProperties({title:`Dr.Dock Hull Report ${SHIP.hull} ${ymd(now)}`,creator:'Dr.Dock'});
+    const dc=dockContext(store.dockKey);pdf.setProperties({title:`Dr.Dock Hull Report ${dc.hull} ${dc.dockInfo.date} ${ymd(now)}`,creator:'Dr.Dock'});
     return pdf.output('blob');
   }finally{host.remove();}
 }
@@ -91,7 +92,7 @@ export function setupReportButton(button,store,toast){
   button.addEventListener('click',async()=>{
     if(busy)return;
     if(mapping()){toast('매핑이 끝난 뒤 생성할 수 있습니다');return;}
-    const now=new Date(),name=reportFileName(now);
+    const now=new Date(),name=reportFileName(now,store.dockKey);
     // 1) file handle first, while the click still counts as a user gesture
     let handle=null;
     if(typeof window.showSaveFilePicker==='function'){

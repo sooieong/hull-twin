@@ -7,6 +7,7 @@
    (아래로 지나가는 다른 치수 보조선 위에 바탕색을 깔고), 그림 밖으로 나가면 선 아래 가운데에 쓴다.
    그림은 주어진 폭과 높이를 모두 쓰고, 선 굵기·글자는 공간에 맞춰 커진다 (k ≥ opts.minK, 기본 1).
    opts.dims: 그릴 치수선 (기본 ['cur','prev','ref']) — 보고서의 작은 그림은 ['cur']만 그리고 캡션에 값을 쓴다.
+   이전 도킹 값이 없는 기록(1차 리도킹 보기, prev == null)은 1차 선·치수선·카드 없이 기준과 현재만 그린다.
    ========================================================= */
 import { THICK, thick, thickNum, dropNum } from './format.js';
 
@@ -19,11 +20,12 @@ export const THEME={
     material:{plate:'#C3C9D2',dft:'#EAD3A2'}}
 };
 
-/* 측정점 하나의 단면 모델. side: 오른쪽 카드 [제목, 숫자, 단위] — "○○ 대비"는 줄어든 양(부호 포함) */
+/* 측정점 하나의 단면 모델. side: 오른쪽 카드 [제목, 숫자, 단위] — "○○ 대비"는 줄어든 양(부호 포함). 이전 도킹 값이 없으면 카드 하나 */
 export function thickness(r,layer){
   const m=layer==='plate'?{layer,title:'강판 두께',unit:THICK.plate.unit,ref:r.plateOrig,prev:r.platePrev,cur:r.plate,refLabel:THICK.plate.ref}
     :{layer,title:'도막 두께',unit:THICK.dft.unit,ref:r.dftDesign,prev:r.dftPrev,cur:r.dft,refLabel:THICK.dft.ref};
-  m.side=[[`${m.refLabel} 대비`,dropNum(m.ref,m.cur,layer),m.unit],['1차 리도킹 대비',dropNum(m.prev,m.cur,layer),m.unit]];
+  m.side=[[`${m.refLabel} 대비`,dropNum(m.ref,m.cur,layer),m.unit]];
+  if(m.prev!=null)m.side.push(['1차 리도킹 대비',dropNum(m.prev,m.cur,layer),m.unit]);
   return m;
 }
 
@@ -35,7 +37,7 @@ export function sectionSvg(m,level,W,H,theme=THEME.dark,maxK=2.2,opts={}){
   const k=Math.max(opts.minK||1,Math.min(maxK,W/380,H/230)),col=theme.level[level],pid=`secHatch${++uid}`;
   const fsCur=13*k,fsDim=11*k,MONO='IBM Plex Mono,monospace';
   const rel=v=>Math.min(1.25,Math.max(0.2,1-EXAG*(m.ref-v)/m.ref));
-  const lines=[{key:'ref',v:m.ref,label:m.refLabel},{key:'prev',v:m.prev,label:'1차'},{key:'cur',v:m.cur,label:'현재'}];
+  const lines=[{key:'ref',v:m.ref,label:m.refLabel},{key:'prev',v:m.prev,label:'1차'},{key:'cur',v:m.cur,label:'현재'}].filter(l=>l.v!=null);
   lines.forEach(l=>{const cur=l.key==='cur';l.fs=cur?fsCur:fsDim;
     l.text=cur?`현재 ${thick(l.v,m.layer)}`:`${l.label} ${thickNum(l.v,m.layer)}`;l.tw=textW(l.text,l.fs);});
   const outerRel=Math.max(...lines.map(l=>rel(l.v)));
@@ -53,7 +55,7 @@ export function sectionSvg(m,level,W,H,theme=THEME.dark,maxK=2.2,opts={}){
   wRef=Math.max(30,(W-padL-padR)/outerRel);
   const cx=padL+wRef*outerRel/2,L=w=>cx-w/2,Rt=w=>cx+w/2;
   lines.forEach(l=>{l.w=wRef*rel(l.v);l.place=l.tw+28*k<=l.w?'in':Rt(l.w)+7*k+l.tw<=W-2?'right':'below';});
-  const [ref,prev,cur]=lines;
+  const line=k=>lines.find(l=>l.key===k),ref=line('ref'),prev=line('prev'),cur=line('cur');
 
   // vertical: two label rows, the section band, then the dimension rows (smallest value on top)
   const top=6*k;   // the lines start a little above the band
@@ -62,7 +64,7 @@ export function sectionSvg(m,level,W,H,theme=THEME.dark,maxK=2.2,opts={}){
   let y=bot+4*k;rows.forEach(l=>{l.y=y+(l.place==='below'?l.fs:l.h/2);y+=l.h;});
   lines.forEach(l=>{if(!dimSet.has(l.key))l.y=bot-3*k;});   // no dimension row: the line stops at the band
 
-  const wOut=Math.max(ref.w,prev.w);   // lost material: from the thicker of the original / 1st redocking down to now
+  const wOut=Math.max(ref.w,prev?prev.w:0);   // lost material: from the thicker of the original / 1st redocking down to now
   const vline=(x,y1,y2,attrs)=>`<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" ${attrs}/>`;
   const pair=(l,y1,attrs)=>vline(L(l.w),y1,l.y+3*k,attrs)+vline(Rt(l.w),y1,l.y+3*k,attrs);
   const a=5.5*k,arrow=(x,yy,dir,c)=>`<path d="M${x} ${yy}l${-dir*a} ${-a*0.6}v${a*1.2}z" fill="${c}"/>`;
@@ -77,13 +79,13 @@ export function sectionSvg(m,level,W,H,theme=THEME.dark,maxK=2.2,opts={}){
       <text x="${tx}" y="${ty}" text-anchor="${l.place==='right'?'start':'middle'}" dominant-baseline="central" font-family="${MONO}"
         font-size="${l.fs}" font-weight="${l.key==='cur'?600:400}" fill="${tc}">${l.text}</text>`;
   };
-  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${m.title} 단면: ${m.refLabel} ${thick(m.ref,m.layer)}, 1차 리도킹 ${thick(m.prev,m.layer)}, 현재 ${thick(m.cur,m.layer)}">
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${m.title} 단면: ${m.refLabel} ${thick(m.ref,m.layer)}${prev?`, 1차 리도킹 ${thick(m.prev,m.layer)}`:''}, 현재 ${thick(m.cur,m.layer)}">
     <defs><pattern id="${pid}" width="${7*k}" height="${7*k}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="${7*k}" stroke="${theme.hatch}" stroke-width="${1.2*k}"/></pattern></defs>
     <rect x="${L(wOut)}" y="${top}" width="${wOut}" height="${bot-top}" fill="${col}" fill-opacity=".16"/>
     <rect x="${L(cur.w)}" y="${top}" width="${cur.w}" height="${bot-top}" fill="${theme.material[m.layer]}"/>
     <rect x="${L(cur.w)}" y="${top}" width="${cur.w}" height="${bot-top}" fill="url(#${pid})"/>
     ${pair(ref,top-4*k,`stroke="${theme.muted}" stroke-width="${1.4*k}"`)}
-    ${pair(prev,top-4*k,`stroke="${theme.label}" stroke-width="${1.6*k}" stroke-dasharray="${2*k} ${3*k}"`)}
+    ${prev?pair(prev,top-4*k,`stroke="${theme.label}" stroke-width="${1.6*k}" stroke-dasharray="${2*k} ${3*k}"`):''}
     ${pair(cur,top-4*k,`stroke="${col}" stroke-width="${2.4*k}"`)}
     ${rows.map(dim).join('')}
   </svg>`;

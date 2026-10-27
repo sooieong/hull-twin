@@ -6,6 +6,7 @@
    위치·판정 정보는 KPI 목록에 있으므로 여기에는 그림과 수치 카드만 둔다.
    - 도막 두께 · 강판 두께 (private/시안_v4_수정.png): 왼쪽 단면 그림 + 치수선 3개(sectionSvg.js)가 패널 높이를 채운다.
      오른쪽 칸: 카드 2개 — "원두께 대비"(도막은 "설계 대비") 줄어든 두께(판정색), "1차 리도킹 대비" 줄어든 두께(주황, 조금 작게).
+     비교할 이전 도킹이 없는 기록(1차 리도킹 보기)은 "원두께(설계) 대비" 카드 하나만.
      "○○ 대비"는 화면 전체에서 줄어든 양(부호 포함)만 뜻한다.
    - 도막 손상: 두께 레이어와 같은 배치 — 왼쪽 손상 사진(cover로 꽉 채움, 누르면 라이트박스에서 전체), 오른쪽 카드 2개
      "종류"(도막 떨어짐 / 스크래치, 판정색) · "AI 신뢰도"(레코드의 aiConfidence, %). 사진이 없으면 "사진 없음" (가짜 이미지는 만들지 않는다)
@@ -79,7 +80,7 @@ export function createDetailPanel(body,store,ui){
     }
     const m=thickness(r,layer),card=([k,v,u],cls,color)=>`<div class="dt-card ${cls}"><span>${k}</span>${dropHtml(v,u,color)}</div>`;
     body.innerHTML=`<div class="dt"><div class="dt-main"><div class="dt-fig"></div>
-      <div class="dt-side">${card(m.side[0],'ref',LV_COLOR[colorLevel])}${card(m.side[1],'prev',PREV_COLOR)}</div></div></div>`;
+      <div class="dt-side">${card(m.side[0],'ref',LV_COLOR[colorLevel])}${m.side[1]?card(m.side[1],'prev',PREV_COLOR):''}</div></div></div>`;
     drawFig(m,colorLevel);
   }
   function drawFig(m,level){

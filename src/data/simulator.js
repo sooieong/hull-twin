@@ -13,15 +13,24 @@ export class SimulatorSource extends RobotSource{
   /* photos = {flaking:[url…], scratch:[url…]} : 손상 레코드에 종류별로 순서대로 연결 */
   constructor({photos={flaking:[],scratch:[]},seed=2491}={}){
     super();
-    const values=createSynth(seed),cnt={flaking:0,scratch:0};
+    const values=createSynth(seed),cnt={flaking:0,scratch:0},cnt1={flaking:0,scratch:0};
+    const photoOf=(type,c)=>{if(!type)return null;const list=photos[type]||[];const ph=list.length?list[(c[type]+(c===cnt1?list.length>>1:0))%list.length]:null;c[type]++;return ph;};
     this.base=this.plan.samples.filter(sm=>!sm.blocked).map(sm=>{
-      const v=values(sm);let photo=null;
-      if(v.defect){const list=photos[v.defect]||[];if(list.length)photo=list[cnt[v.defect]%list.length];cnt[v.defect]++;}
-      return {id:sm.id,X:sm.X,Y:sm.Y,Z:sm.Z,fr:sm.fr,strake:sm.strake,side:sm.side,zone:sm.zone,...v,photo,_at:sm.at};
+      const {first,...v}=values(sm),photo=photoOf(v.defect,cnt);
+      return {id:sm.id,X:sm.X,Y:sm.Y,Z:sm.Z,fr:sm.fr,strake:sm.strake,side:sm.side,zone:sm.zone,...v,photo,_at:sm.at,
+        _first:{...first,photo:photoOf(first.asFound.defect,cnt1)}};   // 1차 리도킹 값 (firstDockRecords), 2차 레코드에는 넣지 않는다
     });
     this.speed=1;this.timer=null;this.paused=false;this.s=0;this.next=0;this.k=0;this.last=0;
   }
-  record(b,ts){const {_at,...r}=b;return {...r,ts};}
+  record(b,ts){const {_at,_first,...r}=b;return {...r,ts};}
+  /* 1차 리도킹 기록 (같은 측정점): 화면 값(dft·plate·defect…)은 asFound(정비 전 측정), asFound·afterRepair 두 벌을 함께 싣는다.
+     이보다 앞선 도킹(신조 인도)의 측정은 없어 …Prev는 비운다. end = 그때 매핑을 마친 시각 (예시) */
+  firstDockRecords(end=new Date(2021,9,15,17,0).getTime()){
+    const P=this.plan;
+    return this.base.map(({_at,_first:{asFound,afterRepair,photo},id,X,Y,Z,fr,strake,side,zone,dftDesign,plateOrig})=>({
+      id,X,Y,Z,fr,strake,side,zone,dftDesign,plateOrig,...asFound,dftPrev:null,platePrev:null,photo,asFound,afterRepair,
+      ts:Math.round(end-(P.total-_at)/BASE_SPEED*1000)}));
+  }
 
   connect(){
     const P=this.plan,end=Date.now()-DONE_AGO_MS;

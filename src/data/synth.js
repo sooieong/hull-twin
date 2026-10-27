@@ -28,38 +28,62 @@ function makeClusters(seed){
   for(let n=0;n<2;n++){const X=rr(0.1*L,0.9*L);plate.push({X,u:side()*rr(14,40),r:rr(2.5,4),k:rr(0.4,0.7)});}                  // 그 밖
   for(let n=0;n<3;n++){const X=rr(0.2*L,0.8*L),u=side()*rr(bilgeG-4,bilgeG+3),r=rr(3,5);                                     // 복합
     coat.push({X,u,r,k:rr(0.7,1)});plate.push({X,u,r,k:rr(0.7,1)});}
-  return {coat,plate};
+  // 1차 asFound에만 있는 도막 군집: 1차 때 보수해서 2차에는 멀쩡한 곳 (흘수선 부근). 별도 난수라 2차 군집은 그대로
+  const rnd1=mulberry32(seed+1),r1r=(a,b)=>a+(b-a)*rnd1(),coat1=[];
+  for(let n=0;n<4;n++){const X=r1r(0.1*L,0.9*L);coat1.push({X,u:(rnd1()<0.5?-1:1)*(wlGirth(X)+r1r(-1.6,1.6)),r:r1r(2.5,5),k:r1r(0.6,0.9)});}
+  return {coat,plate,coat1};
 }
 function influence(list,X,u){
   let m=0;for(const c of list){const d2=((X-c.X)**2+(u-c.u)**2)/(c.r*c.r);if(d2<9)m=Math.max(m,c.k*Math.exp(-d2));}return m;
 }
 const r1=v=>Math.round(v*10)/10;
 
-/* 측정점(sample) 하나의 측정값 (사진 연결은 시뮬레이터가 한다) */
+/* 측정점(sample) 하나의 측정값 (사진 연결은 시뮬레이터가 한다)
+   반환: 2차(현재) 값 + first = 1차 리도킹(2021.10) 값 두 벌
+   - first.asFound    : 1차 입거 때 로봇이 측정한 값 (정비 전, 5년 운항 후). 2차와 같은 군집에 이상이 있되 더 적고 가볍다.
+   - first.afterRepair: 1차 정비를 마친 뒤 값. 도막 = 재도장 두께, 강판 = 교체했으면 새 판(원두께), 아니면 asFound 그대로.
+   2차의 dftPrev·platePrev(“1차 리도킹 대비”, 상세 그림의 “1차” 치수선)는 afterRepair와 같은 값이다.
+   2차 값의 난수 순서는 그대로 두고 1차 asFound용 난수를 뒤에 덧붙인다 (2차 데이터가 바뀌지 않게) */
 export function createSynth(seed=2491){
   const cl=makeClusters(seed);
   return function values(sm){
     const rnd=mulberry32(seed^Math.imul(sm.id+1,2654435761));
-    const c=influence(cl.coat,sm.X,sm.u),p=influence(cl.plate,sm.X,sm.u);
+    const c=influence(cl.coat,sm.X,sm.u),p=influence(cl.plate,sm.X,sm.u),c1=influence(cl.coat1,sm.X,sm.u);
     const design=DFT_DESIGN[sm.zone],orig=PLATE_ORIG[sm.zone];
-    let ratio=0.88+0.12*rnd()-0.72*c+(rnd()-0.5)*0.04;
-    let defect=null,defectArea=0;
+    const ratio0=0.88+0.12*rnd()-0.72*c+(rnd()-0.5)*0.04;   // coating ageing before any damage
+    let ratio=ratio0,defect=null,defectArea=0;
     if(c>0.25&&rnd()<(c-0.25)*1.4)defect=rnd()<(c-0.25)/0.75*0.9?'flaking':'scratch';
     else if(rnd()<0.004)defect='scratch';
     if(defect==='flaking'){defectArea=0.15+rnd()*1.2*c;ratio=Math.min(ratio,0.25+0.3*rnd());}
     else if(defect==='scratch')defectArea=0.03+rnd()*0.35;
     const loss=Math.max(0,Math.min(0.4,0.015+0.04*rnd()+0.27*p+(rnd()-0.5)*0.02));
-    // "1차" = 1차 리도킹(2021.10) 출거 시점, 정비를 마친 뒤의 두께
-    // 강판: 그때 측정한 감소(인도 후 10년 중 5년: 지금의 약 절반)가 경고 기준 이상이면 교체 → 원두께, 아니면 그대로
-    const prevLoss=loss*(0.4+0.2*rnd()),prevAfter=prevLoss>=CRITERIA.plate.crit?0:prevLoss;
+    // 강판 1차 asFound: 인도 후 10년 중 5년 → 지금 감소의 45–75%. 경고 기준 이상이면 그때 교체 (afterRepair = 원두께)
+    const prevLoss=loss*(0.45+0.3*rnd()),replaced=prevLoss>=CRITERIA.plate.crit;
     const dft=Math.round(design*Math.max(0.05,Math.min(1.1,ratio)));
+    // 도막 1차 afterRepair: 그때 다시 칠했다 → 설계 이상 (100–112%), 지금보다 얇을 수는 없다
+    const dftAfter=Math.round(Math.max(design*(1+0.12*rnd()),dft));
+    // AI 손상 판별 신뢰도 (%) — 모델이 아직 없어 85–98% 예시값. 실제 모델 결과(JSON)의 값으로 이 필드만 바꾸면 된다
+    const aiConfidence=defect?Math.round(85+13*rnd()):null;
+    const plateAsFound=r1(orig*(1-prevLoss)),plateAfter=replaced?orig:plateAsFound;
+
+    // --- 1차 asFound 도막: 같은 군집, 5년치 노화 (지금 감소의 50–75%) + 1차에만 있던 군집(coat1), 손상은 더 드물고 작다 ---
+    const f=0.5+0.25*rnd(),ca=Math.max(c,c1);
+    let ratio1=Math.min(1-(1-ratio0)*f,0.95-0.7*c1)+(rnd()-0.5)*0.03,defect1=null,area1=0;
+    if(ca>0.35&&rnd()<(ca-0.35)*0.9)defect1=rnd()<(ca-0.35)/0.65*0.6?'flaking':'scratch';
+    else if(rnd()<0.002)defect1='scratch';
+    if(defect1==='flaking'){area1=0.1+rnd()*0.7*ca;ratio1=Math.min(ratio1,0.35+0.3*rnd());}
+    else if(defect1==='scratch')area1=0.03+rnd()*0.2;
+    const ai1=defect1?Math.round(85+13*rnd()):null;
+
     return {
-      // 도막: 그때 다시 칠했다 → 설계 이상 (100–112%), 지금보다 얇을 수는 없다
-      dft,dftDesign:design,dftPrev:Math.round(Math.max(design*(1+0.12*rnd()),dft)),
-      plate:r1(orig*(1-loss)),plateOrig:orig,platePrev:r1(orig*(1-prevAfter)),
-      defect,defectArea:defect?Math.round(defectArea*100)/100:0,
-      // AI 손상 판별 신뢰도 (%) — 모델이 아직 없어 85–98% 예시값. 실제 모델 결과(JSON)의 값으로 이 필드만 바꾸면 된다
-      aiConfidence:defect?Math.round(85+13*rnd()):null
+      dft,dftDesign:design,dftPrev:dftAfter,
+      plate:r1(orig*(1-loss)),plateOrig:orig,platePrev:plateAfter,
+      defect,defectArea:defect?Math.round(defectArea*100)/100:0,aiConfidence,
+      first:{
+        asFound:{dft:Math.round(design*Math.max(0.05,Math.min(1.1,ratio1))),plate:plateAsFound,
+          defect:defect1,defectArea:defect1?Math.round(area1*100)/100:0,aiConfidence:ai1},
+        afterRepair:{dft:dftAfter,plate:plateAfter,plateReplaced:replaced}
+      }
     };
   };
 }

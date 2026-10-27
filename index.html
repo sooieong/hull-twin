@@ -16,15 +16,14 @@
       <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M2 19h28l-4.5 7.5H7.5z" fill="#F37321"/><path d="M7 19v-8h6v8M15.5 19v-4.5h11V19" fill="none" stroke="#FBB584" stroke-width="1.6"/><path d="M9.5 11V6.5" stroke="#F89B6C" stroke-width="1.6"/></svg>
       <div class="brand-name">Dr.Dock</div>
     </div>
-    <div class="crumbs" aria-label="선박">
-      <b>174K LNG Carrier</b><span class="mono">H-2491</span>
-    </div>
     <div class="top-right">
-      <div class="field"><label for="dockSel">도킹</label>
+      <!-- ship + docking: one bundle, a thin divider between -->
+      <div class="field ship-dock"><span class="ship" aria-label="선박"><span class="mono">H-2491</span><b>174K LNG Carrier</b></span><i class="vsep" aria-hidden="true"></i>
+        <label class="sr-only" for="dockSel">도킹</label>
         <select id="dockSel">
-          <option>2026.10 2차 리도킹·2번 도크 (현재)</option>
-          <option>2021.10 1차 리도킹</option>
-          <option>2016.10 신조 인도</option>
+          <option value="current">2026.10 2차 리도킹·2번 도크 (현재)</option>
+          <option value="first">2021.10 1차 리도킹</option>
+          <option value="newbuild">2016.10 신조 인도</option>
         </select>
       </div>
       <div class="map-toggle" id="mapToggle">
@@ -116,9 +115,9 @@
       </div>
     </section>
 
-    <section class="pane pane-shell" id="paneShell" aria-label="S/Shell 외판 전개도">
+    <section class="pane pane-shell" id="paneShell" aria-label="S.SHELL 외판 전개도">
       <div class="pane-head">
-        <span class="pane-title">S/Shell 외판 전개도</span>
+        <span class="pane-title">S.SHELL 외판 전개도</span>
       </div>
       <div class="pane-body"></div>
     </section>

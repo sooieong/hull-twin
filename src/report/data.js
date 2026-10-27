@@ -6,16 +6,23 @@ import { LAYERS, OK, WARN, CRIT, CRITERIA, ACTION, judge, dftRatio, plateLoss, i
 import { DEFECT_LABEL, recLoc, designRatio, lossRatio, area, pct as pctText } from '../format.js';
 import { groupZones } from '../data/zones.js';
 import { SAMPLE_EVERY } from '../data/scanPath.js';
-import { DOCKING_CYCLE_YEARS, CURRENT_DOCK, PREV_DOCK } from '../data/docking.js';
+import { DOCKING_CYCLE_YEARS, dockOf, prevDockOf, dockLabel } from '../data/docking.js';
 
 /* 예시 상수: 보고서 계산에만 쓰며 나중에 바꿀 수 있다 */
 export const REPORT_CONST={
   pointLen:SAMPLE_EVERY*FS,             // 측정점 하나가 대표하는 길이 (m): 측정 간격
   solids:0.6,                           // 도료 고형분 비율 (도료 물량 = 면적 × 설계 두께 ÷ 고형분)
-  yearsSincePrev:DOCKING_CYCLE_YEARS,   // 1차 리도킹(2021.10) → 2차 리도킹(2026.10)
+  yearsSincePrev:DOCKING_CYCLE_YEARS,   // 이전 도킹 → 이 도킹 (1차 리도킹 → 2차 리도킹, 신조 인도 → 1차 리도킹)
   yearsToNext:DOCKING_CYCLE_YEARS       // 다음 도킹(2031.10)까지
 };
-export const SHIP={name:'174K LNG Carrier',hull:'H-2491',docking:`${CURRENT_DOCK.date} ${CURRENT_DOCK.name}`,dock:CURRENT_DOCK.dock,robot:'RBT-01',prevDock:PREV_DOCK};
+export const SHIP={name:'174K LNG Carrier',hull:'H-2491',robot:'RBT-01'};
+/* the docking the report is about = the one picked in the header (store.dockKey): 현재(2차 리도킹) or the 1차 리도킹 record.
+   prev = the docking before it — loss rates run from its value (a record without …Prev: 신조 인도 = the original thickness) */
+export function dockContext(key){
+  const dock=dockOf(key),prev=prevDockOf(dock);
+  return {...SHIP,dockInfo:dock,docking:`${dock.date} ${dock.name}`,dock:dock.dock||'',prevDock:prev,since:dockLabel(prev),prevShort:prev.short,next:dock.next};
+}
+export const prevPlate=r=>r.platePrev??r.plateOrig;
 
 const pct=(n,d)=>d?n/d*100:0;
 
@@ -33,7 +40,7 @@ const sumArea=rs=>rs.reduce((a,r)=>a+areaOf(r),0);
 function shellArea(){let a=0;const dx=XMAX/NX;for(let i=0;i<NX;i++)a+=(stSec[i].gs[G-1]+stSec[i+1].gs[G-1])/2*dx;return a*2;}
 
 export function buildReportData(store,now=new Date()){
-  const R=store.records,C=REPORT_CONST,plan=store.plan;
+  const R=store.records,C=REPORT_CONST,plan=store.plan,ship=dockContext(store.dockKey);
   const lv=(r,l)=>judge(r,l).level;
 
   /* --- layer summaries --- */
@@ -70,7 +77,7 @@ export function buildReportData(store,now=new Date()){
     return {tN:t.length,tA:A(t),fN:f.length,fA:A(f),sN:s.length,sA:A(s)};}).filter(row=>row.tN+row.fN+row.sN>0);
 
   /* --- plate loss rate and next-docking prediction --- */
-  const rate=r=>(r.platePrev-r.plate)/C.yearsSincePrev;
+  const rate=r=>(prevPlate(r)-r.plate)/C.yearsSincePrev;
   const predLoss=r=>(r.plateOrig-(r.plate-rate(r)*C.yearsToNext))/r.plateOrig;
   const fastest=[...R].sort((a,b)=>rate(b)-rate(a)).slice(0,5).map(r=>({r,rate:rate(r),loss:plateLoss(r)}));
   const predicted=R.filter(r=>lv(r,'plate')<CRIT&&predLoss(r)>=CRITERIA.plate.crit).sort((a,b)=>predLoss(b)-predLoss(a))
@@ -84,13 +91,13 @@ export function buildReportData(store,now=new Date()){
   if(pAb.length){const [z,n]=share(pAb)[0];findings.push(`${z}에 강판 감소 집중 (전체 강판 이상의 ${pctText(pct(n,pAb.length))})·최대 ${layers.plate.worst.value}, ${byLoss[0]?recLoc(byLoss[0]):''}`);}
   if(defects.length){const sh=share(defects),top2=sh.slice(0,2),n2=top2.reduce((a,[,n])=>a+n,0);
     findings.push(`도막 손상 ${defects.length}건 중 ${pctText(pct(n2,defects.length))}가 ${top2.map(([z])=>z).join('·')}에 분포·${DEFECT_LABEL.flaking} ${defects.filter(r=>r.defect==='flaking').length}건`);}
-  if(topZones.length&&findings.length<3)findings.push(`최우선 보수 ${topZones.length}구역 — 도막 이상(두께 또는 손상)과 강판 이상이 같은 곳에 함께 있음`);
+  if(topZones.length&&findings.length<3)findings.push(`최우선 보수 ${topZones.length}건 — 도막 이상(두께 또는 손상)과 강판 이상이 같은 곳에 함께 있음`);
 
   /* --- coverage --- */
   const blockedS=plan.samples.filter(s=>s.blocked),total=shellArea(),measured=sumArea(R);
   const coverage={points:R.length,planned:plan.samples.length,blocked:blockedS.length,measuredArea:measured,blockedArea:sumArea(blockedS),shellArea:total,ratio:pct(measured,total)};
 
-  return {now,records:R,layers,headline,findings:findings.slice(0,3),coverage,
+  return {now,ship,records:R,layers,headline,findings:findings.slice(0,3),coverage,
     dft:{zones:dftZones,thinnest:byRatio.slice(0,5),values:R.map(r=>dftRatio(r)*100)},
     plate:{zones:plateZones,top3:byLoss.slice(0,3),fastest,predicted},
     defect:{zones:defectZones,photos:defects.slice(0,6),count:defects.length},

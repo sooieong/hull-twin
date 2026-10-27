@@ -1,5 +1,5 @@
 /* =========================================================
-   보조 시각화 1: Side Shell 전개도 (SPEC 5.1)
+   보조 시각화 1: S.SHELL 외판 전개도 (SPEC 5.1)
    가로 = 프레임 번호(선미 → 선수), 세로 = 킬 중심선에서의 거스. 위 절반 우현, 가운데 킬 중심선, 아래 절반 좌현.
    로봇 경로(우현 갑판 → 킬 → 좌현 갑판)가 위에서 아래로 진행한다.
    표시(단순화): 선체 외곽선, 가운데 K 선 하나(주황, 왼쪽 K 글자가 라벨), 오른쪽 "우현 / 좌현", 아래 프레임 눈금(100 단위),
@@ -10,8 +10,7 @@
    ========================================================= */
 import { T, FS, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, section, girthAtZ, signedGirth, recordU,
   KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
-import { OK, judge, isTop } from './data/criteria.js';
-import { LAYER_LABEL, gradeLabel, value } from './format.js';
+import { OK, judge } from './data/criteria.js';
 import { heatOf, heatRGB, heatAlpha, buildIndex, idw, nearest } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
 
@@ -29,8 +28,8 @@ const G_MAX=Math.max(...F.map(f=>f.g));
 let nStrakes=0;while(nStrakes<LETTERS.length&&KEEL_HALF+STRAKE_W*nStrakes<G_MAX)nStrakes++;
 
 export function createSideShell(body,store,ui){
-  body.innerHTML='<canvas class="ss-cv" aria-label="Side Shell 전개도: 가로 프레임 번호, 세로 외판열. 위 우현, 아래 좌현. 이상 지점을 누르면 선택합니다."></canvas><div class="ss-read" aria-live="polite"></div>';
-  const cv=body.querySelector('canvas'),ctx=cv.getContext('2d'),read=body.querySelector('.ss-read');
+  body.innerHTML='<canvas class="ss-cv" aria-label="S.SHELL 외판 전개도: 가로 프레임 번호, 세로 외판열. 위 우현, 아래 좌현. 이상 지점을 누르면 선택합니다."></canvas>';
+  const cv=body.querySelector('canvas'),ctx=cv.getContext('2d');
   // static layers: under the heat (background, shell fill, keel blocks) and over it (lines, labels)
   const under=document.createElement('canvas'),over=document.createElement('canvas'),heat=document.createElement('canvas');
   let w=0,h=0,dpr=1,dots=[],allIx=buildIndex([]),heatIx=buildIndex([]),shellPath=null,robot=null,raf=0,timer=null;
@@ -126,8 +125,7 @@ export function createSideShell(body,store,ui){
   new ResizeObserver(resize).observe(cv);
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resize);
 
-  /* hover readout (an anomaly point's value and grade — no location label) + click selection
-     (anomaly point first, else nearest measurement within 3 m) */
+  /* click selection (anomaly point first, else nearest measurement within 3 m); no hover readout — the cursor only marks a point */
   function hit(e){
     const b=cv.getBoundingClientRect(),x=e.clientX-b.left,y=e.clientY-b.top,fr=frOf(x),u=uOf(y);
     if(fr<0||fr>FRMAX||Math.abs(u)>F[Math.round(fr)].g)return {inside:false};
@@ -138,9 +136,8 @@ export function createSideShell(body,store,ui){
     for(const d of list){const dx=px(d.X)-x,dy=py(d.u)-y,q=dx*dx+dy*dy;if(q<=bd){bd=q;best=d;}}return best;}
   cv.addEventListener('pointermove',e=>{
     const t=hit(e);cv.style.cursor=t.dot?'pointer':'crosshair';
-    read.textContent=t.dot?`${LAYER_LABEL[ui.layer]} ${value(t.dot.r,ui.layer)}·${gradeLabel(t.dot.level,isTop(t.dot.r,ui.layer),ui.layer)}`:'';
   });
-  cv.addEventListener('pointerleave',()=>{read.textContent='';cv.style.cursor='';});
+  cv.addEventListener('pointerleave',()=>{cv.style.cursor='';});
   cv.addEventListener('click',e=>{const t=hit(e);if(t.rec)ui.select(t.rec.id,{fly:true});});
 
   const refresh=()=>{rebuildData();draw();};

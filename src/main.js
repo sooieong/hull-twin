@@ -15,7 +15,8 @@ import { createDetailPanel } from './detail.js';
 import { setupPanels } from './panels.js';
 import { nV, pos, girth, index as hullIndex, SUPER_BOXES } from './hullMesh.js';
 import { SimulatorSource } from './data/simulator.js';
-import { createStore } from './data/store.js';
+import { createStore, createRecordStore, createDockStore } from './data/store.js';
+import { dockOf, dockLabel } from './data/docking.js';
 import { findDefectPhotos } from './data/photos.js';
 import { logDataSummary } from './data/report.js';
 
@@ -27,10 +28,14 @@ const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 /* ---------- toast + placeholders ---------- */
 const toastEl=$('#toast');let toastT;
 function toast(m,ms=2400){toastEl.textContent=m;toastEl.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{toastEl.hidden=true;},ms);}
-$('#dockSel').addEventListener('change',()=>toast('도킹 이력 비교는 측정 데이터 연결 후 활성화됩니다'));
 
 /* ---------- data layer: every panel draws from this store (SPEC 3) ---------- */
-const storeReady=findDefectPhotos().then(photos=>{const store=createStore(new SimulatorSource({photos}));store.connect();logDataSummary(store);return store;});
+/* docking picked in the header: 현재 = the live mapping store · 1차 리도킹 = the record of that run (simulator.firstDockRecords)
+   · 신조 인도 = no measurements. Panels see one store (createDockStore) and redraw when the docking changes */
+const storeReady=findDefectPhotos().then(photos=>{
+  const sim=new SimulatorSource({photos}),live=createStore(sim);live.connect();logDataSummary(live);
+  return createDockStore({current:live,first:createRecordStore(sim.firstDockRecords(),sim.plan),newbuild:createRecordStore([],sim.plan)});
+});
 /* selected layer + selected measurement, shared by all panels (SPEC 4.3, 4.5) */
 const ui=createUiState();
 
@@ -408,7 +413,12 @@ function syncMap(){
   const btn=$('#mapBtn');btn.textContent=st==='mapping'?'매핑 중지':st==='paused'?'이어서 매핑':'재매핑';btn.classList.toggle('secondary',st!=='paused');
   $('#speedSeg').hidden=!active;   // replay speed only matters while a run is going or paused
   $('#stRobotWrap').classList.toggle('idle',st!=='mapping');
-  if(st==='done')$('#stRobot').textContent=`매핑 완료·측정점 ${num(store.records.length)}개·마지막 측정 ${store.lastTs?dateTime(store.lastTs):'—'}`;
+  const dk=store.dockKey;
+  if(st==='done')$('#stRobot').textContent=dk==='newbuild'?`${dockLabel(dockOf(dk))}·측정 데이터 없음`
+    :`${dk==='first'?`${dockLabel(dockOf(dk))} 기록·`:''}매핑 완료·측정점 ${num(store.records.length)}개·마지막 측정 ${store.lastTs?dateTime(store.lastTs):'—'}`;
+  // 단면 절단: only once mapping is over (a run started with it on turns it off)
+  const cut=$('#cutTog');cut.disabled=active;cut.closest('label').title=active?'매핑이 끝난 뒤 사용할 수 있습니다':'';
+  if(active&&cut.checked){cut.checked=false;cut.dispatchEvent(new Event('change'));}
   if(st==='paused')$('#stRobot').textContent=store.pose?`매핑 중지·${poseText(store.pose)}`:'매핑 중지';
   if(!active||!store.pose){robotWrap.visible=false;robotSeen=false;}
   pathGroup.visible=active&&lyRobotOn;
@@ -461,6 +471,14 @@ function setLook(l){
 document.querySelectorAll('[data-look]').forEach(b=>b.addEventListener('click',()=>setLook(b.dataset.look)));
 function setSpeed(k){if(store)store.setSpeed(k);document.querySelectorAll('[data-speed]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.speed===k)));}
 document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>setSpeed(+b.dataset.speed)));
+/* 도킹 선택 (헤더): 현재 = 매핑 화면 · 1차 리도킹 = 기록 보기 (매핑 완료 고정, 재매핑 없음, 보고서 가능)
+   · 신조 인도 = 측정 데이터 없이 3D만 화면 전체 (매핑 상태·재매핑·보고서 숨김, 다른 패널 숨김). 다른 도킹을 고르면 원래 화면으로 */
+function syncDock(){
+  const k=store.dockKey,hist=k!=='current',nb=k==='newbuild';
+  $('#dockSel').value=k;$('#mapBtn').hidden=hist;$('#mapToggle').hidden=nb;$('#reportBtn').hidden=nb;
+  panels.setSolo(nb);syncMap();
+}
+$('#dockSel').addEventListener('change',e=>{if(!store)return;store.setDock(e.target.value);syncDock();});
 storeReady.then(s=>{store=s;buildPath(s.plan);setSpeed(10);
   setLook(look);createKpiPanel($('#paneKpi .pane-body'),$('#paneList .pane-body'),$('#listCount'),s,ui);
   // diagnostic report (SPEC 6, 10.9): loaded on demand; ?report=preview shows the 5 pages instead of the dashboard
@@ -472,7 +490,7 @@ storeReady.then(s=>{store=s;buildPath(s.plan);setSpeed(10);
     if(k.has('state')||k.has('records'))syncMap();
     if(k.has('pose')&&s.mapState==='mapping'&&s.pose)onPose(s.pose);
   });
-  rebuildHeat();syncMap();
+  rebuildHeat();syncDock();
 });
 const lay=(id,fn)=>{const el=$(id);el.addEventListener('change',()=>fn(el.checked));fn(el.checked);};
 lay('#lyFrames',on=>{frames.visible=on;frLabels.forEach(l=>l.el.hidden=!on);});
@@ -660,7 +678,7 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 syncLayer();paintHull();selectFR(state.selFR);
-setupPanels($('.main'));
+const panels=setupPanels($('.main'));
 // LAYERS starts folded every time (index.html, no 'open'); its state is not remembered
 requestAnimationFrame(loop);
 })();

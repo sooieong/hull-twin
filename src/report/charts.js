@@ -1,5 +1,5 @@
 /* =========================================================
-   보고서 차트 (SVG, 인쇄용 흰 바탕): Side Shell 지도, 히스토그램, 판정 비율 막대
+   보고서 차트 (SVG, 인쇄용 흰 바탕): S.SHELL 외판 전개도, 히스토그램, 판정 비율 막대
    축·단위·기준선(주의·경고 경계)을 항상 표시한다 (SPEC 6.1).
    ========================================================= */
 import { T, R, FS, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, section, girthAtZ, recordU } from '../hull.js';
@@ -19,7 +19,7 @@ function frames(){
   GMAX=Math.max(...F.map(f=>f.g));
 }
 
-/* Side Shell map: frames across, girth down (starboard on top, port below — as on the dashboard)
+/* S.SHELL map: frames across, girth down (starboard on top, port below — as on the dashboard)
    mode 'value': every measurement point painted (normal = light grey, abnormal = judgement colour)
    mode 'markers': defects only, with the dashboard's icons — 최우선 보수 = 사이렌, 도막 떨어짐 = 경고, 스크래치 = 주의 (PNG, gradeUi.js) */
 export function sideShellMap(records,layer,W,H,mode='value'){

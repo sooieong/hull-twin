@@ -17,7 +17,7 @@ export function logDataSummary(store,top=5){
 
   LAYERS.forEach(layer=>{
     const zones=groupZones(R,layer);
-    console.log(`[Dr.Dock] ${LAYER_LABEL[layer]}·보수 대상 ${zones.length}구역 중 우선순위 상위 ${top}건`);
+    console.log(`[Dr.Dock] ${LAYER_LABEL[layer]}·보수 대상 ${zones.length}건 중 우선순위 상위 ${top}건`);
     console.table(Object.fromEntries(zones.slice(0,top).map((z,i)=>[i+1,{
       위치:zoneLoc(z),
       측정점:z.count,
