@@ -1,80 +1,76 @@
 /* =========================================================
-   전체 외판 순회 경로 (SPEC 4.2)
-   외판열(strake)을 따라 선수미 방향으로 왕복한다.
-   순서: 우현 최상단 외판열(건현) → … → A → K(우현 절반) → K(좌현 절반) → A → … → 좌현 최상단
-   첫 외판열은 선미 → 선수, 다음 외판열은 선수 → 선미.
+   전체 외판 순회 경로 (SPEC 4.2, SPEC-v3 11.2–11.3)
+   거스 방향으로 1.1 m 간격 레인을 두고, 레인을 따라 선수미 방향으로 왕복한다.
+   순서: 우현 최상단 레인(건현) → … → 킬 → 좌현 … → 좌현 최상단. 첫 레인은 선미 → 선수, 다음 레인은 선수 → 선미.
+   측정은 레인 위 1.1 m마다 (측정 격자 1.1 m, 약 10,400점). 측정점은 m 좌표로 저장하고 프레임은 표시할 때만 쓴다.
+   로봇 측정 가능 범위 (baseline.REACH) 안에서만 레인을 만든다:
+     선측 x 8–202 m, z 0.5–20.5 m · 선저 평판부 x 8–195 m, |y| ≤ 13 m
+   킬 블록 접촉면은 지나가되 측정하지 않는다 (blocked = 측정 불가).
+   프로펠러·러더·스케그(x < 8 m)와 선수 벌브 끝(x > 202 m)은 범위 밖 (수동 측정).
    좌표: u = 부호 있는 거스(m, 킬 중심선 기준, 좌현 +). Y도 좌현 +.
    ========================================================= */
-import { FS, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, section, atGirth, strakeLower, zoneOf, ZONES,
-  KEEL_BLOCKS, BLOCK_SIZE } from '../hull.js';
+import { G, section, atGirth, strakeName, zoneOf, ZONES, frOf, KEEL_BLOCKS, BLOCK_SIZE } from '../hull.js';
+import { GRID, REACH } from './baseline.js';
 
-export const SAMPLE_EVERY=3;   // 측정 간격: 3 프레임 (2.55 m)
-const MIN_STRAKE=0.8;          // 이 폭보다 좁게 남은 외판열 끝단은 주행하지 않음 (m)
-const TURN_STEPS=8;            // 외판열 사이 이동 구간 점 개수
-export const ROBOT_MARGIN=0.6; // 블록 접촉면 주변 측정 불가 여유 (m)
+const TURN_STEPS=8;            // 레인 사이 이동 구간 점 개수
+export const ROBOT_MARGIN=0;   // 블록 접촉면 주변 측정 불가 여유 (m): 접촉면 |y| ≤ 0.6만
 
-const secs=[];for(let fr=0;fr<=FRMAX;fr++)secs.push(section(fr*FS));
+/* stations every GRID along x over the robot's reach */
+const X0=REACH.side.x0,X1=Math.max(REACH.side.x1,REACH.bottom.x1);
+const xs=[];for(let x=X0;x<=X1+1e-6;x+=GRID)xs.push(Math.round(x*1000)/1000);
+const secs=xs.map(x=>section(x));
+const gTop=Math.max(...secs.map(s=>s.gs[G-1]));
 
-/* 외판열 하나(하단 거스 lower, 목표 중심 거스 gc)의 주행 가능한 최장 연속 프레임 구간 */
-function rowRange(lower,gc){
-  let best=null,cur=null;
-  for(let fr=0;fr<=FRMAX;fr++){
-    const s=secs[fr],gt=s.gs[G-1];
-    const g=Math.min(gc,(lower+gt)/2);
-    const ok=gt>lower+MIN_STRAKE&&atGirth(s,g)!==null;
-    if(ok){if(!cur)cur={fr0:fr,fr1:fr};else cur.fr1=fr;if(!best||cur.fr1-cur.fr0>best.fr1-best.fr0)best={...cur};}
-    else cur=null;
-  }
-  return best;
+/* the shell point at girth g on station i, and whether the robot can measure there */
+function pointAt(i,g){
+  const p=atGirth(secs[i],g);if(!p)return null;
+  const X=xs[i],R=REACH;
+  const ok=p.bottom?X>=R.bottom.x0&&X<=R.bottom.x1&&p.Y<=R.bottom.y
+    :X>=R.side.x0&&X<=R.side.x1&&p.Z>=R.side.z0&&p.Z<=R.side.z1;
+  return {...p,ok};
 }
-function rowGirth(fr,lower,gc){return Math.min(gc,(lower+secs[fr].gs[G-1])/2);}
-
+function blocked(X,Y){
+  const hx=BLOCK_SIZE.dx/2+ROBOT_MARGIN,hy=BLOCK_SIZE.dy/2+ROBOT_MARGIN;
+  return KEEL_BLOCKS.some(b=>Math.abs(X-b.X)<=hx&&Math.abs(Y-b.Y)<=hy);
+}
 function surfaceAt(X,u,prev){
-  const fr=Math.round(X/FS),s=Math.abs(fr*FS-X)<1e-6?secs[fr]:section(X);
-  let g=Math.abs(u),p=atGirth(s,g);
+  const s=section(X);let g=Math.abs(u),p=atGirth(s,g);
   if(!p){g=Math.min(g,s.gs[G-1]*0.999);for(let k=0;k<20&&!p;k++){p=atGirth(s,g);g*=0.9;}}
   if(!p)return prev?{Y:prev.Y,Z:prev.Z,bottom:false}:{Y:0,Z:0,bottom:true};
   return {Y:u<0?-p.Y:p.Y,Z:p.Z,bottom:p.bottom};
 }
 
-function blocked(X,Y){
-  const hx=BLOCK_SIZE.dx/2+ROBOT_MARGIN,hy=BLOCK_SIZE.dy/2+ROBOT_MARGIN;
-  return KEEL_BLOCKS.some(b=>Math.abs(X-b.X)<hx&&Math.abs(Y-b.Y)<hy);
-}
-
 export function buildScanPath(){
-  // strakes present anywhere along the hull: K(-1), A(0) … top
-  const gMax=Math.max(...secs.map(s=>s.gs[G-1]));
-  let top=0;while(top+1<LETTERS.length&&strakeLower(top+1)+MIN_STRAKE<gMax)top++;
-  const order=[];
-  for(let i=top;i>=0;i--)order.push({side:'S',i});
-  order.push({side:'S',i:-1},{side:'P',i:-1});
-  for(let i=0;i<=top;i++)order.push({side:'P',i});
+  // lane girths: GRID/2, 3·GRID/2, … up to the highest measurable point
+  const lanes=[];for(let g=GRID/2;g<gTop;g+=GRID)lanes.push(Math.round(g*1000)/1000);
+  const order=[...lanes.slice().reverse().map(g=>({side:'S',g})),...lanes.map(g=>({side:'P',g}))];
 
   const rows=[],points=[];let dir=1;
   for(const o of order){
-    const lower=strakeLower(o.i),gc=o.i<0?KEEL_HALF/2:lower+STRAKE_W/2;
-    const rg=rowRange(lower,gc);if(!rg)continue;
-    const sgn=o.side==='P'?1:-1,strake=o.i<0?'K':LETTERS[o.i];
-    const frs=[];for(let fr=rg.fr0;fr<=rg.fr1;fr++)frs.push(fr);if(dir<0)frs.reverse();
-    const row={side:o.side,strake,fr0:rg.fr0,fr1:rg.fr1,dir,start:0,end:0};
-    // turn: straight move in (X, u) from the previous row end
-    const first={X:frs[0]*FS,u:sgn*rowGirth(frs[0],lower,gc)};
+    // the lane runs from its first to its last measurable station (points in between that cannot be measured are crossed)
+    const at=xs.map((_,i)=>pointAt(i,o.g));
+    let i0=at.findIndex(p=>p&&p.ok),i1=at.length-1-[...at].reverse().findIndex(p=>p&&p.ok);
+    if(i0<0)continue;
+    const sgn=o.side==='P'?1:-1,strake=strakeName(o.g);
+    const idx=[];for(let i=i0;i<=i1;i++)if(at[i])idx.push(i);if(dir<0)idx.reverse();
+    const row={side:o.side,strake,g:o.g,x0:xs[i0],x1:xs[i1],dir,start:0,end:0};
+    // turn: straight move in (X, u) from the previous lane end
+    const first={X:xs[idx[0]],u:sgn*o.g};
     if(points.length){const a=points[points.length-1];
       for(let k=1;k<TURN_STEPS;k++){const t=k/TURN_STEPS;const X=a.X+(first.X-a.X)*t,u=a.u+(first.u-a.u)*t;
-        points.push({X,u,...surfaceAt(X,u,a),fr:Math.round(X/FS),row:-1,onRow:false});}}
+        points.push({X,u,...surfaceAt(X,u,a),fr:frOf(X),row:-1,onRow:false,ok:false});}}
     row.start=points.length;
-    for(const fr of frs){const X=fr*FS,u=sgn*rowGirth(fr,lower,gc);
-      points.push({X,u,...surfaceAt(X,u,points[points.length-1]),fr,row:rows.length,onRow:true});}
+    for(const i of idx){const p=at[i],X=xs[i];
+      points.push({X,u:sgn*o.g,Y:sgn*p.Y,Z:p.Z,bottom:p.bottom,fr:frOf(X),row:rows.length,onRow:true,ok:p.ok});}
     row.end=points.length-1;rows.push(row);dir=-dir;
   }
   // cumulative surface distance
   const cum=new Float64Array(points.length);
   for(let k=1;k<points.length;k++){const a=points[k-1],b=points[k];cum[k]=cum[k-1]+Math.hypot(b.X-a.X,b.Y-a.Y,b.Z-a.Z);}
-  // measurement samples: every SAMPLE_EVERY frames on each row; block contact areas are marked, not measured
+  // measurement samples: every measurable lane point (GRID apart); keel block contact areas are marked, not measured
   const samples=[];
   rows.forEach((row,ri)=>{
-    for(let k=row.start;k<=row.end;k++){const p=points[k];if(p.fr%SAMPLE_EVERY)continue;
+    for(let k=row.start;k<=row.end;k++){const p=points[k];if(!p.ok)continue;
       samples.push({id:samples.length,k,at:cum[k],X:p.X,Y:p.Y,Z:p.Z,u:p.u,fr:p.fr,strake:row.strake,side:row.side,
         zone:ZONES[zoneOf(p.X,p.Z)],row:ri,blocked:p.bottom&&blocked(p.X,p.Y)});}
   });

@@ -1,11 +1,14 @@
+import './styles/applyTokens.js';   // first: CSS variables from styles/tokens.js
 import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { clamp, smooth, L, B, D, T, R, FS, XMAX, XC, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS,
-  deckZ, keelZ, HB, section, atGirth, strakeLower, recordU, strakeName, ZONES, zoneOf, regionOf, stX, stSec, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
+import { clamp, smooth, L, B, D, T, R, FS, XMIN, XMAX, XC, FRMIN, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS, SX, SY, SZ,
+  deckZ, keelZ, HB, section, atGirth, strakeLower, recordU, strakeName, ZONES, zoneOf, regionOf, stX, stSec, stIndex, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
+import { DRAFT_LIGHT, WL_TOP, MANUAL, BOW_FR, STERN_FR } from './data/baseline.js';
 import { CRITERIA, TOP_RULE, TOP, CRIT, WARN, topGroup, judge, isTop, gradeOf } from './data/criteria.js';
 import { gradeChip } from './gradeUi.js';
-import { LAYER_LABEL, DEFECT_LABEL, ACTION, value, loc, coords, metres, num, progress, dateTime } from './format.js';
+import { LAYER_LABEL, DEFECT_LABEL, ACTION, value, ptLoc, coords, metres, num, numHtml, progress, dateTime } from './format.js';
+import { COLOR, FS as TYPE, font } from './styles/tokens.js';
 import { HEAT, heatOf, heatRGB, heatAlpha, buildIndex, addToIndex, idw, coverage, nearest } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
 import { createUiState } from './uiState.js';
@@ -17,7 +20,7 @@ import { nV, pos, girth, index as hullIndex, SUPER_BOXES } from './hullMesh.js';
 import { SimulatorSource } from './data/simulator.js';
 import { createStore, createRecordStore, createDockStore } from './data/store.js';
 import { dockOf, dockLabel } from './data/docking.js';
-import { findDefectPhotos } from './data/photos.js';
+import { loadDefectPhotos } from './data/photos.js';
 import { logDataSummary } from './data/report.js';
 
 (function(){
@@ -32,7 +35,7 @@ function toast(m,ms=2400){toastEl.textContent=m;toastEl.hidden=false;clearTimeou
 /* ---------- data layer: every panel draws from this store (SPEC 3) ---------- */
 /* docking picked in the header: 현재 = the live mapping store · 1차 리도킹 = the record of that run (simulator.firstDockRecords)
    · 신조 인도 = no measurements. Panels see one store (createDockStore) and redraw when the docking changes */
-const storeReady=findDefectPhotos().then(photos=>{
+const storeReady=loadDefectPhotos().then(photos=>{
   const sim=new SimulatorSource({photos}),live=createStore(sim);live.connect();logDataSummary(live);
   return createDockStore({current:live,first:createRecordStore(sim.firstDockRecords(),sim.plan),newbuild:createRecordStore([],sim.plan)});
 });
@@ -43,8 +46,8 @@ const ui=createUiState();
 const state={selFR:170,hoverX:null,hoverSrc:null,cut:false};
 const hooks={onSelect:[],onHover:[]};
 function selectFR(fr){
-  fr=clamp(Math.round(fr),0,FRMAX);state.selFR=fr;const X=fr*FS;const s=section(X);
-  const fi=$('#secFr');if(document.activeElement!==fi)fi.value=fr;$('#secMiniFr').textContent=fr;$('#secZone').textContent=regionOf(X);
+  fr=clamp(Math.round(fr),FRMIN,FRMAX);state.selFR=fr;const X=fr*FS;const s=section(X);
+  const fi=$('#secFr');if(document.activeElement!==fi)fi.value=fr;$('#secMiniFr').textContent=num(fr);$('#secZone').textContent=regionOf(X);
   $('#secX').textContent=metres(X);
   const hb=HB(X,T);$('#secHb').textContent=hb>0?metres(hb):'—';
   const g=s.gs[G-1];$('#secG').textContent=metres(g,1);
@@ -54,9 +57,9 @@ function selectFR(fr){
   hooks.onSelect.forEach(f=>f(fr,X));
 }
 function setHover(X,src){state.hoverX=X;state.hoverSrc=X==null?null:src;hooks.onHover.forEach(f=>f(X,src));}
-$('#secSlider').max=FRMAX;
+$('#secSlider').min=FRMIN;$('#secSlider').max=FRMAX;
 $('#secSlider').addEventListener('input',e=>selectFR(+e.target.value));
-/* frame number typed into the card: Enter moves there (clamped to 0–FRMAX), Esc or leaving the field restores it */
+/* frame number typed into the card: Enter moves there (clamped to FRMIN–FRMAX, −6–256), Esc or leaving the field restores it */
 {const fi=$('#secFr');
   fi.addEventListener('focus',()=>fi.select());
   fi.addEventListener('keydown',e=>{
@@ -75,13 +78,13 @@ renderer.localClippingEnabled=true;
 host.appendChild(renderer.domElement);
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x04070d);
-scene.fog=new THREE.Fog(0x04070d,480,1250);
+scene.fog=new THREE.Fog(0x04070d,480*SX,1250*SX);   // scaled with the ship (hull.js SX)
 const camera=new THREE.PerspectiveCamera(32,1,1,5000);
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.dampingFactor=0.08;controls.minDistance=8;controls.maxDistance=1200;controls.rotateSpeed=0.7;
 const PRESETS={iso:{p:[240,125,275],t:[0,8,0]},side:{p:[0,14,600],t:[0,12,0]},plan:{p:[0,640,0.5],t:[0,0,0]},front:{p:[560,18,0.5],t:[0,14,0]},bottom:{p:[150,-340,170],t:[0,4,0]}};
 // each preset keeps its direction; the distance is fitted so the whole ship shows in the pane (SPEC 4.1)
-const FIT=0.9,SHIP_BOX=[];for(const x of [-XC,XC])for(const y of [-1.8,D+30])for(const z of [-B/2,B/2])SHIP_BOX.push(new V3(x,y,z));
+const FIT=0.9,SHIP_BOX=[];for(const x of [XMIN-XC,XMAX-XC])for(const y of [-1.8,D+30*SZ])for(const z of [-B/2,B/2])SHIP_BOX.push(new V3(x,y,z));
 function fitPreset(k){const pr=PRESETS[k],t=new V3(...pr.t);return fitDir(new V3(...pr.p).sub(t).normalize(),t);}
 function fitDir(dir,t){
   const ax=new V3(),ay=new V3(),az=new V3();new THREE.Matrix4().lookAt(dir,new V3(),camera.up).extractBasis(ax,ay,az);
@@ -101,9 +104,12 @@ const clipMats=[];
 function cm(m){clipMats.push(m);return m;}
 
 /* hull shell */
-const colReal=new Float32Array(nV*3),colBp=new Float32Array(nV*3);
-const cHull=new THREE.Color(0xD3D8DF),cBp=new THREE.Color(0x0c1528);   // 실선: light achromatic hull (SPEC 4.4) · 도면: dark navy
+const colReal=new Float32Array(nV*3),colBp=new Float32Array(nV*3),colActual=new Float32Array(nV*3);
+const cHull=new THREE.Color(COLOR.hull),cBp=new THREE.Color(0x0c1528);   // 실선: light achromatic hull (SPEC 4.4) · 도면: dark navy
 for(let k=0;k<nV;k++){cHull.toArray(colReal,k*3);cBp.toArray(colBp,k*3);}
+// 실제: painted like the real ship — antifouling red-brown below the design waterline, grey above (pos y = ship Z)
+{const below=new THREE.Color(COLOR.hullBelow),above=new THREE.Color(COLOR.hullAbove);
+  for(let k=0;k<nV;k++)(pos[k*3+1]<T?below:above).toArray(colActual,k*3);}
 const hullGeo=new THREE.BufferGeometry();
 hullGeo.setAttribute('position',new THREE.BufferAttribute(pos,3));
 hullGeo.setIndex(hullIndex);hullGeo.computeVertexNormals();hullGeo.computeBoundingSphere();
@@ -120,7 +126,7 @@ const hullGroup=new THREE.Group();hullGroup.add(hullS,hullP,backS,backP);scene.a
 const toThree=(X,Y,Z,out=new V3())=>out.set(X-XC,Z,-Y);
 /* outward shell normal (three coords) at ship point (X, Y, Z), from the nearest shell vertex; port mesh is mirrored */
 function shellNormal(X,Y,Z,out=new V3()){
-  const i=clamp(Math.round(X/XMAX*NX),0,NX),s=stSec[i];let j=0,bd=1e9;
+  const i=stIndex(X),s=stSec[i];let j=0,bd=1e9;
   for(let q=0;q<G;q++){const d=(s.Ys[q]-Math.abs(Y))**2+(s.Zs[q]-Z)**2;if(d<bd){bd=d;j=q;}}
   const n=hullGeo.attributes.normal,k=i*G+j;
   return out.set(n.getX(k),n.getY(k),n.getZ(k)*(Y<0?1:-1)).normalize();
@@ -128,13 +134,20 @@ function shellNormal(X,Y,Z,out=new V3()){
 
 /* keel / side block contact areas cannot be measured (SPEC 4.2): hatched on the bottom shell */
 {const cv=document.createElement('canvas');cv.width=cv.height=16;const c=cv.getContext('2d');
-  c.fillStyle='#3A4558';c.fillRect(0,0,16,16);c.strokeStyle='#8A96AA';c.lineWidth=2;
+  c.fillStyle=COLOR.hatchBg;c.fillRect(0,0,16,16);c.strokeStyle=COLOR.hatchLine;c.lineWidth=2;
   c.beginPath();c.moveTo(-4,4);c.lineTo(4,-4);c.moveTo(0,16);c.lineTo(16,0);c.moveTo(12,20);c.lineTo(20,12);c.stroke();
   const tex=new THREE.CanvasTexture(cv);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
   const mat=cm(new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
   KEEL_BLOCKS.forEach(b=>{const w=BLOCK_SIZE.dx+2*ROBOT_MARGIN,h=BLOCK_SIZE.dy+2*ROBOT_MARGIN,g=new THREE.PlaneGeometry(w,h),uv=g.attributes.uv;
     for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*w/1.2,uv.getY(i)*h/1.2);
-    const m=new THREE.Mesh(g,mat);m.rotation.x=Math.PI/2;m.position.set(b.X-XC,keelZ(b.X)-0.04,-b.Y);hullGroup.add(m);});}
+    const m=new THREE.Mesh(g,mat);m.rotation.x=Math.PI/2;m.position.set(b.X-XC,keelZ(b.X)-0.04,-b.Y);hullGroup.add(m);});
+  // 수동 측정 areas (baseline.MANUAL): the shell triangles inside them get the same hatch, on both sides
+  const inManual=(X,Z)=>MANUAL.some(m=>X>=m.x0-1e-6&&X<=m.x1+1e-6&&Z<=m.z1);
+  const mp=[],muv=[];const P=hullGeo.attributes.position,I=hullGeo.index.array;
+  for(let t=0;t<I.length;t+=3){const v=[I[t],I[t+1],I[t+2]];if(!v.every(k=>inManual(P.getX(k)+XC,P.getY(k))))continue;
+    for(const k of v){mp.push(P.getX(k),P.getY(k),P.getZ(k));muv.push((P.getX(k)+XC)/1.2,(P.getY(k)+P.getZ(k))/1.2);}}
+  const mg=new THREE.BufferGeometry();mg.setAttribute('position',new THREE.Float32BufferAttribute(mp,3));mg.setAttribute('uv',new THREE.Float32BufferAttribute(muv,2));
+  const mS=new THREE.Mesh(mg,mat),mP=new THREE.Mesh(mg,mat);mP.scale.z=-1;hullGroup.add(mS,mP);}
 
 /* deck + transom */
 const deckPos=[],deckIdx=[];
@@ -159,7 +172,7 @@ function sectionSegs(X,out,off=0.06){
 // lines: dark slate so they read on the light hull
 const frameMat=cm(new THREE.LineBasicMaterial({color:0x5C687D,transparent:true,opacity:0.3}));
 const frameMajMat=cm(new THREE.LineBasicMaterial({color:0x34415A,transparent:true,opacity:0.7}));
-const fA=[],fB=[];for(let n=10;n<=FRMAX;n+=10)sectionSegs(n*FS,n%50===0?fB:fA);
+const fA=[],fB=[];for(let n=Math.ceil(FRMIN/5)*5;n<=FRMAX;n+=5)if(n)sectionSegs(n*FS,n%50===0?fB:fA);   // a line every 5 frames
 const frames=new THREE.Group();frames.add(lineSeg(fA,frameMat),lineSeg(fB,frameMajMat));
 // sheer line (deck edge)
 const sheer=[];for(let i=0;i<NX;i++){const a=stSec[i],b=stSec[i+1];const ya=a.Ys[G-1],yb=b.Ys[G-1];if(ya<0.02&&yb<0.02)continue;sheer.push(stX[i]-XC,a.Zs[G-1],ya,stX[i+1]-XC,b.Zs[G-1],yb,stX[i]-XC,a.Zs[G-1],-ya,stX[i+1]-XC,b.Zs[G-1],-yb);}
@@ -174,18 +187,22 @@ for(let k=0;k<LETTERS.length;k++){const g=KEEL_HALF+STRAKE_W*k;let prev=null;
   for(let i=0;i<=NX;i++){const p=seamPt(stSec[i],g);if(p&&prev){seamArr.push(stX[i-1]-XC,prev[1],prev[0],stX[i]-XC,p[1],p[0],stX[i-1]-XC,prev[1],-prev[0],stX[i]-XC,p[1],-p[0]);}prev=p;}}
 const seams=lineSeg(seamArr,seamMat);
 // DWL
-const dwlArr=[];for(let X=0;X<XMAX;X+=0.5){const y1=HB(X,T),y2=HB(X+0.5,T);if(y1<0.02||y2<0.02)continue;dwlArr.push(X-XC,T,y1+0.1,X+0.5-XC,T,y2+0.1,X-XC,T,-y1-0.1,X+0.5-XC,T,-y2-0.1);}
+const dwlArr=[];for(let X=XMIN;X<XMAX;X+=0.5){const y1=HB(X,T),y2=HB(X+0.5,T);if(y1<0.02||y2<0.02)continue;dwlArr.push(X-XC,T,y1+0.1,X+0.5-XC,T,y2+0.1,X-XC,T,-y1-0.1,X+0.5-XC,T,-y2-0.1);}
 const dwlMat=cm(new THREE.LineBasicMaterial({color:0x2F5597}));
 const dwl=lineSeg(dwlArr,dwlMat);
 // design lines (waterlines + stations): shown in the 도면 look only
 const bpMat=cm(new THREE.LineBasicMaterial({color:0xFBB584,transparent:true,opacity:0.4}));
-const bpArr=[];WLS.forEach(Z=>{for(let X=0;X<XMAX;X+=0.6){const y1=HB(X,Z),y2=HB(X+0.6,Z);if(y1<0.02||y2<0.02)continue;bpArr.push(X-XC,Z,y1+0.06,X+0.6-XC,Z,y2+0.06,X-XC,Z,-y1-0.06,X+0.6-XC,Z,-y2-0.06);}});
-for(let i=0;i<=20;i++)sectionSegs(i*L/20,bpArr,0.07);
+const bpArr=[];WLS.forEach(Z=>{for(let X=XMIN;X<XMAX;X+=0.6){const y1=HB(X,Z),y2=HB(X+0.6,Z);if(y1<0.02||y2<0.02)continue;bpArr.push(X-XC,Z,y1+0.06,X+0.6-XC,Z,y2+0.06,X-XC,Z,-y1-0.06,X+0.6-XC,Z,-y2-0.06);}});
+for(let i=0;i<=20;i++)sectionSegs(XMIN+i*(XMAX-XMIN)/20,bpArr,0.07);
 const bpLines=lineSeg(bpArr,bpMat);bpLines.visible=false;
 hullGroup.add(frames,seams,dwl,bpLines);
+/* 실제 look: a thin white contour around the heatmap so it reads on the red-brown hull (rebuilt with the heat, paintHull) */
+const heatEdgeMat=cm(new THREE.LineBasicMaterial({color:COLOR.draw.heatEdge,transparent:true,opacity:0.9}));
+const heatEdgeS=new THREE.LineSegments(new THREE.BufferGeometry(),heatEdgeMat),heatEdgeP=new THREE.LineSegments(new THREE.BufferGeometry(),heatEdgeMat);
+heatEdgeP.scale.z=-1;heatEdgeS.visible=heatEdgeP.visible=false;hullGroup.add(heatEdgeS,heatEdgeP);
 // measurement zone boundaries (hull.zoneOf limits) + names: LAYERS "구역 경계", off by default, lines and text only
-const zoneArr=[],ZX0=0.08*L,ZX1=0.9*L;
-[0.15,R+0.6,T-1.2,T+1.6].forEach(Z=>{for(let X=ZX0;X<ZX1;X+=0.5){const y1=HB(X,Z),y2=HB(X+0.5,Z);if(y1<0.02||y2<0.02)continue;
+const zoneArr=[],ZX0=STERN_FR*FS,ZX1=BOW_FR*FS;
+[0.15,R+0.6,DRAFT_LIGHT,WL_TOP].forEach(Z=>{for(let X=ZX0;X<ZX1;X+=0.5){const y1=HB(X,Z),y2=HB(X+0.5,Z);if(y1<0.02||y2<0.02)continue;
   zoneArr.push(X-XC,Z,y1+0.12,X+0.5-XC,Z,y2+0.12,X-XC,Z,-y1-0.12,X+0.5-XC,Z,-y2-0.12);}});
 [ZX0,ZX1].forEach(X=>sectionSegs(X,zoneArr,0.12));
 const zoneMat=cm(new THREE.LineDashedMaterial({color:0x1F2D4A,dashSize:1.6,gapSize:1.1}));
@@ -205,15 +222,15 @@ scene.add(superGroup);
 /* dock: floor, grid, walls, keel blocks */
 const dockGroup=new THREE.Group();
 const FLOOR=-1.8;
-const floor=new THREE.Mesh(new THREE.PlaneGeometry(380,120),new THREE.MeshBasicMaterial({color:0x060b15}));floor.rotation.x=-Math.PI/2;floor.position.y=FLOOR-0.02;dockGroup.add(floor);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(380*SX,120*SY),new THREE.MeshBasicMaterial({color:0x060b15}));floor.rotation.x=-Math.PI/2;floor.position.y=FLOOR-0.02;dockGroup.add(floor);
 const gMin=[],gMaj=[];
 for(let x=-300;x<=300;x+=5){const a=x%25===0?gMaj:gMin;a.push(x,FLOOR,-170,x,FLOOR,170);}
 for(let z=-170;z<=170;z+=5){const a=z%25===0?gMaj:gMin;a.push(-300,FLOOR,z,300,FLOOR,z);}
 scene.add(lineSeg(gMin,new THREE.LineBasicMaterial({color:0x0c1527})));
 scene.add(lineSeg(gMaj,new THREE.LineBasicMaterial({color:0x172540})));
-const dw=[];const DX0=-190,DX1=190,DZ=60,DH=18;
+const dw=[];const DX0=-190*SX,DX1=190*SX,DZ=60*SY,DH=18*SZ;
 [[FLOOR],[DH]].forEach(([y])=>{dw.push(DX0,y,-DZ,DX1,y,-DZ,DX0,y,DZ,DX1,y,DZ,DX0,y,-DZ,DX0,y,DZ);});
-for(let x=DX0;x<=DX1;x+=20){dw.push(x,FLOOR,-DZ,x,DH,-DZ,x,FLOOR,DZ,x,DH,DZ);}
+for(let x=DX0;x<=DX1+1e-6;x+=(DX1-DX0)/19){dw.push(x,FLOOR,-DZ,x,DH,-DZ,x,FLOOR,DZ,x,DH,DZ);}
 dockGroup.add(lineSeg(dw,new THREE.LineBasicMaterial({color:0x22355a,transparent:true,opacity:0.7})));
 const blkMat=new THREE.MeshStandardMaterial({color:0x2a303c,roughness:0.9});
 const capMat=new THREE.MeshStandardMaterial({color:0x5a3a22,roughness:0.9});
@@ -277,10 +294,11 @@ function ringPoints(X,off){const s=section(X);const pts=[];
   for(let j=1;j<G;j++)pts.push(new V3(X-XC,s.Zs[j],s.Ys[j]+off));
   return pts.filter((p,i,a)=>i===0||p.distanceTo(a[i-1])>1e-3);}
 const labelsEl=$('#labels');const frLabels=[];
-for(let n=0;n<=FRMAX;n+=50){const el=document.createElement('div');el.className='lbl3d';el.textContent='FR'+n;labelsEl.appendChild(el);const X=n*FS;const Z=deckZ(X);frLabels.push({el,p:new V3(X-XC,Z+2.2,HB(X,Z)+0.5)});}
+for(let n=Math.ceil(FRMIN/10)*10;n<=FRMAX;n+=10){const el=document.createElement('div');el.className='lbl3d';el.textContent='FR'+num(n);labelsEl.appendChild(el);const X=n*FS;const Z=deckZ(X);frLabels.push({el,p:new V3(X-XC,Z+2.2,HB(X,Z)+0.5)});}
 const selLabel=document.createElement('div');selLabel.className='lbl3d sel';labelsEl.appendChild(selLabel);let selLabelPos=new V3();
 // staggered along the ship so the stacked bands do not overlap in the side view
-const zoneLabels=[[0.3*L,0,B/4],[0.34*L,1.2],[0.42*L,(R+0.6+T-1.2)/2],[0.52*L,T+0.2],[0.6*L,(T+1.6+D)/2],[0.95*L,T],[0.04*L,T+4]].map(([X,Z,Y],i)=>{
+const zoneLabels=[[0.3*L,0,B/4],[0.34*L,(0.15+R+0.6)/2],[0.42*L,(R+0.6+DRAFT_LIGHT)/2],[0.52*L,(DRAFT_LIGHT+WL_TOP)/2],[0.6*L,(WL_TOP+D)/2],
+  [(BOW_FR*FS+L)/2,T],[(XMIN+STERN_FR*FS)/2+1,T+4*SZ]].map(([X,Z,Y],i)=>{
   const t=ZONES[i];   // same order as hull.ZONES
   const el=document.createElement('div');el.className='lbl3d zl';el.textContent=t;el.hidden=true;labelsEl.appendChild(el);
   return {el,p:new V3(X-XC,Z,Y!=null?Y:HB(X,Z)+0.4)};});
@@ -290,7 +308,7 @@ hooks.onSelect.push((fr,X)=>{
   const pts=ringPoints(X,0.12);const curve=new THREE.CatmullRomCurve3(pts,false,'centripetal');
   ringMesh=new THREE.Mesh(new THREE.TubeGeometry(curve,Math.max(60,pts.length*3),0.24,6,false),ringMat);hullGroup.add(ringMesh);
   clipPlane.constant=X-XC+0.02;
-  selLabel.textContent='FR'+fr;const Z=deckZ(X);selLabelPos.set(X-XC,Z+5.5,HB(X,Z));
+  selLabel.textContent='FR'+num(fr);const Z=deckZ(X);selLabelPos.set(X-XC,Z+5.5,HB(X,Z));
 });
 hooks.onHover.push((X,src)=>{
   if(X==null){hoverRing.visible=false;if(src!=='3d')hoverDot.visible=false;return;}
@@ -318,16 +336,26 @@ function updateHeat(){
   if(R.length===heatLen)return;
   const layer=ui.layer,rad=HEAT.radius,fresh=R.slice(heatLen);heatLen=R.length;
   fresh.forEach(r=>addToIndex(heatIx,{X:r.X,u:recordU(r),h:heatOf(r,layer),r}));
-  fresh.forEach(r=>{const u=Math.abs(recordU(r)),i0=Math.max(0,Math.floor((r.X-rad)/XMAX*NX)),i1=Math.min(NX,Math.ceil((r.X+rad)/XMAX*NX));
+  fresh.forEach(r=>{const u=Math.abs(recordU(r)),i0=Math.max(0,Math.floor((r.X-rad-XMIN)/(XMAX-XMIN)*NX)),i1=Math.min(NX,Math.ceil((r.X+rad-XMIN)/(XMAX-XMIN)*NX));
     for(let i=i0;i<=i1;i++)for(let j=0;j<G;j++){const k=i*G+j;if(Math.abs(girth[k]-u)<rad||girth[k]<rad)heatVertex(k,stX[i],girth[k]);}});
   paintHull();
 }
 function scheduleHeat(){if(heatT)return;heatT=setTimeout(()=>{heatT=null;updateHeat();},100);}
 // not-yet-measured shell while mapping or paused (the map "appears" behind the robot)
-const DIM={real:[0.3,0.33,0.39],bp:[0.02,0.035,0.07]};
+const DIM={real:[0.3,0.33,0.39],bp:[0.02,0.035,0.07],actual:[0.3,0.33,0.39]};
 let look='real';
+/* the heat contour at half of the colour ramp (heatAlpha), as line segments across the shell triangles, lifted off the shell */
+const EDGE_H=HEAT.alphaFrom+0.5*(HEAT.alphaTo-HEAT.alphaFrom),EDGE_OFF=0.07;
+function heatEdges(line,h){
+  const I=hullIndex,N=hullGeo.attributes.normal.array,out=[];
+  const at=(a,b)=>{const t=(EDGE_H-h[a])/(h[b]-h[a]);for(let q=0;q<3;q++)out.push(pos[a*3+q]+(pos[b*3+q]-pos[a*3+q])*t+(N[a*3+q]+(N[b*3+q]-N[a*3+q])*t)*EDGE_OFF);};
+  for(let t=0;t<I.length;t+=3){const v=[I[t],I[t+1],I[t+2]],up=v.map(k=>h[k]>=EDGE_H);
+    if(up[0]===up[1]&&up[1]===up[2])continue;
+    for(let e=0;e<3;e++){const a=v[e],b=v[(e+1)%3];if(up[e]!==up[(e+1)%3])at(a,b);}}
+  line.geometry.dispose();line.geometry=new THREE.BufferGeometry();line.geometry.setAttribute('position',new THREE.Float32BufferAttribute(out,3));
+}
 function paintHull(){
-  const base=look==='bp'?colBp:colReal,show=true,DIMC=DIM[look];
+  const base=look==='bp'?colBp:look==='actual'?colActual:colReal,show=true,DIMC=DIM[look];
   const dimOn=!!store&&(store.mapState==='mapping'||store.mapState==='paused');
   [[geoS,heatS,covS],[geoP,heatP,covP]].forEach(([g,h,cov])=>{const attr=g.attributes.color,c=attr.array;
     for(let k=0;k<nV;k++){const o=k*3;let r=base[o],gr=base[o+1],b=base[o+2];
@@ -336,6 +364,8 @@ function paintHull(){
       if(a>0){const hc=heatRGB(h[k]);r+=(hc[0]/255-r)*a;gr+=(hc[1]/255-gr)*a;b+=(hc[2]/255-b)*a;}
       c[o]=r;c[o+1]=gr;c[o+2]=b;}
     attr.needsUpdate=true;});
+  const edges=look==='actual';heatEdgeS.visible=heatEdgeP.visible=edges;
+  if(edges){heatEdges(heatEdgeS,heatS);heatEdges(heatEdgeP,heatP);}
 }
 /* ? legend: the current layer only — name · 최우선 보수 · 경고 · 주의 (the list's chips + criteria) · 정상 / 측정 불가 */
 const LEGEND={
@@ -404,7 +434,7 @@ function syncProgress(p){
   const ms=$('#mapState'),done=store.mapState==='done';
   ms.querySelector('.map-prog i').style.width=done?'0':progress(p);ms.title=done?'':`측정 진행률 ${progress(p)}`;
 }
-const poseText=p=>`${loc(p.fr,p.strake,p.side,p.zone)}·${coords(p.X,p.Y,p.Z)}`;
+const poseText=p=>ptLoc(p.X,p.side,p.Z);   // FR152+0.36 m·좌현·z 6.20 m
 let mapMode=null,robotSeen=false;
 function syncMap(){
   const st=store.mapState,active=st==='mapping'||st==='paused';
@@ -414,12 +444,12 @@ function syncMap(){
   $('#speedSeg').hidden=!active;   // replay speed only matters while a run is going or paused
   $('#stRobotWrap').classList.toggle('idle',st!=='mapping');
   const dk=store.dockKey;
-  if(st==='done')$('#stRobot').textContent=dk==='newbuild'?`${dockLabel(dockOf(dk))}·측정 데이터 없음`
-    :`${dk==='first'?`${dockLabel(dockOf(dk))} 기록·`:''}매핑 완료·측정점 ${num(store.records.length)}개·마지막 측정 ${store.lastTs?dateTime(store.lastTs):'—'}`;
+  if(st==='done')$('#stRobot').innerHTML=numHtml(dk==='newbuild'?`${dockLabel(dockOf(dk))}·측정 데이터 없음`
+    :`${dk==='first'?`${dockLabel(dockOf(dk))} 기록·`:''}매핑 완료·측정점 ${num(store.records.length)}개·마지막 측정 ${store.lastTs?dateTime(store.lastTs):'—'}`);
   // 단면 절단: only once mapping is over (a run started with it on turns it off)
   const cut=$('#cutTog');cut.disabled=active;cut.closest('label').title=active?'매핑이 끝난 뒤 사용할 수 있습니다':'';
   if(active&&cut.checked){cut.checked=false;cut.dispatchEvent(new Event('change'));}
-  if(st==='paused')$('#stRobot').textContent=store.pose?`매핑 중지·${poseText(store.pose)}`:'매핑 중지';
+  if(st==='paused')$('#stRobot').innerHTML=numHtml(store.pose?`매핑 중지·${poseText(store.pose)}`:'매핑 중지');
   if(!active||!store.pose){robotWrap.visible=false;robotSeen=false;}
   pathGroup.visible=active&&lyRobotOn;
   if(st!==mapMode){
@@ -434,7 +464,7 @@ function syncMap(){
 function onPose(p){
   follow.raw=followAngle(p);
   setRobotTarget(p,!robotSeen);robotSeen=true;robotWrap.visible=true;showPathAt(p.k);
-  $('#stRobot').textContent=`RBT-01 매핑 중·${poseText(p)}`;syncProgress(p.progress);
+  $('#stRobot').innerHTML=numHtml(`RBT-01 매핑 중·${poseText(p)}`);syncProgress(p.progress);
 }
 $('#mapBtn').addEventListener('click',()=>{if(!store)return;const st=store.mapState;
   if(st==='mapping')store.pause();else if(st==='paused')store.resume();else store.start();});   // done: 재매핑 = fresh run
@@ -449,9 +479,11 @@ window.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
   else if(!csPop.hidden){openCs(false);csBtn.focus();e.preventDefault();}
   else if(!valPop.hidden){openVal(false);valBtn.focus();e.preventDefault();}
 },true);
-/* 실선 | 도면 (VIEW row): 도면 = dark navy hull, orange design lines (waterlines, stations, frames); the heatmap stays */
+/* 실선 | 도면 | 실제 (VIEW row): 도면 = dark navy hull, orange design lines (waterlines, stations, frames);
+   실제 = painted like the ship (red-brown below the DWL, grey above), the heatmap with a thin white contour. The heatmap always stays */
 function setLook(l){
   look=l;const bp=l==='bp';
+  const sw=document.querySelector('#legendPop .sw-hull');if(sw)sw.classList.toggle('actual',l==='actual');
   document.querySelectorAll('[data-look]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.look===l)));
   hullMat.roughness=bp?0.95:0.7;
   deckMat.color.setHex(bp?0x0c1528:0xAAB2BD);trMat.color.setHex(bp?0x0c1528:0xC4CAD2);
@@ -616,8 +648,8 @@ function pick(e){
   let val='<div class="none">측정값 없음</div>';
   if(rec){const lv=judge(rec,ui.layer).level;
     const cx=isTop(rec,ui.layer);val=`<div class="tv"><b>${value(rec,ui.layer)}</b>${gradeChip(gradeOf(lv,cx),ui.layer)}</div>`;}
-  const zone=ZONES[zoneOf(X,Z)],[frTxt,...rest]=loc(fr,st,side,zone).split('·');   // FR bold, the rest of the same line lighter
-  tip.innerHTML=`<div class="t1">${frTxt}<em>·${rest.join('·')}</em></div><div class="t2">${LAYER_LABEL[ui.layer]}</div>${val}<div class="t3">${coords(X,Y,Z)}</div>`;
+  const [frTxt,...rest]=ptLoc(X,side,Z).split('·');   // FR152+0.36 m bold, the rest of the same line lighter
+  tip.innerHTML=`<div class="t1">${frTxt}<em>·${numHtml(rest.join('·'))}</em></div><div class="t2">${LAYER_LABEL[ui.layer]}</div>${val}<div class="t3">${coords(X,Y,Z)}</div>`;
   tip.hidden=false;const pw=r.width;tip.style.left=(e.clientX-r.left)+'px';tip.style.top=(e.clientY-r.top)+'px';
   tip.style.transform=(e.clientX-r.left)>pw-260?'translate(calc(-100% - 14px),14px)':'translate(14px,14px)';
   hoverDot.position.copy(p);hoverDot.visible=true;
@@ -636,13 +668,13 @@ function drawGizmo(){
   if(gz.width!==Math.round(r.width*d)){gz.width=Math.round(r.width*d);gz.height=Math.round(r.height*d);}
   const w=gz.width/d,c=w/2,len=w*0.32;gctx.setTransform(d,0,0,d,0,0);gctx.clearRect(0,0,w,w);
   const q=camera.quaternion.clone().invert();
-  const ax=[{v:new V3(1,0,0),c:'#F37321',l:'X'},{v:new V3(0,0,-1),c:'#F89B6C',l:'Y'},{v:new V3(0,1,0),c:'#FBB584',l:'Z'}]
+  const ax=[{v:new V3(1,0,0),c:COLOR.orange,l:'X'},{v:new V3(0,0,-1),c:COLOR.coral,l:'Y'},{v:new V3(0,1,0),c:COLOR.peach,l:'Z'}]
     .map(a=>{const p=a.v.clone().applyQuaternion(q);return {...a,x:p.x,y:p.y,z:p.z};}).sort((a,b)=>a.z-b.z);
-  gctx.beginPath();gctx.arc(c,c,2,0,Math.PI*2);gctx.fillStyle='#6F7C93';gctx.fill();
+  gctx.beginPath();gctx.arc(c,c,2,0,Math.PI*2);gctx.fillStyle=COLOR.muted;gctx.fill();
   ax.forEach(a=>{const ex=c+a.x*len,ey=c-a.y*len;gctx.globalAlpha=a.z<-0.2?0.45:1;
     gctx.strokeStyle=a.c;gctx.lineWidth=2;gctx.beginPath();gctx.moveTo(c,c);gctx.lineTo(ex,ey);gctx.stroke();
     gctx.fillStyle=a.c;gctx.beginPath();gctx.arc(c+a.x*(len+9),c-a.y*(len+9),8,0,Math.PI*2);gctx.fill();
-    gctx.fillStyle='#000';gctx.font='600 11px "Barlow Condensed",sans-serif';gctx.textAlign='center';gctx.textBaseline='middle';gctx.fillText(a.l,c+a.x*(len+9),c-a.y*(len+9)+0.5);});
+    gctx.fillStyle=COLOR.k100;gctx.font=font(600,TYPE.meta);gctx.textAlign='center';gctx.textBaseline='middle';gctx.fillText(a.l,c+a.x*(len+9),c-a.y*(len+9)+0.5);});
   gctx.globalAlpha=1;
 }
 
@@ -673,7 +705,9 @@ function loop(now){
   selPulse.visible=selMarker.visible&&now<pulseUntil;
   if(selPulse.visible){const ph=(now%700)/700;selPulse.scale.setScalar(1+ph*1.6);selPulse.material.opacity=0.9*(1-ph);}
   zoneLabels.forEach(l=>{if(!l.el.hidden)place(l.el,l.p);});
-  frLabels.forEach(l=>{if(!l.el.hidden)place(l.el,l.p);});place(selLabel,selLabelPos);
+  let lx=null,ly=null;   // frame numbers every 10 frames; one too close to the last shown is skipped
+  frLabels.forEach(l=>{if(l.el.hidden)return;place(l.el,l.p);if(l.el.style.display==='none')return;
+    const x=parseFloat(l.el.style.left),y=parseFloat(l.el.style.top);if(lx!==null&&Math.hypot(x-lx,y-ly)<38){l.el.style.display='none';return;}lx=x;ly=y;});place(selLabel,selLabelPos);
   renderer.render(scene,camera);drawGizmo();
   requestAnimationFrame(loop);
 }

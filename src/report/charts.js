@@ -2,20 +2,21 @@
    보고서 차트 (SVG, 인쇄용 흰 바탕): S.SHELL 외판 전개도, 히스토그램, 판정 비율 막대
    축·단위·기준선(주의·경고 경계)을 항상 표시한다 (SPEC 6.1).
    ========================================================= */
-import { T, R, FS, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, section, girthAtZ, recordU } from '../hull.js';
+import { T, R, FS, FRMIN, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, section, girthAtZ, recordU } from '../hull.js';
 import { OK, judge, isTop } from '../data/criteria.js';
 import { GRADE_ICON, GRADE_ICON_DATA } from '../gradeUi.js';
 import { heatOf, heatRGB } from '../heatmap.js';
-import { SAMPLE_EVERY } from '../data/scanPath.js';
+import { COLOR, FONT as TF } from '../styles/tokens.js';
+import { GRID } from '../data/baseline.js';
 
-export const LV_FILL=['#8A93A3','#F2B53A','#E23D4B'];   // 정상 · 주의 · 경고 (대시보드와 같은 판정색)
-const INK='#14181F',MUTED='#6B7385',GRIDC='#E1E5EB',FONT='IBM Plex Sans KR,sans-serif',MONO='IBM Plex Mono,monospace';
+export const LV_FILL=COLOR.rp.lvFill;   // 정상 · 주의 · 경고 (대시보드와 같은 판정색)
+const INK=COLOR.rp.text,MUTED=COLOR.rp.muted,GRIDC=COLOR.rp.line,FONT=TF.ui,MONO=TF.mono;   // styles/tokens.js
 const rgb=c=>`rgb(${c.map(Math.round).join(',')})`;
 
 let F=null,GMAX=0;
 function frames(){
   if(F)return;F=[];
-  for(let fr=0;fr<=FRMAX;fr++){const s=section(fr*FS);F.push({g:s.gs[G-1],wl:girthAtZ(s,T),b0:girthAtZ(s,0.15),b1:girthAtZ(s,R+0.6)});}
+  for(let fr=FRMIN;fr<=FRMAX;fr++){const s=section(fr*FS);F.push({fr,g:s.gs[G-1],wl:girthAtZ(s,T),b0:girthAtZ(s,0.15),b1:girthAtZ(s,R+0.6)});}
   GMAX=Math.max(...F.map(f=>f.g));
 }
 
@@ -24,29 +25,29 @@ function frames(){
    mode 'markers': defects only, with the dashboard's icons — 최우선 보수 = 사이렌, 도막 떨어짐 = 경고, 스크래치 = 주의 (PNG, gradeUi.js) */
 export function sideShellMap(records,layer,W,H,mode='value'){
   frames();
-  const m={l:22,r:30,t:8,b:22},px=fr=>m.l+fr/FRMAX*(W-m.l-m.r),py=u=>m.t+(u+GMAX)/(2*GMAX)*(H-m.t-m.b);
+  const m={l:22,r:30,t:8,b:22},px=fr=>m.l+(fr-FRMIN)/(FRMAX-FRMIN)*(W-m.l-m.r),py=u=>m.t+(u+GMAX)/(2*GMAX)*(H-m.t-m.b);
   const out=[];
-  const outline=`M${F.map((f,fr)=>`${px(fr).toFixed(1)},${py(-f.g).toFixed(1)}`).join('L')}L${F.map((f,fr)=>`${px(fr).toFixed(1)},${py(f.g).toFixed(1)}`).reverse().join('L')}Z`;
-  out.push(`<path d="${outline}" fill="#F4F6F9"/>`);
+  const outline=`M${F.map(f=>`${px(f.fr).toFixed(1)},${py(-f.g).toFixed(1)}`).join('L')}L${F.map(f=>`${px(f.fr).toFixed(1)},${py(f.g).toFixed(1)}`).reverse().join('L')}Z`;
+  out.push(`<path d="${outline}" fill="${COLOR.rp.shellFill}"/>`);
   out.push(`<clipPath id="ssClip${layer}${mode}"><path d="${outline}"/></clipPath><g clip-path="url(#ssClip${layer}${mode})">`);
   if(mode==='value'){
-    const cw=Math.max(1,px(SAMPLE_EVERY)-px(0)),ch=Math.max(1,py(STRAKE_W)-py(0));
+    const cw=Math.max(1,px(GRID/FS)-px(0)),ch=Math.max(1,py(GRID)-py(0));   // one 1.1 m grid cell per point
     for(const r of records){const u=recordU(r),j=judge(r,layer);
-      out.push(`<rect x="${(px(r.fr)-cw/2).toFixed(1)}" y="${(py(u)-ch/2).toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" fill="${j.level===OK?'#DCE1E8':rgb(heatRGB(heatOf(r,layer)))}"/>`);}
+      out.push(`<rect x="${(px(r.X/FS)-cw/2).toFixed(1)}" y="${(py(u)-ch/2).toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" fill="${j.level===OK?COLOR.rp.normalFill:rgb(heatRGB(heatOf(r,layer)))}"/>`);}
   }
-  for(let k=0;k*STRAKE_W+KEEL_HALF<GMAX;k++){const g=KEEL_HALF+STRAKE_W*k;out.push(`<path d="M${m.l} ${py(g)}H${W-m.r}M${m.l} ${py(-g)}H${W-m.r}" stroke="#FFFFFF" stroke-width="0.6"/>`);}
-  const curve=(key,sd)=>`M${F.map((f,fr)=>`${px(fr).toFixed(1)},${py(sd*Math.min(f[key],f.g)).toFixed(1)}`).join('L')}`;
-  [-1,1].forEach(sd=>{out.push(`<path d="${curve('wl',sd)}" fill="none" stroke="#2F5597" stroke-width="1"/>`,
+  for(let k=0;k*STRAKE_W+KEEL_HALF<GMAX;k++){const g=KEEL_HALF+STRAKE_W*k;out.push(`<path d="M${m.l} ${py(g)}H${W-m.r}M${m.l} ${py(-g)}H${W-m.r}" stroke="${COLOR.rp.bg}" stroke-width="0.6"/>`);}
+  const curve=(key,sd)=>`M${F.map(f=>`${px(f.fr).toFixed(1)},${py(sd*Math.min(f[key],f.g)).toFixed(1)}`).join('L')}`;
+  [-1,1].forEach(sd=>{out.push(`<path d="${curve('wl',sd)}" fill="none" stroke="${COLOR.rp.dwl}" stroke-width="1"/>`,
     `<path d="${curve('b1',sd)}" fill="none" stroke="${MUTED}" stroke-width="0.7" stroke-dasharray="3 2"/>`);});
   if(mode==='markers'){
     // each icon once as a data URI (this SVG becomes an image for the PDF and could not load a file), then <use> per point
     const s=8,id=g=>`mk${g}${layer}`;
     out.push(`<defs>${[1,2,3].map(g=>`<image id="${id(g)}" href="${GRADE_ICON_DATA[g]||GRADE_ICON[g]}" width="${s}" height="${s}"/>`).join('')}</defs>`);
     const dmg=records.filter(r=>r.defect).map(r=>({r,g:isTop(r,'defect')?3:judge(r,'defect').level})).sort((a,b)=>a.g-b.g);   // worst on top
-    for(const {r,g} of dmg)out.push(`<use href="#${id(g)}" x="${(px(r.fr)-s/2).toFixed(1)}" y="${(py(recordU(r))-s/2).toFixed(1)}"/>`);
+    for(const {r,g} of dmg)out.push(`<use href="#${id(g)}" x="${(px(r.X/FS)-s/2).toFixed(1)}" y="${(py(recordU(r))-s/2).toFixed(1)}"/>`);
   }
   out.push('</g>');
-  out.push(`<path d="${outline}" fill="none" stroke="#5B6474" stroke-width="1"/>`);
+  out.push(`<path d="${outline}" fill="none" stroke="${COLOR.rp.shellLine}" stroke-width="1"/>`);
   out.push(`<path d="M${m.l-3} ${py(0)}H${W-m.r+3}" stroke="${MUTED}" stroke-width="0.8" stroke-dasharray="8 2 2 2"/>`);
   const tx=(x,y,t,o='')=>`<text x="${x}" y="${y}" font-family="${FONT}" font-size="9" fill="${MUTED}" ${o}>${t}</text>`;
   for(let fr=0;fr<=FRMAX;fr+=50)out.push(`<path d="M${px(fr)} ${H-m.b}v3" stroke="${MUTED}"/>`,tx(px(fr),H-m.b+12,fr,'text-anchor="middle"'));

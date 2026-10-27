@@ -12,7 +12,7 @@
      "종류"(도막 떨어짐 / 스크래치, 판정색) · "AI 신뢰도"(레코드의 aiConfidence, %). 사진이 없으면 "사진 없음" (가짜 이미지는 만들지 않는다)
    ========================================================= */
 import { judge, isTop, gradeOf, CRIT } from './data/criteria.js';
-import { DEFECT_LABEL, recLoc, area, dropHtml } from './format.js';
+import { DEFECT_LABEL, recLoc, area, dropHtml, numHtml } from './format.js';
 import { thickness, sectionSvg, THEME } from './sectionSvg.js';
 import { emptyState, mappingState, PICK_HINT } from './emptyState.js';
 
@@ -34,7 +34,7 @@ function createLightbox(){
   const close=()=>{if(lb.hidden)return;lb.hidden=true;if(opener)opener.focus();};
   lb.addEventListener('click',e=>{if(e.target===lb||e.target.closest('.lb-close'))close();});
   window.addEventListener('keydown',e=>{if(e.key==='Escape'&&!lb.hidden){close();e.preventDefault();}},true);
-  return {open(src,alt,caption,from){const img=lb.querySelector('img');img.src=src;img.alt=alt;lb.querySelector('figcaption').textContent=caption;
+  return {open(src,alt,caption,from){const img=lb.querySelector('img');img.src=src;img.alt=alt;lb.querySelector('figcaption').innerHTML=numHtml(caption);
     opener=from;lb.hidden=false;lb.querySelector('.lb-close').focus();}};
 }
 

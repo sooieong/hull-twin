@@ -10,14 +10,15 @@
    이전 도킹 값이 없는 기록(1차 리도킹 보기, prev == null)은 1차 선·치수선·카드 없이 기준과 현재만 그린다.
    ========================================================= */
 import { THICK, thick, thickNum, dropNum } from './format.js';
+import { COLOR, FONT } from './styles/tokens.js';
 
 const EXAG=1.6;                     // 두께 차이 과장 배율 (그림 전용)
 
 export const THEME={
-  dark:{bg:'#0A1120',level:['#8FA3BF','#F2B53A','#FF5A5F'],label:'#C9D3E3',muted:'#6F7C93',dim:'#E8EDF6',hatch:'rgba(255,255,255,.12)',
-    material:{plate:'#3A4558',dft:'#4A3A1E'}},
-  light:{bg:'#FFFFFF',level:['#8A93A3','#C98A12','#E23D4B']   /* amber darkened to read on white */,label:'#3A4252',muted:'#6B7385',dim:'#14181F',hatch:'rgba(0,0,0,.14)',
-    material:{plate:'#C3C9D2',dft:'#EAD3A2'}}
+  dark:{bg:COLOR.surface,level:COLOR.lv.slice(0,3),label:COLOR.text2,muted:COLOR.muted,dim:COLOR.text,hatch:COLOR.draw.hatch,
+    material:COLOR.draw.material},
+  light:{bg:COLOR.rp.bg,level:COLOR.rp.lv   /* amber darkened to read on white */,label:COLOR.rp.text2,muted:COLOR.rp.muted,dim:COLOR.rp.text,hatch:COLOR.rp.hatch,
+    material:COLOR.rp.material}
 };
 
 /* 측정점 하나의 단면 모델. side: 오른쪽 카드 [제목, 숫자, 단위] — "○○ 대비"는 줄어든 양(부호 포함). 이전 도킹 값이 없으면 카드 하나 */
@@ -35,7 +36,7 @@ let uid=0;
 
 export function sectionSvg(m,level,W,H,theme=THEME.dark,maxK=2.2,opts={}){
   const k=Math.max(opts.minK||1,Math.min(maxK,W/380,H/230)),col=theme.level[level],pid=`secHatch${++uid}`;
-  const fsCur=13*k,fsDim=11*k,MONO='IBM Plex Mono,monospace';
+  const fsCur=13*k,fsDim=11*k,MONO=FONT.mono;   // sizes scale with the figure
   const rel=v=>Math.min(1.25,Math.max(0.2,1-EXAG*(m.ref-v)/m.ref));
   const lines=[{key:'ref',v:m.ref,label:m.refLabel},{key:'prev',v:m.prev,label:'1차'},{key:'cur',v:m.cur,label:'현재'}].filter(l=>l.v!=null);
   lines.forEach(l=>{const cur=l.key==='cur';l.fs=cur?fsCur:fsDim;

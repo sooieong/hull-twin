@@ -1,33 +1,48 @@
 /* =========================================================
-   HULL FORM  (example: 174K LNG Carrier, parametric)
-   Ship CS: X from AP (+fwd), Y half-breadth (+port), Z from baseline
+   HULL FORM  (Wally Schirra — dimensions in data/baseline.js)
+   Ship CS: X from AP (+fwd, −5 … 205 m), Y half-breadth (+port), Z from baseline. Frames: FR = X / FS (FR −6 … 256)
+   The exterior design is the original parametric form (long parallel midbody, bulbous bow, transom stern), unchanged,
+   scaled to the ship's dimensions: lengthwise to LOA, breadth to B, height to D (the design draught lands on T).
    Shared by the 3D viewer and the robot data simulator.
    ========================================================= */
+import { BEAM, DEPTH, DRAFT, DRAFT_LIGHT, WL_TOP, LBP, X_MIN, X_MAX, FRAME_SPACING, FR_MIN, FR_MAX,
+  STRAKE_W as SW, KEEL_HALF as KH, KEEL_BLOCK, BOW_FR, STERN_FR } from './data/baseline.js';
 export const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
 
-export const L=289, B=46.4, D=26.5, T=11.5, R=2.6, FS=0.85;
-export const XMAX=L+9.6, XC=XMAX/2, FRMAX=Math.floor(XMAX/FS);
-export const NX=300, NB=12, NS=48, G=NB+1+NS;
-export const KEEL_HALF=1.6, STRAKE_W=3.2, LETTERS="ABCDEFGHJLMNPQRSTUV";
-export const WLS=[2,4,6,8,14,18,22];
+/* the original form's own units (design kept as is) and the scale onto the ship */
+const O={L:289,B:46.4,D:26.5,R:2.6,LOA:298.6};
+export const SX=(X_MAX-X_MIN)/O.LOA, SY=BEAM/O.B, SZ=DEPTH/O.D;
+const toO=X=>(X-X_MIN)/SX;   // ship X (m) → the original form's X
 
-export function deckZ(X){const xn=X/L;return D+(xn>0.86?3.2*Math.pow(Math.min((xn-0.86)/0.16,1.1),2):0);}
-export function keelZ(X){const xn=X/L;if(xn<0.05){const t=(0.05-xn)/0.05;return 9.5*t*t;}return 0;}
-function rake(Z){return 7.0*Math.pow(clamp(Z/D,0,1.3),1.6);}
-function midHB(Z){if(Z>=R)return B/2;const dz=R-Z;return B/2-R+Math.sqrt(Math.max(0,R*R-dz*dz));}
+export const L=LBP, B=BEAM, D=DEPTH, T=DRAFT, R=O.R*SZ, FS=FRAME_SPACING;
+export const XMIN=X_MIN, XMAX=X_MAX, XC=(XMIN+XMAX)/2, FRMIN=FR_MIN, FRMAX=FR_MAX;
+export const NX=300, NB=12, NS=48, G=NB+1+NS;
+export const KEEL_HALF=KH, STRAKE_W=SW, LETTERS="ABCDEFGHJLMNPQRSTUV";
+export const WLS=[2,4,6,8,14,18,22].map(z=>+(z*SZ).toFixed(2));
+export const BOTTOM_FLAT=(O.B/2-O.R)*SY;   // half-breadth of the flat bottom (m)
+/* frame ↔ X (m): measurements keep X; frames are for display only */
+export const frX=fr=>fr*FS;
+export const frOf=X=>Math.round(X/FS);
+
+function deckZo(X){const xn=X/O.L;return O.D+(xn>0.86?3.2*Math.pow(Math.min((xn-0.86)/0.16,1.1),2):0);}
+function keelZo(X){const xn=X/O.L;if(xn<0.05){const t=(0.05-xn)/0.05;return 9.5*t*t;}return 0;}
+function rake(Z){return 7.0*Math.pow(clamp(Z/O.D,0,1.3),1.6);}
+function midHB(Z){if(Z>=O.R)return O.B/2;const dz=O.R-Z;return O.B/2-O.R+Math.sqrt(Math.max(0,O.R*O.R-dz*dz));}
 function hullHB(X,Z){
-  if(X<0||Z<keelZ(X)-1e-6||Z>deckZ(X)+1e-6)return 0;
-  const zn=clamp(Z/D,0,1);let w=1;
-  const xnf=(X-rake(Z))/L;
+  if(X<0||Z<keelZo(X)-1e-6||Z>deckZo(X)+1e-6)return 0;
+  const zn=clamp(Z/O.D,0,1);let w=1;
+  const xnf=(X-rake(Z))/O.L;
   if(xnf>=1)return 0;
   if(xnf>0.70){const t=(xnf-0.70)/0.30;w*=Math.max(0,1-Math.pow(t,1.6+2.4*zn));}
-  const xn=X/L;
+  const xn=X/O.L;
   if(xn<0.24){const t=(0.24-xn)/0.24;const p=0.6+2.6*zn;const tw=0.80*smooth(0.30,0.85,zn);w*=1-Math.pow(t,p)*(1-tw);}
   return midHB(Z)*w;
 }
-function bulbHB(X,Z){const u=((X-(L+2.5))/7)**2+((Z-6)/4.6)**2;return u>=1?0:3.4*Math.sqrt(1-u);}
-export function HB(X,Z){return Math.max(hullHB(X,Z),Z>=0?bulbHB(X,Z):0);}
+function bulbHB(X,Z){const u=((X-(O.L+2.5))/7)**2+((Z-6)/4.6)**2;return u>=1?0:3.4*Math.sqrt(1-u);}
+export function deckZ(X){return deckZo(toO(X))*SZ;}
+export function keelZ(X){return keelZo(toO(X))*SZ;}
+export function HB(X,Z){const x=toO(X),z=Z/SZ;return Math.max(hullHB(x,z),z>=0?bulbHB(x,z):0)*SY;}
 
 export function section(X){
   const zk=keelZ(X),zd=deckZ(X);
@@ -43,8 +58,10 @@ export function strakeName(g){if(g<KEEL_HALF)return 'K';const i=Math.floor((g-KE
 export function strakeLower(i){return i<0?0:KEEL_HALF+STRAKE_W*i;}   // i = -1 for K, 0 for A …
 /* zone names: stored in measurement records (spec 3.1) and shown as they are everywhere (format.js) */
 export const ZONES=['선저','빌지','선측','흘수선','건현','선수','선미'];
-export function zoneOf(X,Z){const xn=X/L;if(xn>=0.9)return 5;if(xn<0.08)return 6;if(Z<0.15)return 0;if(Z<R+0.6)return 1;if(Z<T-1.2)return 2;if(Z<T+1.6)return 3;return 4;}
-export function regionOf(X){const xn=X/L;if(xn<0.08)return '선미';if(xn<0.24)return '선미 곡면부';if(xn<0.70)return '평행 중앙부';if(xn<0.9)return '선수 곡면부';return '선수';}
+/* 선수 = FR 220 이후, 선미 = FR 10 이전. 나머지는 높이: 선저 · 빌지 · 선측(수선 아래) · 흘수선(수선부 5.6–9.4 m) · 건현 */
+export function zoneOf(X,Z){if(X>=BOW_FR*FS)return 5;if(X<STERN_FR*FS)return 6;if(Z<0.15)return 0;if(Z<R+0.6)return 1;if(Z<DRAFT_LIGHT)return 2;if(Z<WL_TOP)return 3;return 4;}
+/* frame card: where along the hull (the form's own run / parallel midbody / entrance limits) */
+export function regionOf(X){const xn=toO(X)/O.L;if(X<STERN_FR*FS)return '선미';if(xn<0.24)return '선미 곡면부';if(xn<0.70)return '평행 중앙부';if(X<BOW_FR*FS)return '선수 곡면부';return '선수';}
 export function strakeAt(X,Z){const s=section(X);let j=NB;for(let k=0;k<G-1;k++){if(s.Zs[k]<=Z&&s.Zs[k+1]>=Z&&k>=NB){j=k;break;}}return strakeName(s.gs[j]);}
 
 /* point on the shell at girth g (m from keel CL) of section s; null where the shell is degenerate */
@@ -74,10 +91,10 @@ export function girthAtZ(s,Z){
 }
 
 export const stX=new Float32Array(NX+1),stSec=[];
-for(let i=0;i<=NX;i++){stX[i]=XMAX*i/NX;stSec.push(section(stX[i]));}
+for(let i=0;i<=NX;i++){stX[i]=XMIN+(XMAX-XMIN)*i/NX;stSec.push(section(stX[i]));}
+export const stIndex=X=>clamp(Math.round((X-XMIN)/(XMAX-XMIN)*NX),0,NX);   // nearest mesh station
 
-/* keel / side blocks under the bottom: footprint centre (X, Y) and size (m). Contact areas cannot be measured. */
-export const BLOCK_SIZE={dx:1.4,dy:2.6};
+/* keel blocks under the bottom centreline: footprint centre (X, Y) and contact size (m). Contact areas cannot be measured. */
+export const BLOCK_SIZE={dx:KEEL_BLOCK.len,dy:KEEL_BLOCK.half*2};
 export const KEEL_BLOCKS=[];
-for(let X=16;X<=L-6;X+=6)KEEL_BLOCKS.push({X,Y:0});
-for(let X=50;X<=240;X+=19)[-1,1].forEach(sd=>KEEL_BLOCKS.push({X,Y:sd*14}));
+for(let X=KEEL_BLOCK.x0;X<=KEEL_BLOCK.x1+1e-6;X+=KEEL_BLOCK.spacing)KEEL_BLOCKS.push({X:Math.round(X*100)/100,Y:0});

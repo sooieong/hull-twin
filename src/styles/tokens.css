@@ -1,0 +1,20 @@
+/* =========================================================
+   디자인 토큰 — CSS 변수 이름 목록 (값은 여기에 쓰지 않는다)
+   값은 src/styles/tokens.js 한 곳에만 있고, 앱이 시작할 때 styles/applyTokens.js가 :root에 설정한다.
+   값을 바꿀 때는 tokens.js만 고친다. 이름을 새로 만들 때는 tokens.js의 CSS_VARS에 넣고 이 목록에도 적는다
+   (개발 중에는 CSS가 쓰는데 tokens.js에 없는 이름을 콘솔이 알려 준다).
+
+   brand          --ho-orange --ho-coral --ho-peach --k100
+   surfaces       --bg --surface --surface-2 --surface-3 --glass --pop-bg --tip-bg --line --line-strong --hatch-bg --hatch-line
+   text           --text (제목·숫자·FR) · --text-2 (판정 이름·항목 제목·위치·설명·버튼) · --muted (건수·순위·축 라벨·태그)
+   judgement      --lv-ok --lv-warn --lv-crit --lv-top
+   3D hull        --zone-label --zone-label-bg --hull --hull-below --hull-above
+   translucent    --orange-a10 --orange-a18 --orange-a35 --orange-a60 --orange-a0 --peach-a35
+                  --warn-bg --warn-line --crit-bg --crit-line --shadow --backdrop
+   fonts          --font-ui (IBM Plex Sans KR) · --font-mono (IBM Plex Mono)
+   type scale     --fs-title · --fs-sub · --fs-body · --fs-meta · --fs-num-s · --fs-num-l · --fs-num-xl · --fs-tick
+                  --unit (× the number's size) · --unit-min (smallest unit) · --ls-label (English labels)
+   report         --rp-bg --rp-text --rp-text-2 --rp-muted --rp-line --rp-line-2 --rp-line-3 --rp-line-strong
+                  --rp-fill --rp-fill-2 --rp-fill-3 --rp-photo --rp-photo-text --rp-tag-line
+                  --rp-warn-line --rp-warn-text --rp-warn-bg --rp-crit-text --rp-crit-bg --rp-preview-bg --rp-page-shadow
+   ========================================================= */

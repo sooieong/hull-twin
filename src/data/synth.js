@@ -6,7 +6,7 @@
    - 일부 군집은 도막과 강판 이상이 겹친다 (복합)
    같은 seed면 항상 같은 값이 나온다.
    ========================================================= */
-import { L, T, section, girthAtZ } from '../hull.js';
+import { L, T, BOTTOM_FLAT, section, girthAtZ } from '../hull.js';
 import { CRITERIA } from './criteria.js';
 
 /* 구역별 설계 도막 두께(µm), 원두께(mm): 선저, 빌지, 선측, 흘수선, 건현, 선수, 선미 */
@@ -19,7 +19,7 @@ export function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math
 function makeClusters(seed){
   const rnd=mulberry32(seed),rr=(a,b)=>a+(b-a)*rnd(),side=()=>rnd()<0.5?-1:1;
   const wlGirth=X=>girthAtZ(section(X),T);
-  const bilgeG=20.6+2;                     // 선저 평판 끝 + 빌지 중간쯤
+  const bilgeG=BOTTOM_FLAT+2;              // 선저 평판 끝 + 빌지 중간쯤
   const coat=[],plate=[];
   for(let n=0;n<10;n++){const X=rr(0.06*L,0.97*L);coat.push({X,u:side()*(wlGirth(X)+rr(-1.6,1.6)),r:rr(3,8),k:rr(0.55,1)});}  // 흘수선
   for(let n=0;n<8;n++){const X=rr(0.9*L,1.0*L);coat.push({X,u:side()*rr(3,30),r:rr(3,8),k:rr(0.6,1)});}                       // 선수부

@@ -4,21 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Dr.Dock 선체 진단</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M2 19h28l-4.5 7.5H7.5z' fill='%23F37321'/%3E%3Cpath d='M7 19v-8h6v8M15.5 19v-4.5h11V19' fill='none' stroke='%23FBB584' stroke-width='1.6'/%3E%3Cpath d='M9.5 11V6.5' stroke='%23F89B6C' stroke-width='1.6'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/src/assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
 </head>
 <body>
 <div class="app">
   <header class="topbar">
-    <div class="brand">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M2 19h28l-4.5 7.5H7.5z" fill="#F37321"/><path d="M7 19v-8h6v8M15.5 19v-4.5h11V19" fill="none" stroke="#FBB584" stroke-width="1.6"/><path d="M9.5 11V6.5" stroke="#F89B6C" stroke-width="1.6"/></svg>
-      <div class="brand-name">Dr.Dock</div>
-    </div>
+    <div class="brand"><img class="brand-logo" src="/src/assets/logo.png" alt="Dr.DOCK"></div>
     <div class="top-right">
       <!-- ship + docking: one bundle, a thin divider between -->
-      <div class="field ship-dock"><span class="ship" aria-label="선박"><span class="mono">H-2491</span><b>174K LNG Carrier</b></span><i class="vsep" aria-hidden="true"></i>
+      <div class="field ship-dock"><span class="ship" aria-label="선박"><b>Wally Schirra</b></span><i class="vsep" aria-hidden="true"></i>
         <label class="sr-only" for="dockSel">도킹</label>
         <select id="dockSel">
           <option value="current">2026.10 2차 리도킹·2번 도크 (현재)</option>
@@ -68,6 +65,7 @@
             <span class="sep" aria-hidden="true"></span>
             <button data-look="real" aria-pressed="true">실선</button>
             <button data-look="bp" aria-pressed="false">도면</button>
+            <button data-look="actual" aria-pressed="false">실제</button>
           </div>
           <div class="seg" role="group" aria-label="재생 속도 (시연용)" id="speedSeg" hidden>
             <span class="lbl">Speed</span>

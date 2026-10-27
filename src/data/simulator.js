@@ -3,6 +3,7 @@
    ========================================================= */
 import { RobotSource } from './robotSource.js';
 import { createSynth } from './synth.js';
+import { photoFor } from './photos.js';
 import { FS, ZONES, zoneOf, strakeName } from '../hull.js';
 
 export const BASE_SPEED=3.6;      // ×1 재생 속도의 로봇 주행 속도 (m/s, 시연용)
@@ -10,15 +11,14 @@ const TICK_MS=50;
 const DONE_AGO_MS=60*60*1000;     // connect 때 보내는 직전 완료 결과의 종료 시각 (1시간 전)
 
 export class SimulatorSource extends RobotSource{
-  /* photos = {flaking:[url…], scratch:[url…]} : 손상 레코드에 종류별로 순서대로 연결 */
-  constructor({photos={flaking:[],scratch:[]},seed=2491}={}){
+  /* photos = loadDefectPhotos() {below|above:{flaking|scratch:[url…]}}: 손상 레코드마다 흘수선 위·아래와 종류에 맞는 사진을 id로 고른다 */
+  constructor({photos=null,seed=2491}={}){
     super();
-    const values=createSynth(seed),cnt={flaking:0,scratch:0},cnt1={flaking:0,scratch:0};
-    const photoOf=(type,c)=>{if(!type)return null;const list=photos[type]||[];const ph=list.length?list[(c[type]+(c===cnt1?list.length>>1:0))%list.length]:null;c[type]++;return ph;};
+    const values=createSynth(seed);
     this.base=this.plan.samples.filter(sm=>!sm.blocked).map(sm=>{
-      const {first,...v}=values(sm),photo=photoOf(v.defect,cnt);
+      const {first,...v}=values(sm),photo=photoFor(photos,v.defect,sm.id,sm.Z);
       return {id:sm.id,X:sm.X,Y:sm.Y,Z:sm.Z,fr:sm.fr,strake:sm.strake,side:sm.side,zone:sm.zone,...v,photo,_at:sm.at,
-        _first:{...first,photo:photoOf(first.asFound.defect,cnt1)}};   // 1차 리도킹 값 (firstDockRecords), 2차 레코드에는 넣지 않는다
+        _first:{...first,photo:photoFor(photos,first.asFound.defect,sm.id,sm.Z,1)}};   // 1차 리도킹 값 (firstDockRecords), 2차 레코드에는 넣지 않는다
     });
     this.speed=1;this.timer=null;this.paused=false;this.s=0;this.next=0;this.k=0;this.last=0;
   }

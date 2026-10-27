@@ -4,7 +4,9 @@
      칸마다 윗줄 판정 아이콘(24px)과 회색 이름을 한 묶음으로 칸 가운데, 아랫줄 숫자 + "건"도 칸 가운데.
      묶음은 칸보다 넓어지지 않는다 (긴 이름은 줄바꿈). 숫자는 세 칸 모두 흰색 굵게.
    목록 패널 헤더: 제목 옆 "총 N건"(현재 레이어).
-   목록: 판정별 그룹(최우선 보수 → 경고 → 주의). 그룹 제목 줄 = 아이콘·이름·건수, 건수 옆 작은 ! 버튼 — 올리거나 누르면
+   목록: 판정별 그룹(최우선 보수 → 경고 → 주의). 그룹마다 위에서 GROUP_SHOW(3)개만 보이고, 넘으면 마지막 항목 아래
+     "더 보기 (+N건) ⌄" 줄로 나머지를 펼친다 (펼치면 "접기 ⌃"). 선택한 구역이 접힌 부분에 있으면 그 그룹을 펼친다
+     (목록·3D·외판 전개도 어디서 골라도). 그룹 제목 줄 = 아이콘·이름·건수, 건수 옆 작은 ! 버튼 — 올리거나 누르면
      그 그룹의 권장 조치(가장 많은 조치)를 팝오버로 ("권장 조치: …").
      항목은 한 줄(약 32px): 순위(작은 회색) · 위치(프레임 번호만 흰색 굵게, 나머지 회색) · 수치(오른쪽 정렬, 판정색, 고정폭 숫자).
      그룹 조치와 다른 항목만 수치 앞에 회색 태그로 조치를 붙인다. 수치의 뜻은 패널 헤더 건수 옆 ? 팝오버 (VALUE_NOTE).
@@ -17,6 +19,9 @@ import { refDropPctNum, dropHtml, areaNum, zoneLoc, num } from './format.js';
 import { zonesOf } from './data/zones.js';
 import { gradeIcon } from './gradeUi.js';
 import { emptyState, mappingState } from './emptyState.js';
+import { CHEV } from './panels.js';
+
+const GROUP_SHOW=3;   // items shown per group before "더 보기"
 
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -40,6 +45,7 @@ export function createKpiPanel(tilesRoot,listRoot,countEl,store,ui){
   listRoot.innerHTML='<ol class="kpi-list" aria-label="보수 목록"></ol>';
   const $k=k=>tilesRoot.querySelector(`[data-k="${k}"]`),list=listRoot.querySelector('.kpi-list');
   let zones=[],timer=null,lastHtml='';
+  const open=new Set();   // unfolded groups, per layer: 'dft:3' …
 
   function render(){
     const layer=ui.layer;
@@ -49,7 +55,7 @@ export function createKpiPanel(tilesRoot,listRoot,countEl,store,ui){
     $k('top').textContent=zones.filter(z=>z.top).length;
     $k('crit').textContent=grades.filter(g=>g===CRIT).length;
     $k('warn').textContent=grades.filter(g=>g===WARN).length;
-    countEl.textContent=`총 ${num(zones.length)}건`;
+    countEl.innerHTML=`총 <span class="n">${num(zones.length)}</span>건`;
     // nothing to list: the shared notice (mapping / paused), or after a finished run with nothing abnormal
     const empty=zones.length?null:mappingState(store,'보수 대상')||emptyState('탐지된 이상이 없습니다');
     list.classList.toggle('is-empty',!!empty);
@@ -60,19 +66,21 @@ export function createKpiPanel(tilesRoot,listRoot,countEl,store,ui){
       let i=0;
       for(const g of [TOP,CRIT,WARN]){
         const items=zones.filter(z=>gradeOf(z.level,z.top)===g);if(!items.length)continue;
-        const act=groupAction(items),name=gradeName(g,layer);
-        html+=`<li class="zg-head g${g}"><span class="zgi">${gradeIcon(g)}</span><b>${name}</b><span class="zg-n">${num(items.length)}건</span>`
+        const act=groupAction(items),name=gradeName(g,layer),key=`${layer}:${g}`,unfolded=open.has(key);
+        html+=`<li class="zg-head g${g}"><span class="zgi">${gradeIcon(g)}</span><b>${name}</b><span class="zg-n"><span class="n">${num(items.length)}</span>건</span>`
           +`<button class="help-btn sm act-btn" data-g="${g}" data-act="${esc(act)}" aria-expanded="false" aria-controls="actPop" aria-label="${name} 권장 조치">!</button></li>`;
-        for(const z of items){
+        items.forEach((z,n)=>{
           const v=valueParts(z.worst,layer),[fr,...rest]=zoneLoc(z).split('·'),where=esc(zoneLoc(z)),own=z.action!==act;
-          html+=`<li class="z lvl${Math.min(g,CRIT)}" data-id="${z.worst.id}" tabindex="0" role="button" aria-label="${++i}순위 ${where} ${name} ${esc(z.action)} ${v.v}${v.u}">
+          html+=`<li class="z lvl${Math.min(g,CRIT)}" data-id="${z.worst.id}" data-key="${key}"${n>=GROUP_SHOW&&!unfolded?' hidden':''} tabindex="0" role="button" aria-label="${++i}순위 ${where} ${name} ${esc(z.action)} ${v.v}${v.u}">
             <span class="rk">${i}</span><span class="zl" title="${where}"><b>${esc(fr)}</b>·${esc(rest.join('·'))}</span>
             ${own?`<span class="ztag">${esc(z.action)}</span>`:''}<span class="dv">${dropHtml(v.v,v.u)}</span></li>`;
-        }
+        });
+        if(items.length>GROUP_SHOW)html+=`<li class="zg-more${unfolded?'':' down'}" data-key="${key}" role="button" tabindex="0" aria-expanded="${unfolded}">`
+          +`<span>${unfolded?'접기':`더 보기 (<span class="n">+${num(items.length-GROUP_SHOW)}</span>건)`}</span>${CHEV}</li>`;   // one text item in the flex row
       }
     }
     if(html!==lastHtml){list.innerHTML=html;lastHtml=html;if(actFor!==null)openAct(actBtn(actFor),actPinned);}   // unchanged while mapping finds nothing new: keep the DOM (hover, clicks)
-    syncSel(false);
+    syncSel(false,false);
   }
   function schedule(){if(timer)return;timer=setTimeout(()=>{timer=null;render();},250);}
   /* default selection: rank 1 (or nothing) — {auto} so no panel scrolls the page or moves the camera */
@@ -83,13 +91,22 @@ export function createKpiPanel(tilesRoot,listRoot,countEl,store,ui){
     if(s==='mapping'&&p!=='mapping'&&p!=='paused')ui.select(null,{auto:true});   // fresh run (resume comes from 'paused')
     else if(s==='done'&&p!=='done')selectTop();
   }
-  function syncSel(scroll){
-    list.querySelectorAll('.z').forEach((el,i)=>{const on=!!zones[i]&&zones[i].ids.has(ui.selId);el.classList.toggle('sel',on);
-      if(on&&scroll)el.scrollIntoView({block:'nearest'});});
+  /* reveal: a new selection inside a folded part unfolds its group (a re-render alone keeps the user's folding) */
+  function syncSel(scroll,reveal=true){
+    let target=null;
+    list.querySelectorAll('.z').forEach((el,i)=>{const on=!!zones[i]&&zones[i].ids.has(ui.selId);el.classList.toggle('sel',on);if(on)target=el;});
+    if(target&&target.hidden&&reveal){open.add(target.dataset.key);render();target=list.querySelector('.z.sel');}
+    if(target&&scroll&&!target.hidden)target.scrollIntoView({block:'nearest'});
+  }
+  function toggleGroup(key,focus){
+    if(open.has(key))open.delete(key);else open.add(key);
+    render();if(focus){const b=list.querySelector(`.zg-more[data-key="${key}"]`);if(b)b.focus();}
   }
   const pick=el=>{const li=el.closest('.z');if(li)ui.select(+li.dataset.id,{fly:true});};
   list.addEventListener('pointerdown',e=>{if(e.button===0)pick(e.target);});
-  list.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!e.target.closest('.act-btn')){e.preventDefault();pick(e.target);}});
+  list.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!e.target.closest('.act-btn')){e.preventDefault();
+    const more=e.target.closest('.zg-more');if(more)toggleGroup(more.dataset.key,true);else pick(e.target);}});
+  list.addEventListener('click',e=>{const more=e.target.closest('.zg-more');if(more)toggleGroup(more.dataset.key,false);});
 
   /* group action popover: the ! next to a group's count — shown while hovered, or pinned open by a click
      (another click, an outside press, Esc or scrolling the list closes it). Follows its group across re-renders. */
@@ -123,7 +140,7 @@ export function createKpiPanel(tilesRoot,listRoot,countEl,store,ui){
   // mapping start/stop: redraw at once; the stream of new measurements while mapping: throttled
   store.subscribe(k=>{if(k.has('state')){clearTimeout(timer);timer=null;render();onState();}else if(k.has('records'))schedule();});
   ui.subscribe((k,o)=>{
-    if(k==='layer'){render();list.scrollTop=0;if(store.mapState==='done')selectTop();else syncSel(false);}
+    if(k==='layer'){render();list.scrollTop=0;if(store.mapState==='done')selectTop();else syncSel(false,false);}
     if(k==='select')syncSel(!(o&&o.auto));});
   render();
   if(store.mapState==='done')selectTop();

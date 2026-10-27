@@ -1,21 +1,21 @@
 /* =========================================================
    진단 보고서 데이터 (SPEC 6): 화면에서 고른 레이어와 상관없이 전체 측정 데이터로 계산한다.
    ========================================================= */
-import { FS, STRAKE_W, KEEL_HALF, LETTERS, XMAX, NX, G, stSec, section, strakeLower, ZONES } from '../hull.js';
+import { XMIN, XMAX, NX, G, stSec, ZONES } from '../hull.js';
 import { LAYERS, OK, WARN, CRIT, CRITERIA, ACTION, judge, dftRatio, plateLoss, isCompound, isTop, scoreOf } from '../data/criteria.js';
 import { DEFECT_LABEL, recLoc, designRatio, lossRatio, area, pct as pctText } from '../format.js';
 import { groupZones } from '../data/zones.js';
-import { SAMPLE_EVERY } from '../data/scanPath.js';
+import { SHIP as BASE, GRID } from '../data/baseline.js';
 import { DOCKING_CYCLE_YEARS, dockOf, prevDockOf, dockLabel } from '../data/docking.js';
 
 /* 예시 상수: 보고서 계산에만 쓰며 나중에 바꿀 수 있다 */
 export const REPORT_CONST={
-  pointLen:SAMPLE_EVERY*FS,             // 측정점 하나가 대표하는 길이 (m): 측정 간격
+  cellArea:GRID*GRID,                   // 측정점 하나가 대표하는 외판 면적 (m²): 측정 격자 1.1 m × 1.1 m
   solids:0.6,                           // 도료 고형분 비율 (도료 물량 = 면적 × 설계 두께 ÷ 고형분)
   yearsSincePrev:DOCKING_CYCLE_YEARS,   // 이전 도킹 → 이 도킹 (1차 리도킹 → 2차 리도킹, 신조 인도 → 1차 리도킹)
   yearsToNext:DOCKING_CYCLE_YEARS       // 다음 도킹(2031.10)까지
 };
-export const SHIP={name:'174K LNG Carrier',hull:'H-2491',robot:'RBT-01'};
+export const SHIP={name:BASE.name,hull:BASE.hull,robot:'RBT-01'};   // name: 머리말·표지 · hull: 파일명
 /* the docking the report is about = the one picked in the header (store.dockKey): 현재(2차 리도킹) or the 1차 리도킹 record.
    prev = the docking before it — loss rates run from its value (a record without …Prev: 신조 인도 = the original thickness) */
 export function dockContext(key){
@@ -26,18 +26,12 @@ export const prevPlate=r=>r.platePrev??r.plateOrig;
 
 const pct=(n,d)=>d?n/d*100:0;
 
-/* 측정점 하나가 대표하는 외판 면적 (m²) = 측정 간격 × 그 자리 외판열 폭 (K는 반폭, 맨 위 외판열은 갑판까지만) */
-const girthCache=new Map();
-const girthAt=fr=>{let g=girthCache.get(fr);if(g===undefined){g=section(fr*FS).gs[G-1];girthCache.set(fr,g);}return g;};
-export function areaOf(p){
-  if(p.strake==='K')return REPORT_CONST.pointLen*KEEL_HALF;
-  const lower=strakeLower(LETTERS.indexOf(p.strake));
-  return REPORT_CONST.pointLen*Math.max(0,Math.min(STRAKE_W,girthAt(p.fr)-lower));
-}
+/* 측정점 하나가 대표하는 외판 면적 (m²): 측정 격자 한 칸 (측정점은 1.1 m 간격 격자) */
+export function areaOf(){return REPORT_CONST.cellArea;}
 const sumArea=rs=>rs.reduce((a,r)=>a+areaOf(r),0);
 
 /* 전체 외판 면적 (양현): 단면 둘레 × 길이 */
-function shellArea(){let a=0;const dx=XMAX/NX;for(let i=0;i<NX;i++)a+=(stSec[i].gs[G-1]+stSec[i+1].gs[G-1])/2*dx;return a*2;}
+function shellArea(){let a=0;const dx=(XMAX-XMIN)/NX;for(let i=0;i<NX;i++)a+=(stSec[i].gs[G-1]+stSec[i+1].gs[G-1])/2*dx;return a*2;}
 
 export function buildReportData(store,now=new Date()){
   const R=store.records,C=REPORT_CONST,plan=store.plan,ship=dockContext(store.dockKey);

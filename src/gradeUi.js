@@ -7,12 +7,13 @@
    한화 오렌지는 판정에 쓰지 않는다 (버튼·선택 테두리·진행 막대 전용).
    ========================================================= */
 import { gradeName } from './data/criteria.js';
+import { COLOR } from './styles/tokens.js';
 import priorityPng from './assets/icons/priority.png';
 import warningPng from './assets/icons/warning.png';
 import cautionPng from './assets/icons/caution.png';
 
 /* 정상 · 주의 · 경고 · 최우선 보수 — numbers and lines on the dark UI */
-export const GRADE_COLOR=['#8FA3BF','#F2B53A','#FF5A5F','#E23D4B'];
+export const GRADE_COLOR=COLOR.lv;   // styles/tokens.js
 export const GRADE_ICON=[null,cautionPng,warningPng,priorityPng];
 /* the same PNGs as data URIs, for SVG that is drawn as an image (report maps → PDF), which cannot load files by URL.
    Filled by loadIconData() before the report is built. */
