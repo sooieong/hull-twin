@@ -3,8 +3,8 @@ import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { clamp, smooth, L, B, D, T, R, FS, XMIN, XMAX, XC, FRMIN, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS, SX, SY, SZ,
-  deckZ, keelZ, HB, section, atGirth, strakeLower, recordU, strakeName, ZONES, zoneOf, regionOf, stX, stSec, stIndex, KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
-import { DRAFT_LIGHT, WL_TOP, MANUAL, BOW_FR, STERN_FR } from './data/baseline.js';
+  deckZ, keelZ, HB, section, atGirth, strakeLower, recordU, strakeName, ZONES, zoneOf, regionOf, stX, stSec, stIndex, KEEL_BLOCKS, BLOCK_SIZE , unmeasurable } from './hull.js';
+import { DRAFT_LIGHT, WL_TOP, BOW_FR, STERN_FR } from './data/baseline.js';
 import { CRITERIA, TOP_RULE, TOP, CRIT, WARN, topGroup, judge, isTop, gradeOf } from './data/criteria.js';
 import { gradeChip } from './gradeUi.js';
 import { LAYER_LABEL, DEFECT_LABEL, ACTION, value, ptLoc, coords, metres, num, numHtml, progress, dateTime } from './format.js';
@@ -16,7 +16,8 @@ import { createKpiPanel, VALUE_NOTE } from './kpi.js';
 import { createSideShell } from './sideShell.js';
 import { createDetailPanel } from './detail.js';
 import { setupPanels } from './panels.js';
-import { nV, pos, girth, index as hullIndex, SUPER_BOXES } from './hullMesh.js';
+import { nV, pos, girth, index as hullIndex, normal as hullNormal, bowCap, SUPER_BOXES } from './hullMesh.js';
+import { sternGearGeometry, worldUV } from './sternGear.js';
 import { SimulatorSource } from './data/simulator.js';
 import { createStore, createRecordStore, createDockStore } from './data/store.js';
 import { dockOf, dockLabel } from './data/docking.js';
@@ -125,7 +126,8 @@ for(let k=0;k<nV;k++){cHull.toArray(colReal,k*3);cBp.toArray(colBp,k*3);}
   for(let k=0;k<nV;k++)(pos[k*3+1]<T?below:above).toArray(colActual,k*3);}
 const hullGeo=new THREE.BufferGeometry();
 hullGeo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-hullGeo.setIndex(hullIndex);hullGeo.computeVertexNormals();hullGeo.computeBoundingSphere();
+hullGeo.setAttribute('normal',new THREE.BufferAttribute(hullNormal,3));   // hullMesh: one normal on the centreline seam for both sides
+hullGeo.setIndex(hullIndex);hullGeo.computeBoundingSphere();
 // each side shares position/normal/index but has its own colours (the heatmap differs port vs starboard)
 function sideGeo(){const g=new THREE.BufferGeometry();g.setAttribute('position',hullGeo.attributes.position);g.setAttribute('normal',hullGeo.attributes.normal);
   g.setIndex(hullGeo.index);g.setAttribute('color',new THREE.BufferAttribute(colReal.slice(),3));g.boundingSphere=hullGeo.boundingSphere;return g;}
@@ -145,22 +147,55 @@ function shellNormal(X,Y,Z,out=new V3()){
   return out.set(n.getX(k),n.getY(k),n.getZ(k)*(Y<0?1:-1)).normalize();
 }
 
-/* keel / side block contact areas cannot be measured (SPEC 4.2): hatched on the bottom shell */
-{const cv=document.createElement('canvas');cv.width=cv.height=16;const c=cv.getContext('2d');
-  c.fillStyle=COLOR.hatchBg;c.fillRect(0,0,16,16);c.strokeStyle=COLOR.hatchLine;c.lineWidth=2;
-  c.beginPath();c.moveTo(-4,4);c.lineTo(4,-4);c.moveTo(0,16);c.lineTo(16,0);c.moveTo(12,20);c.lineTo(20,12);c.stroke();
+/* areas that cannot be measured — keel block contact (측정 불가), propeller·rudder·skeg and bulb tip (수동 측정, baseline.MANUAL):
+   a hatch laid over the shell surface — dark and light stripes on a transparent tile, so the hull shows through on every look */
+const hatchMat=(()=>{const cv=document.createElement('canvas');cv.width=cv.height=16;const c=cv.getContext('2d');
+  const stripes=(off,width,col)=>{c.strokeStyle=col;c.lineWidth=width;c.beginPath();
+    for(const k of [-16,0,16,32]){const q=k+off;c.moveTo(q+4,-4);c.lineTo(q-20,20);}c.stroke();};   // lines x + y = k: seamless when tiled
+  stripes(0,2,COLOR.hatchDark);stripes(3,1,COLOR.hatchLight);
   const tex=new THREE.CanvasTexture(cv);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
-  const mat=cm(new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
+  return cm(new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
+})();
+const hatchMesh=g=>{const m=new THREE.Mesh(g,hatchMat);m.renderOrder=2;return m;};
+{const mat=hatchMat;
   KEEL_BLOCKS.forEach(b=>{const w=BLOCK_SIZE.dx+2*ROBOT_MARGIN,h=BLOCK_SIZE.dy+2*ROBOT_MARGIN,g=new THREE.PlaneGeometry(w,h),uv=g.attributes.uv;
     for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*w/1.2,uv.getY(i)*h/1.2);
-    const m=new THREE.Mesh(g,mat);m.rotation.x=Math.PI/2;m.position.set(b.X-XC,keelZ(b.X)-0.04,-b.Y);hullGroup.add(m);});
-  // 수동 측정 areas (baseline.MANUAL): the shell triangles inside them get the same hatch, on both sides
-  const inManual=(X,Z)=>MANUAL.some(m=>X>=m.x0-1e-6&&X<=m.x1+1e-6&&Z<=m.z1);
+    const m=new THREE.Mesh(g,mat);m.rotation.x=Math.PI/2;m.position.set(b.X-XC,keelZ(b.X),-b.Y);m.renderOrder=2;hullGroup.add(m);});   // on the bottom, the block's footprint
+  // 수동 측정 areas (hull.unmeasurable: stern gear zone, the bulb's nose): the shell triangles inside them get the same hatch, on both sides
+  const inManual=(X,Z)=>!!unmeasurable(X,Z);
   const mp=[],muv=[];const P=hullGeo.attributes.position,I=hullGeo.index.array;
   for(let t=0;t<I.length;t+=3){const v=[I[t],I[t+1],I[t+2]];if(!v.every(k=>inManual(P.getX(k)+XC,P.getY(k))))continue;
     for(const k of v){mp.push(P.getX(k),P.getY(k),P.getZ(k));muv.push((P.getX(k)+XC)/1.2,(P.getY(k)+P.getZ(k))/1.2);}}
   const mg=new THREE.BufferGeometry();mg.setAttribute('position',new THREE.Float32BufferAttribute(mp,3));mg.setAttribute('uv',new THREE.Float32BufferAttribute(muv,2));
-  const mS=new THREE.Mesh(mg,mat),mP=new THREE.Mesh(mg,mat);mP.scale.z=-1;hullGroup.add(mS,mP);}
+  const mS=new THREE.Mesh(mg,mat),mP=new THREE.Mesh(mg,mat);mP.scale.z=-1;mS.renderOrder=mP.renderOrder=2;hullGroup.add(mS,mP);}
+
+/* bulb tip: the cap that rounds it off (hullMesh.bowCap), and the stern gear (sternGear.js): skeg, propeller, rudder.
+   Not measured (수동 측정): no heat — a base colour per look (paintGear) with the hatch over it; 도면 adds outlines like the other lines */
+const gearMats={cap:cm(new THREE.MeshStandardMaterial({roughness:0.7,metalness:0.05,side:THREE.DoubleSide})),
+  plate:cm(new THREE.MeshStandardMaterial({roughness:0.7,metalness:0.05,side:THREE.DoubleSide})),
+  prop:cm(new THREE.MeshStandardMaterial({roughness:0.45,metalness:0.35,side:THREE.DoubleSide}))};
+const gearEdgeMat=cm(new THREE.LineBasicMaterial({color:COLOR.peach,transparent:true,opacity:0.6}));
+const gearEdges=new THREE.Group();gearEdges.visible=false;
+{const capG=new THREE.BufferGeometry();capG.setAttribute('position',new THREE.Float32BufferAttribute(bowCap.pos,3));capG.setAttribute('normal',new THREE.BufferAttribute(bowCap.normal,3));capG.setIndex(bowCap.index);
+  // the hatch on the cap: only its triangles inside the bulb's nose (hull.unmeasurable), each side built in place
+  // (not mirrored by scale) so the stripes run straight across the centreline
+  const P=bowCap.pos,I=bowCap.index,tri=[];
+  for(let t=0;t<I.length;t+=3){const v=[I[t],I[t+1],I[t+2]];if(v.every(k=>unmeasurable(P[k*3]+XC,P[k*3+1])))tri.push(...v);}
+  [1,-1].forEach(sd=>{const m=new THREE.Mesh(capG,gearMats.cap),hg=new THREE.BufferGeometry();m.scale.z=sd;
+    hg.setAttribute('position',new THREE.Float32BufferAttribute(tri.flatMap(k=>[P[k*3],P[k*3+1],P[k*3+2]*sd]),3));hullGroup.add(m,hatchMesh(worldUV(hg)));});
+  const G3=sternGearGeometry(),add=(g,mat)=>{hullGroup.add(new THREE.Mesh(g,mat),hatchMesh(worldUV(g)));gearEdges.add(new THREE.LineSegments(new THREE.EdgesGeometry(g,30),gearEdgeMat));};
+  add(G3.skeg,gearMats.plate);add(G3.rudder,gearMats.plate);G3.prop.forEach(g=>add(g,gearMats.prop));
+  hullGroup.add(gearEdges);}
+/* base colours of the cap and the gear for the look (실제: antifouling skeg·rudder·bulb, bronze propeller), dimmed like
+   the unmeasured shell while a run is going */
+function paintGear(dimOn){
+  const pick=(real,bp,actual)=>new THREE.Color(look==='bp'?bp:look==='actual'?actual:real);
+  const dim=c=>{if(dimOn){const D=DIM[look];c.r+=(D[0]-c.r)*0.7;c.g+=(D[1]-c.g)*0.7;c.b+=(D[2]-c.b)*0.7;}return c;};
+  gearMats.cap.color.copy(dim(pick(COLOR.hull,SCENE.hullBp,COLOR.hullBelow)));
+  gearMats.plate.color.copy(dim(pick(COLOR.hull,SCENE.hullBp,COLOR.hullBelow)));
+  gearMats.prop.color.copy(dim(pick(COLOR.hull,SCENE.hullBp,COLOR.bronze)));
+  gearEdges.visible=look==='bp';
+}
 
 /* deck + transom */
 const deckPos=[],deckIdx=[];
@@ -248,7 +283,9 @@ dockGroup.add(lineSeg(dw,new THREE.LineBasicMaterial({color:SCENE.dockWall,trans
 const blkMat=new THREE.MeshStandardMaterial({color:SCENE.block,roughness:0.9});
 const capMat=new THREE.MeshStandardMaterial({color:SCENE.blockCap,roughness:0.9});
 const blkG=new THREE.BoxGeometry(BLOCK_SIZE.dx,1.5,BLOCK_SIZE.dy),capG=new THREE.BoxGeometry(BLOCK_SIZE.dx,0.3,BLOCK_SIZE.dy);
-KEEL_BLOCKS.forEach(k=>{const b=new THREE.Mesh(blkG,blkMat);b.position.set(k.X-XC,FLOOR+0.75,-k.Y);const c=new THREE.Mesh(capG,capMat);c.position.set(k.X-XC,-0.15,-k.Y);dockGroup.add(b,c);});
+// each block's cap top meets the hull bottom exactly (keelZ), the block stands on the floor under it
+KEEL_BLOCKS.forEach(k=>{const top=keelZ(k.X),b=new THREE.Mesh(blkG,blkMat),c=new THREE.Mesh(capG,capMat);
+  b.scale.y=(top-0.3-FLOOR)/1.5;b.position.set(k.X-XC,FLOOR+(top-0.3-FLOOR)/2,-k.Y);c.position.set(k.X-XC,top-0.15,-k.Y);dockGroup.add(b,c);});
 scene.add(dockGroup);
 
 /* robot (SPEC 4.2, 4.4): K100 body, bright outline and pulse ring, 1.5x the former size. Shown only while mapping.
@@ -379,6 +416,7 @@ function paintHull(){
     attr.needsUpdate=true;});
   const edges=look==='actual';heatEdgeS.visible=heatEdgeP.visible=edges;
   if(edges){heatEdges(heatEdgeS,heatS);heatEdges(heatEdgeP,heatP);}
+  paintGear(dimOn);
 }
 /* ? legend: the current layer only — name · 최우선 보수 · 경고 · 주의 (the list's chips + criteria) · 정상 / 측정 불가 */
 const LEGEND={
@@ -496,7 +534,7 @@ window.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
    실제 = painted like the ship (red-brown below the DWL, grey above), the heatmap with a thin white contour. The heatmap always stays */
 function setLook(l){
   look=l;const bp=l==='bp';
-  const sw=document.querySelector('#legendPop .sw-hull');if(sw)sw.classList.toggle('actual',l==='actual');
+  document.querySelectorAll('#legendPop .sw-hull, #legendPop .hatch').forEach(sw=>sw.classList.toggle('actual',l==='actual'));
   document.querySelectorAll('[data-look]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.look===l)));
   hullMat.roughness=bp?0.95:0.7;
   deckMat.color.set(bp?SCENE.deckBp:SCENE.deck);trMat.color.set(bp?SCENE.transomBp:SCENE.transom);

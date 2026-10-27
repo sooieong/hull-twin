@@ -13,7 +13,8 @@ export const COLOR={
   /* surfaces and lines */
   bg:'#04070D',surface:'#0A1120',surface2:'#0F182B',surface3:'#15213A',glass:'rgba(7,12,23,.82)',popBg:'#070C17',tipBg:'rgba(3,6,12,.93)',
   line:'#1A263D',lineStrong:'#2A3A58',
-  hatchBg:'#3A4558',hatchLine:'#8A96AA',   // 측정 불가 / 수동 측정 hatch
+  hatchDark:'rgba(58,69,88,.8)',hatchLight:'rgba(255,255,255,.45)',   // 측정 불가 hatch: dark + light stripes over the hull (reads on every look)
+  hatchLine:'#8A96AA',   // 구역 경계 swatch (LAYERS)
   /* text: three steps */
   text:'#E8EDF6',text2:'#A7B3C7',muted:'#6F7C93',
   /* judgement: 정상 · 주의 · 경고 · 최우선 보수 */
@@ -21,6 +22,7 @@ export const COLOR={
   /* 3D hull */
   zoneLabel:'#1F2D4A',zoneLabelBg:'rgba(255,255,255,.72)',   // 구역 이름 on the light hull
   hull:'#D3D8DF',hullBelow:'#8E3B33',hullAbove:'#9AA3AE',     // 실선 / 실제 (below · above the design waterline)
+  bronze:'#A67C4E',                                           // 실제: propeller
   dwl:DWL,dwlBp:'#7FA6E8',                                    // design waterline line (3D: 실선·실제 / 도면)
   /* robot (3D and the S.SHELL marker): body, top plate, wheels; outline, eye and locator rings = draw.marker;
      scan path: done part, the current row (k100, 도면: draw.marker), the next part (도면: pathNextBp) */
@@ -61,7 +63,7 @@ export const CSS_VARS={
   '--ho-orange':COLOR.orange,'--ho-coral':COLOR.coral,'--ho-peach':COLOR.peach,'--k100':COLOR.k100,
   '--bg':COLOR.bg,'--surface':COLOR.surface,'--surface-2':COLOR.surface2,'--surface-3':COLOR.surface3,'--glass':COLOR.glass,
   '--pop-bg':COLOR.popBg,'--tip-bg':COLOR.tipBg,'--line':COLOR.line,'--line-strong':COLOR.lineStrong,
-  '--hatch-bg':COLOR.hatchBg,'--hatch-line':COLOR.hatchLine,
+  '--hatch-dark':COLOR.hatchDark,'--hatch-light':COLOR.hatchLight,'--hatch-line':COLOR.hatchLine,
   '--text':COLOR.text,'--text-2':COLOR.text2,'--muted':COLOR.muted,
   '--lv-ok':COLOR.lv[0],'--lv-warn':COLOR.lv[1],'--lv-crit':COLOR.lv[2],'--lv-top':COLOR.lv[3],
   '--zone-label':COLOR.zoneLabel,'--zone-label-bg':COLOR.zoneLabelBg,

@@ -5,7 +5,7 @@
    (개발 중에는 CSS가 쓰는데 tokens.js에 없는 이름을 콘솔이 알려 준다).
 
    brand          --ho-orange --ho-coral --ho-peach --k100
-   surfaces       --bg --surface --surface-2 --surface-3 --glass --pop-bg --tip-bg --line --line-strong --hatch-bg --hatch-line
+   surfaces       --bg --surface --surface-2 --surface-3 --glass --pop-bg --tip-bg --line --line-strong --hatch-dark --hatch-light --hatch-line
    text           --text (제목·숫자·FR) · --text-2 (판정 이름·항목 제목·위치·설명·버튼) · --muted (건수·순위·축 라벨·태그)
    judgement      --lv-ok --lv-warn --lv-crit --lv-top
    3D hull        --zone-label --zone-label-bg --hull --hull-below --hull-above

@@ -8,26 +8,29 @@
    히트맵: 3D와 같은 IDW 보간(heatmap.js)을 저해상도 격자에서 계산해 부드럽게 확대해 칠한다.
          선체 외곽선 안, 이상 구역만 (색: 앰버 → 레드). 매핑 중에는 0.5초마다 다시 계산한다.
    ========================================================= */
-import { T, FS, FRMIN, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, section, girthAtZ, signedGirth, recordU,
-  KEEL_BLOCKS, BLOCK_SIZE } from './hull.js';
-import { MANUAL } from './data/baseline.js';
+import { T, FS, FRMIN, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, section, atGirth, girthAtZ, signedGirth, recordU,
+  KEEL_BLOCKS, BLOCK_SIZE, unmeasurable } from './hull.js';
 import { COLOR, FS as TYPE, font } from './styles/tokens.js';
 import { OK, judge } from './data/criteria.js';
 import { heatOf, heatRGB, heatAlpha, buildIndex, idw, nearest } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
 
-const C={bg:COLOR.popBg,shell:COLOR.draw.shell,outline:COLOR.draw.outline,keel:COLOR.orange,dwl:COLOR.draw.dwl,tick:COLOR.muted,frLabel:COLOR.peach,text:COLOR.text2,
-  hatch:COLOR.hatchLine};
+const C={bg:COLOR.surface,shell:COLOR.draw.shell,outline:COLOR.draw.outline,keel:COLOR.orange,dwl:COLOR.draw.dwl,tick:COLOR.muted,frLabel:COLOR.peach,text:COLOR.text2};
 const LABEL=font(600,TYPE.meta),LETTER=font(400,TYPE.meta),TICK=font(600,TYPE.tick);   // K · 우현/좌현 · strake letters · frame numbers
-const M={l:26,r:30,t:12,b:20};   // plot margins (px)
+const M={l:26,r:30,t:12,b:20};   // room around the plot box for the labels (px)
+const ASPECT=1.46;                // plot box width : height — kept at any panel size (the default layout's ratio); the box is centred
 const PICK_PX=9;                  // click / hover tolerance around an anomaly point
 const HEAT_PX=3;                  // heat grid cell (CSS px); drawn scaled up with smoothing
 const HEAT_MS=500;                // while mapping: recompute at most this often
 
-/* per-frame girth of the deck edge, the design waterline and the top of each 수동 측정 area (FR −6 … 256; Fr(fr) looks one up) */
-const F=[];
-for(let fr=FRMIN;fr<=FRMAX;fr++){const X=fr*FS,s=section(X);
-  F.push({fr,g:s.gs[G-1],wl:girthAtZ(s,T),manual:Math.max(0,...MANUAL.filter(m=>X>=m.x0-1e-6&&X<=m.x1+1e-6).map(m=>m.z1===Infinity?s.gs[G-1]:girthAtZ(s,m.z1)))});}
+/* per-frame girth of the deck edge, the design waterline and the girth bands of the unmeasurable shell (hull.unmeasurable:
+   stern gear zone from the keel up; the bulb's nose — around its middle at the tip, thin slivers at its top and bottom further aft),
+   found every M_STEP of girth: m = [[g0, g1], …] (FR −6 … 256; Fr(fr) looks one up) */
+const M_STEP=0.1,F=[];
+for(let fr=FRMIN;fr<=FRMAX;fr++){const X=fr*FS,s=section(X),m=[];let open=null;
+  for(let g=0;g<=s.gs[G-1]+1e-6;g+=M_STEP){const p=atGirth(s,Math.min(g,s.gs[G-1])),in_=!!p&&!!unmeasurable(X,p.Z);
+    if(in_){if(open)open[1]=g;else m.push(open=[g,g]);}else open=null;}
+  F.push({fr,g:s.gs[G-1],wl:girthAtZ(s,T),m});}
 const Fr=fr=>F[Math.max(0,Math.min(F.length-1,Math.round(fr)-FRMIN))];
 const G_MAX=Math.max(...F.map(f=>f.g));
 let nStrakes=0;while(nStrakes<LETTERS.length&&KEEL_HALF+STRAKE_W*nStrakes<G_MAX)nStrakes++;
@@ -37,58 +40,63 @@ export function createSideShell(body,store,ui){
   const cv=body.querySelector('canvas'),ctx=cv.getContext('2d');
   // static layers: under the heat (background, shell fill, keel blocks) and over it (lines, labels)
   const under=document.createElement('canvas'),over=document.createElement('canvas'),heat=document.createElement('canvas');
-  let w=0,h=0,dpr=1,dots=[],allIx=buildIndex([]),heatIx=buildIndex([]),shellPath=null,robot=null,raf=0,timer=null;
+  let w=0,h=0,dpr=1,dots=[],allIx=buildIndex([]),heatIx=buildIndex([]),shellPath=null,heatClip=null,robot=null,raf=0,timer=null;
+  /* plot box (CSS px): the largest ASPECT box that fits inside the canvas less the label margins, centred.
+     Everything — outline, heat, markers, ticks, labels — is placed from this box, so nothing stretches with the panel */
+  let bx=0,by=0,bw=1,bh=1;
+  function layout(){
+    const aw=Math.max(1,w-M.l-M.r),ah=Math.max(1,h-M.t-M.b);
+    if(aw/ah>ASPECT){bh=ah;bw=ah*ASPECT;}else{bw=aw;bh=aw/ASPECT;}
+    bx=(w-bw-M.l-M.r)/2+M.l;by=(h-bh-M.t-M.b)/2+M.t;
+  }
 
-  const px=fr=>M.l+(fr-FRMIN)/(FRMAX-FRMIN)*(w-M.l-M.r);
-  const py=u=>M.t+(u+G_MAX)/(2*G_MAX)*(h-M.t-M.b);
-  const frOf=x=>FRMIN+(x-M.l)/(w-M.l-M.r)*(FRMAX-FRMIN);
-  const uOf=y=>(y-M.t)/(h-M.t-M.b)*2*G_MAX-G_MAX;
+  const px=fr=>bx+(fr-FRMIN)/(FRMAX-FRMIN)*bw;
+  const py=u=>by+(u+G_MAX)/(2*G_MAX)*bh;
+  const frOf=x=>FRMIN+(x-bx)/bw*(FRMAX-FRMIN);
+  const uOf=y=>(y-by)/bh*2*G_MAX-G_MAX;
 
   function drawBase(){
     shellPath=new Path2D();
     F.forEach((f,i)=>i?shellPath.lineTo(px(f.fr),py(-f.g)):shellPath.moveTo(px(f.fr),py(-f.g)));
     for(let i=F.length-1;i>=0;i--)shellPath.lineTo(px(F[i].fr),py(F[i].g));shellPath.closePath();
-    // under: background, shell fill, keel block contact areas (측정 불가), 수동 측정 areas (hatched)
+    // areas that cannot be measured (keel block contact, 수동 측정): not drawn — only the heat leaves them out (heatClip)
+    heatClip=new Path2D();heatClip.rect(0,0,w,h);
+    KEEL_BLOCKS.forEach(b=>{const hx=(BLOCK_SIZE.dx/2+ROBOT_MARGIN)/FS,hy=BLOCK_SIZE.dy/2+ROBOT_MARGIN,fr=b.X/FS;
+      heatClip.rect(px(fr-hx),py(b.Y-hy),Math.max(1,px(fr+hx)-px(fr-hx)),py(b.Y+hy)-py(b.Y-hy));});
+    // 수동 측정 areas: each run of frames with the same number of bands as one polygon per band and side — no overlaps for the even-odd clip
+    for(let i=0;i<F.length;){const n=F[i].m.length;if(!n){i++;continue;}let j=i;while(j+1<F.length&&F[j+1].m.length===n)j++;const run=F.slice(i,j+1);
+      for(let q=0;q<n;q++)[-1,1].forEach(sd=>{const a=run.flatMap(f=>[[px(f.fr-0.5),py(sd*f.m[q][0])],[px(f.fr+0.5),py(sd*f.m[q][0])]]),b=run.flatMap(f=>[[px(f.fr-0.5),py(sd*f.m[q][1])],[px(f.fr+0.5),py(sd*f.m[q][1])]]).reverse();
+        [...a,...b].forEach(([x,y],k)=>k?heatClip.lineTo(x,y):heatClip.moveTo(x,y));heatClip.closePath();});i=j+1;}
+    // under: background and the whole shell fill
     under.width=over.width=cv.width;under.height=over.height=cv.height;
     let c=under.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);
     c.fillStyle=C.bg;c.fillRect(0,0,w,h);c.fillStyle=C.shell;c.fill(shellPath);
-    c.save();c.clip(shellPath);c.fillStyle=C.hatch;c.globalAlpha=.35;
-    KEEL_BLOCKS.forEach(b=>{const hx=(BLOCK_SIZE.dx/2+ROBOT_MARGIN)/FS,hy=BLOCK_SIZE.dy/2+ROBOT_MARGIN,fr=b.X/FS;
-      c.fillRect(px(fr-hx),py(b.Y-hy),Math.max(1,px(fr+hx)-px(fr-hx)),py(b.Y+hy)-py(b.Y-hy));});
-    const hp=document.createElement('canvas');hp.width=hp.height=6;{const q=hp.getContext('2d');q.strokeStyle=C.hatch;q.globalAlpha=.55;q.lineWidth=1;
-      q.beginPath();q.moveTo(-1,7);q.lineTo(7,-1);q.stroke();}
-    c.globalAlpha=1;c.fillStyle=c.createPattern(hp,'repeat');
-    const m=new Path2D();   // 수동 측정: one frame-wide strip per frame, from the keel up to the area's top girth, both sides
-    F.forEach(f=>{if(f.manual<=0)return;const x0=px(f.fr-0.5),x1=px(f.fr+0.5);
-      [-1,1].forEach(sd=>m.rect(x0,py(0),x1-x0+0.5,py(sd*f.manual)-py(0)));});
-    c.fill(m);
-    c.restore();
     // over: design waterline, keel line, outline, labels
     c=over.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);
     c.save();c.clip(shellPath);c.strokeStyle=C.dwl;c.lineWidth=1;c.setLineDash([2,3]);
     [-1,1].forEach(sd=>{c.beginPath();F.forEach((f,i)=>{const y=py(sd*Math.min(f.wl,f.g));i?c.lineTo(px(f.fr),y):c.moveTo(px(f.fr),y);});c.stroke();});
     c.restore();c.setLineDash([]);
-    c.strokeStyle=C.keel;c.lineWidth=1;c.beginPath();c.moveTo(M.l-4,py(0));c.lineTo(w-M.r+4,py(0));c.stroke();   // K: a little thinner than the outline
+    c.strokeStyle=C.keel;c.lineWidth=1;c.beginPath();c.moveTo(bx-4,py(0));c.lineTo(bx+bw+4,py(0));c.stroke();   // K: a little thinner than the outline
     c.strokeStyle=C.outline;c.lineWidth=1.3;c.stroke(shellPath);
     c.textBaseline='middle';
     // strake letters on the left: K, then every third strake (C, F, J, …)
-    c.textAlign='right';c.font=LABEL;c.fillStyle=C.keel;c.fillText('K',M.l-6,py(0));
+    c.textAlign='right';c.font=LABEL;c.fillStyle=C.keel;c.fillText('K',bx-6,py(0));
     c.font=LETTER;c.fillStyle=C.text;
-    for(let k=2;k<nStrakes;k+=3){const g=KEEL_HALF+STRAKE_W*(k+0.5);[-1,1].forEach(sd=>c.fillText(LETTERS[k],M.l-6,py(sd*g)));}
+    for(let k=2;k<nStrakes;k+=3){const g=KEEL_HALF+STRAKE_W*(k+0.5);[-1,1].forEach(sd=>c.fillText(LETTERS[k],bx-6,py(sd*g)));}
     c.textAlign='left';c.font=LABEL;c.fillStyle=C.text;
-    c.fillText('우현',w-M.r+4,py(-G_MAX/2));c.fillText('좌현',w-M.r+4,py(G_MAX/2));
+    c.fillText('우현',bx+bw+4,py(-G_MAX/2));c.fillText('좌현',bx+bw+4,py(G_MAX/2));
     // frame ticks every 5 frames (longer every 10), numbers every 10 frames — or every 50 / 100 when the pane is too narrow for them
     c.strokeStyle=C.tick;c.lineWidth=1;c.beginPath();
-    for(let fr=Math.ceil(FRMIN/5)*5;fr<=FRMAX;fr+=5){c.moveTo(px(fr),h-M.b);c.lineTo(px(fr),h-M.b+(fr%10?2:4));}c.stroke();
+    for(let fr=Math.ceil(FRMIN/5)*5;fr<=FRMAX;fr+=5){c.moveTo(px(fr),by+bh);c.lineTo(px(fr),by+bh+(fr%10?2:4));}c.stroke();
     const step=[10,50,100].find(n=>px(n)-px(0)>=26)||100;
     c.textAlign='center';c.textBaseline='top';c.font=TICK;c.fillStyle=C.frLabel;
-    for(let fr=0;fr<=FRMAX;fr+=step)c.fillText(String(fr),px(fr),h-M.b+5);
+    for(let fr=0;fr<=FRMAX;fr+=step)c.fillText(String(fr),px(fr),by+bh+5);
   }
 
   /* heat field: IDW of the current layer at every grid cell inside the shell, abnormal only (same as 3D) */
   function rebuildHeat(){
     if(!w)return;
-    const pw=w-M.l-M.r,ph=h-M.t-M.b,nx=Math.max(2,Math.ceil(pw/HEAT_PX)),ny=Math.max(2,Math.ceil(ph/HEAT_PX));
+    const nx=Math.max(2,Math.ceil(bw/HEAT_PX)),ny=Math.max(2,Math.ceil(bh/HEAT_PX));
     heat.width=nx;heat.height=ny;const hc=heat.getContext('2d'),img=hc.createImageData(nx,ny),d=img.data;
     for(let i=0;i<nx;i++){
       const fr=FRMIN+(i+0.5)/nx*(FRMAX-FRMIN),g=Fr(fr).g,X=fr*FS;
@@ -116,13 +124,13 @@ export function createSideShell(body,store,ui){
     if(!w)return;
     ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(under,0,0);ctx.setTransform(dpr,0,0,dpr,0,0);
     // scaled up with smoothing and a light blur, so the low-res cells read as one soft surface
-    ctx.save();ctx.clip(shellPath);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.filter=`blur(${HEAT_PX*0.6}px)`;
-    ctx.drawImage(heat,M.l,M.t,w-M.l-M.r,h-M.t-M.b);ctx.restore();
+    ctx.save();ctx.clip(shellPath);ctx.clip(heatClip,'evenodd');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.filter=`blur(${HEAT_PX*0.6}px)`;   // inside the shell, outside the unmeasurable areas
+    ctx.drawImage(heat,bx,by,bw,bh);ctx.restore();
     ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(over,0,0);ctx.setTransform(dpr,0,0,dpr,0,0);
     const sel=ui.selId!=null&&store.get(ui.selId);
     if(sel){const x=px(sel.fr),y=py(recordU(sel));
       ctx.strokeStyle=COLOR.draw.crosshair;ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.beginPath();
-      ctx.moveTo(x,M.t);ctx.lineTo(x,h-M.b);ctx.moveTo(M.l,y);ctx.lineTo(w-M.r,y);ctx.stroke();ctx.setLineDash([]);
+      ctx.moveTo(x,by);ctx.lineTo(x,by+bh);ctx.moveTo(bx,y);ctx.lineTo(bx+bw,y);ctx.stroke();ctx.setLineDash([]);
       [[7.5,COLOR.draw.marker],[5.5,COLOR.k100],[2.2,COLOR.draw.marker]].forEach(([rad,col])=>{ctx.fillStyle=col;ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);ctx.fill();});}
     if(robot){const x=px(robot.X/FS),y=py(robot.u),ph=(performance.now()/1000)%1.4/1.4;
       ctx.strokeStyle=COLOR.draw.marker;ctx.globalAlpha=0.7*(1-ph);ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,y,6+ph*9,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
@@ -133,7 +141,7 @@ export function createSideShell(body,store,ui){
   function resize(){
     const r=cv.getBoundingClientRect();dpr=Math.min(window.devicePixelRatio||1,2);
     w=Math.max(1,Math.round(r.width));h=Math.max(1,Math.round(r.height));cv.width=w*dpr;cv.height=h*dpr;
-    drawBase();rebuildHeat();draw();
+    layout();drawBase();rebuildHeat();draw();
   }
   new ResizeObserver(resize).observe(cv);
   // the drawing caches its text: draw again once the web font is in (a canvas does not repaint by itself)

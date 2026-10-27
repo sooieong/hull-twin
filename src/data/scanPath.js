@@ -4,12 +4,12 @@
    순서: 우현 최상단 레인(건현) → … → 킬 → 좌현 … → 좌현 최상단. 첫 레인은 선미 → 선수, 다음 레인은 선수 → 선미.
    측정은 레인 위 1.1 m마다 (측정 격자 1.1 m, 약 10,400점). 측정점은 m 좌표로 저장하고 프레임은 표시할 때만 쓴다.
    로봇 측정 가능 범위 (baseline.REACH) 안에서만 레인을 만든다:
-     선측 x 8–202 m, z 0.5–20.5 m · 선저 평판부 x 8–195 m, |y| ≤ 13 m
+     선측 x 8 m – 선수재, z 0.5–20.5 m · 선저 평판부 x 8–195 m, |y| ≤ 13 m · 측정 제외 구역(hull.unmeasurable: 벌브 앞코)은 뺀다
    킬 블록 접촉면은 지나가되 측정하지 않는다 (blocked = 측정 불가).
-   프로펠러·러더·스케그(x < 8 m)와 선수 벌브 끝(x > 202 m)은 범위 밖 (수동 측정).
+   프로펠러·러더·스케그(x < 8 m)와 선수 벌브 앞코는 범위 밖 (수동 측정).
    좌표: u = 부호 있는 거스(m, 킬 중심선 기준, 좌현 +). Y도 좌현 +.
    ========================================================= */
-import { G, section, atGirth, strakeName, zoneOf, ZONES, frOf, KEEL_BLOCKS, BLOCK_SIZE } from '../hull.js';
+import { G, section, atGirth, strakeName, zoneOf, ZONES, frOf, KEEL_BLOCKS, BLOCK_SIZE, unmeasurable } from '../hull.js';
 import { GRID, REACH } from './baseline.js';
 
 const TURN_STEPS=8;            // 레인 사이 이동 구간 점 개수
@@ -27,7 +27,7 @@ function pointAt(i,g){
   const X=xs[i],R=REACH;
   const ok=p.bottom?X>=R.bottom.x0&&X<=R.bottom.x1&&p.Y<=R.bottom.y
     :X>=R.side.x0&&X<=R.side.x1&&p.Z>=R.side.z0&&p.Z<=R.side.z1;
-  return {...p,ok};
+  return {...p,ok:ok&&!unmeasurable(X,p.Z)};
 }
 function blocked(X,Y){
   const hx=BLOCK_SIZE.dx/2+ROBOT_MARGIN,hy=BLOCK_SIZE.dy/2+ROBOT_MARGIN;

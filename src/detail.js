@@ -23,6 +23,7 @@ const ICON_PHOTO='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-
 const ICON_OK='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m8 12.3 2.7 2.7 5.3-5.6"/></svg>';
 const ICON_PICK='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>';
 const state=(icon,t,s)=>emptyState(t,s,{icon});
+const FIG_ASPECT=1.1;   // section figure width : height (the default layout's ratio)
 
 /* photo lightbox: closes on the backdrop, the close button or Esc */
 function createLightbox(){
@@ -65,6 +66,7 @@ export function createDetailPanel(body,store,ui){
     if(layer==='defect'){
       const has=!!r.defect,caption=has?`${DEFECT_LABEL[r.defect]}·${area(r.defectArea)}·${recLoc(r)}`:'';
       const media=!has?state(ICON_OK,'손상 없음','이 지점에서 발견된 도막 손상이 없습니다')
+        // the whole photo in a frame of the photo's own ratio, the largest that fits the cell, centred (fitPhoto)
         :r.photo?`<button class="dt-img" title="크게 보기" aria-label="사진 크게 보기"><img src="${esc(r.photo)}" alt="${esc(DEFECT_LABEL[r.defect])} 사진·${recLoc(r)}"></button>`
         :state(ICON_PHOTO,'사진 없음','이 손상에 연결된 사진이 없습니다');
       const kind=`<b class="dt-word"${has?` style="color:${LV_COLOR[colorLevel]}"`:''}>${has?esc(DEFECT_LABEL[r.defect]):'없음'}</b>`;
@@ -74,6 +76,7 @@ export function createDetailPanel(body,store,ui){
       const btn=body.querySelector('.dt-img'),img=btn&&btn.querySelector('img');
       if(img){
         img.addEventListener('error',()=>{img.closest('.dt-media').innerHTML=state(ICON_PHOTO,'사진 없음','사진 파일을 불러올 수 없습니다');},{once:true});
+        if(img.complete&&img.naturalWidth)fitPhoto();else img.addEventListener('load',fitPhoto,{once:true});
         btn.addEventListener('click',()=>lightbox.open(r.photo,img.alt,caption,btn));
       }
       return;
@@ -83,12 +86,19 @@ export function createDetailPanel(body,store,ui){
       <div class="dt-side">${card(m.side[0],'ref',LV_COLOR[colorLevel])}${m.side[1]?card(m.side[1],'prev',PREV_COLOR):''}</div></div></div>`;
     drawFig(m,colorLevel);
   }
+  /* damage photo: the frame (button) takes the photo's ratio at the largest size that fits the cell; the cell centres it */
+  function fitPhoto(){
+    const btn=body.querySelector('.dt-img'),img=btn&&btn.querySelector('img');if(!img||!img.naturalWidth)return;
+    const cell=btn.parentElement,cw=cell.clientWidth,ch=cell.clientHeight,ratio=img.naturalWidth/img.naturalHeight;
+    const W=Math.min(cw,ch*ratio);btn.style.width=`${Math.floor(W)}px`;btn.style.height=`${Math.floor(W/ratio)}px`;
+  }
+  /* the section figure keeps FIG_ASPECT at any panel size: the largest such box in the cell, centred (sectionSvg fills what it gets) */
   function drawFig(m,level){
     const fig=body.querySelector('.dt-fig');if(!fig)return;
-    const W=Math.round(fig.clientWidth),H=Math.round(fig.clientHeight);
+    const cw=fig.clientWidth,ch=fig.clientHeight,W=Math.round(Math.min(cw,ch*FIG_ASPECT)),H=Math.round(W/FIG_ASPECT);
     fig.innerHTML=W>40&&H>60?sectionSvg(m,level,W,H):'';
   }
-  new ResizeObserver(()=>{const r=last&&last.r;if(r&&last.layer!=='defect')drawFig(thickness(r,ui.layer),Math.min(gradeOf(judge(r,ui.layer).level,isTop(r,ui.layer)),CRIT));}).observe(body);
+  new ResizeObserver(()=>{const r=last&&last.r;if(r&&last.layer==='defect')fitPhoto();if(r&&last.layer!=='defect')drawFig(thickness(r,ui.layer),Math.min(gradeOf(judge(r,ui.layer).level,isTop(r,ui.layer)),CRIT));}).observe(body);
   // the mapping notice carries the progress, so robot moves (pose) refresh it too while nothing is shown
   store.subscribe(k=>{if(k.has('state')){clearTimeout(timer);timer=null;render();}
     else if((k.has('records')||k.has('pose')&&last&&!last.r)&&!timer)timer=setTimeout(()=>{timer=null;render();},250);});

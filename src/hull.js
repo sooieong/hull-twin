@@ -6,7 +6,7 @@
    Shared by the 3D viewer and the robot data simulator.
    ========================================================= */
 import { BEAM, DEPTH, DRAFT, DRAFT_LIGHT, WL_TOP, LBP, X_MIN, X_MAX, FRAME_SPACING, FR_MIN, FR_MAX,
-  STRAKE_W as SW, KEEL_HALF as KH, KEEL_BLOCK, BOW_FR, STERN_FR } from './data/baseline.js';
+  STRAKE_W as SW, KEEL_HALF as KH, KEEL_BLOCK, BOW_FR, STERN_FR, MANUAL } from './data/baseline.js';
 export const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
 
@@ -40,6 +40,30 @@ function hullHB(X,Z){
   return midHB(Z)*w;
 }
 function bulbHB(X,Z){const u=((X-(O.L+2.5))/7)**2+((Z-6)/4.6)**2;return u>=1?0:3.4*Math.sqrt(1-u);}
+/* the bulb ellipsoid in ship units (centre x, z; semi-axes along x, z, y) — the 3D bow cap rounds the tip with it (hullMesh.js) */
+export const BULB={x:X_MIN+(O.L+2.5)*SX,len:7*SX,z:6*SZ,h:4.6*SZ,w:3.4*SY};
+/* smallest curvature radius of the bulb ellipsoid at (X, Z) (m): 1 / the larger principal curvature at its surface point
+   (the tightest bend in any direction) — Infinity off the ellipsoid */
+export function bulbRadius(X,Z){
+  const A=[BULB.len,BULB.w,BULB.h],x=X-BULB.x,z=Z-BULB.z,y2=1-(x/A[0])**2-(z/A[2])**2;if(y2<=0)return Infinity;
+  const q=[x,A[1]*Math.sqrt(y2),z],g=q.map((v,i)=>2*v/A[i]**2),gl=Math.hypot(...g),n=g.map(v=>v/gl),Hd=A.map(v=>2/v**2);
+  const e=[0,1,2].reduce((m,i)=>Math.abs(n[i])<Math.abs(n[m])?i:m,0),u=[0,0,0];u[e]=1;   // the axis least along the normal
+  const cr=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],nz=v=>{const l=Math.hypot(...v);return v.map(c=>c/l);};
+  const t1=nz(cr(n,u)),t2=cr(n,t1),h=(a,b)=>(a[0]*b[0]*Hd[0]+a[1]*b[1]*Hd[1]+a[2]*b[2]*Hd[2])/gl;   // shape operator on the tangent plane
+  const s11=h(t1,t1),s12=h(t1,t2),s22=h(t2,t2),m=(s11+s22)/2,kmax=m+Math.sqrt(Math.max(0,m*m-(s11*s22-s12*s12)));
+  return 1/kmax;
+}
+/* the shell at (X, Z) cannot be measured (baseline.MANUAL): 'stern' (propeller·rudder·skeg) or 'bulb' (the bulb's nose:
+   within the bulb's heights, forward of its centre, where the shell is the bulb itself and its curvature radius is under rMax) — else null */
+export function unmeasurable(X,Z){
+  for(const m of MANUAL){
+    if(X<m.x0-1e-6||X>m.x1+1e-6||Z<m.z0-1e-6||Z>m.z1+1e-6)continue;
+    if(m.key!=='bulb')return m.key;
+    const x=toO(X),z=Z/SZ;
+    if(X>=BULB.x&&bulbHB(x,z)>0&&bulbHB(x,z)>=hullHB(x,z)-1e-6&&bulbRadius(X,Z)<m.rMax)return m.key;
+  }
+  return null;
+}
 export function deckZ(X){return deckZo(toO(X))*SZ;}
 export function keelZ(X){return keelZo(toO(X))*SZ;}
 export function HB(X,Z){const x=toO(X),z=Z/SZ;return Math.max(hullHB(x,z),z>=0?bulbHB(x,z):0)*SY;}

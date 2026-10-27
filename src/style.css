@@ -115,7 +115,10 @@ button,select,input{font:inherit;color:inherit}
 .lg-row.lg-one{flex-wrap:nowrap;white-space:nowrap}   /* 최우선 보수 rule on one line next to its chip */
 .pop .sw-hull{width:12px;height:12px;border-radius:2px;background:var(--hull);flex:none}
 .pop .sw-hull.actual{background:linear-gradient(180deg,var(--hull-above) 50%,var(--hull-below) 50%)}   /* 실제 look: grey above, red-brown below */
-.pop .hatch{width:12px;height:12px;border-radius:2px;flex:none;background:repeating-linear-gradient(135deg,var(--hatch-line) 0 1.5px,var(--hatch-bg) 1.5px 4px)}
+.pop .hatch{width:12px;height:12px;border-radius:2px;flex:none;   /* 측정 불가: the 3D hatch — dark + light stripes over the hull */
+  background:repeating-linear-gradient(135deg,var(--hatch-dark) 0 1.6px,var(--hatch-light) 1.6px 2.4px,transparent 2.4px 4.2px),var(--hull)}
+.pop .hatch.actual{background:repeating-linear-gradient(135deg,var(--hatch-dark) 0 1.6px,var(--hatch-light) 1.6px 2.4px,transparent 2.4px 4.2px),
+  linear-gradient(180deg,var(--hull-above) 50%,var(--hull-below) 50%)}
 .pane-body{position:relative;flex:1;min-height:0}
 #vp{position:absolute;inset:0}
 #vp canvas{display:block}
@@ -225,10 +228,11 @@ button,select,input{font:inherit;color:inherit}
 .dt-side .dt-card{flex:none;height:74px;justify-content:space-between;padding:7px 9px}
 .dt-side .dt-card>span:not(.num-drop){font-size:var(--fs-meta)}
 .dt-side .dt-word{font-size:var(--fs-sub);font-weight:600;line-height:1.2;color:var(--text)}   /* a word value (손상 종류), same card as the numbers */
-.dt-fig svg{position:absolute;inset:0;display:block}
-.dt-media{flex:1;min-height:0;display:flex;border-radius:7px;overflow:hidden;background:var(--surface-2)}
-.dt-img{flex:1;display:block;min-height:0;padding:0;border:0;background:none;cursor:zoom-in}
-.dt-img img{width:100%;height:100%;object-fit:cover;display:block}   /* fills the box; the lightbox shows the whole photo */
+.dt-fig svg{position:absolute;inset:0;margin:auto;display:block}   /* fixed-ratio figure, centred in the cell (detail.js FIG_ASPECT) */
+.dt-media{flex:1;min-height:0;min-width:0;display:flex;align-items:center;justify-content:center;overflow:hidden}   /* the panel background around the photo */
+/* the photo's frame: sized to the photo's ratio by detail.js fitPhoto, corners as the side cards */
+.dt-img{flex:none;display:block;padding:0;border:0;border-radius:6px;overflow:hidden;background:none;cursor:zoom-in}
+.dt-img img{display:block;width:100%;height:100%;object-fit:cover}   /* the frame is the photo's ratio to the pixel: cover only absorbs the rounding (< 1px), never distorts */
 .lightbox{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:32px;background:var(--backdrop)}
 .lightbox figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:10px;max-width:100%;max-height:100%}
 .lightbox img{max-width:90vw;max-height:calc(100vh - 110px);object-fit:contain;display:block;border-radius:4px}
