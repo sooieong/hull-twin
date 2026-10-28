@@ -1,47 +1,79 @@
 /* =========================================================
-   HULL FORM  (Wally Schirra — dimensions in data/baseline.js)
+   HULL FORM  (a made-up Panamax-size merchant ship — dimensions and form values in data/baseline.js)
    Ship CS: X from AP (+fwd, −5 … 205 m), Y half-breadth (+port), Z from baseline. Frames: FR = X / FS (FR −6 … 256)
-   The exterior design is the original parametric form (long parallel midbody, bulbous bow, transom stern), unchanged,
-   scaled to the ship's dimensions: lengthwise to LOA, breadth to B, height to D (the design draught lands on T).
+   A tanker / bulk carrier like form: long parallel midbody, raked and flared bow with a bulb faired into it, forecastle,
+   counter stern over an open propeller aperture, skeg grown out of the bottom, poop under the accommodation, flat transom.
+   Everything (girth, heat, S.SHELL, picking, the robot path) is computed from HB(X, Z), keelZ(X) and deckZ(X) here.
    Shared by the 3D viewer and the robot data simulator.
    ========================================================= */
 import { BEAM, DEPTH, DRAFT, DRAFT_LIGHT, WL_TOP, LBP, X_MIN, X_MAX, FRAME_SPACING, FR_MIN, FR_MAX,
-  STRAKE_W as SW, KEEL_HALF as KH, KEEL_BLOCK, BOW_FR, STERN_FR, MANUAL } from './data/baseline.js';
+  STRAKE_W as SW, KEEL_HALF as KH, KEEL_BLOCK, BOW_FR, STERN_FR, MANUAL, HULL_FORM as HF } from './data/baseline.js';
 export const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
 
-/* the original form's own units (design kept as is) and the scale onto the ship */
-const O={L:289,B:46.4,D:26.5,R:2.6,LOA:298.6};
+/* the superstructure's design units and their scale onto the ship (hullMesh.SUPER_BOXES, the waterline heights) */
+const O={B:46.4,D:26.5,R:2.6,LOA:298.6};
 export const SX=(X_MAX-X_MIN)/O.LOA, SY=BEAM/O.B, SZ=DEPTH/O.D;
-const toO=X=>(X-X_MIN)/SX;   // ship X (m) → the original form's X
 
 export const L=LBP, B=BEAM, D=DEPTH, T=DRAFT, R=O.R*SZ, FS=FRAME_SPACING;
 export const XMIN=X_MIN, XMAX=X_MAX, XC=(XMIN+XMAX)/2, FRMIN=FR_MIN, FRMAX=FR_MAX;
 export const NX=300, NB=12, NS=48, G=NB+1+NS;
 export const KEEL_HALF=KH, STRAKE_W=SW, LETTERS="ABCDEFGHJLMNPQRSTUV";
 export const WLS=[2,4,6,8,14,18,22].map(z=>+(z*SZ).toFixed(2));
-export const BOTTOM_FLAT=(O.B/2-O.R)*SY;   // half-breadth of the flat bottom (m)
+export const BOTTOM_FLAT=B/2-R;   // half-breadth of the flat bottom amidships (m)
 /* frame ↔ X (m): measurements keep X; frames are for display only */
 export const frX=fr=>fr*FS;
 export const frOf=X=>Math.round(X/FS);
 
-function deckZo(X){const xn=X/O.L;return O.D+(xn>0.86?3.2*Math.pow(Math.min((xn-0.86)/0.16,1.1),2):0);}
-function keelZo(X){const xn=X/O.L;if(xn<0.05){const t=(0.05-xn)/0.05;return 9.5*t*t;}return 0;}
-function rake(Z){return 7.0*Math.pow(clamp(Z/O.D,0,1.3),1.6);}
-function midHB(Z){if(Z>=O.R)return O.B/2;const dz=O.R-Z;return O.B/2-O.R+Math.sqrt(Math.max(0,O.R*O.R-dz*dz));}
-function hullHB(X,Z){
-  if(X<0||Z<keelZo(X)-1e-6||Z>deckZo(X)+1e-6)return 0;
-  const zn=clamp(Z/O.D,0,1);let w=1;
-  const xnf=(X-rake(Z))/O.L;
-  if(xnf>=1)return 0;
-  if(xnf>0.70){const t=(xnf-0.70)/0.30;w*=Math.max(0,1-Math.pow(t,1.6+2.4*zn));}
-  const xn=X/O.L;
-  if(xn<0.24){const t=(0.24-xn)/0.24;const p=0.6+2.6*zn;const tw=0.80*smooth(0.30,0.85,zn);w*=1-Math.pow(t,p)*(1-tw);}
-  return midHB(Z)*w;
+/* The form is built from signed half-breadth² fields (m²: positive inside the hull, negative outside), so two parts can be
+   joined with a smooth union (smax) — a round fillet where they are within k of each other, the plain max elsewhere
+   (no film past the stem), so no groove or kink where they meet. HB = √field. */
+const sq=h=>h<0?-h*h:h*h;
+const smax=(a,b,k)=>{const h=Math.max(k-Math.abs(a-b),0)/k;return Math.max(a,b)+h*h*k/4;};
+const rad=d=>d*Math.PI/180,TAN_RAKE=Math.tan(rad(HF.stem.rake)),BH=B/2;
+
+/* main deck (m): sheer rising forward to the forecastle and aft to the poop, each of those raised by its height */
+export function deckZ(X){
+  const S=HF.sheer,F=HF.forecastle,P=HF.poop;let z=D;
+  if(X>S.fwdX0)z+=S.fwd*Math.min(1,(X-S.fwdX0)/(F.x0-S.fwdX0))**2;
+  if(X<S.aftX0)z+=S.aft*Math.min(1,(S.aftX0-X)/(S.aftX0-P.x1))**2;
+  if(X>=F.x0)z+=F.h+F.stem*((X-F.x0)/(X_MAX-F.x0))**2;
+  if(X<=P.x1)z+=P.h;
+  return z;
 }
-function bulbHB(X,Z){const u=((X-(O.L+2.5))/7)**2+((Z-6)/4.6)**2;return u>=1?0:3.4*Math.sqrt(1-u);}
-/* the bulb ellipsoid in ship units (centre x, z; semi-axes along x, z, y) — the 3D bow cap rounds the tip with it (hullMesh.js) */
-export const BULB={x:X_MIN+(O.L+2.5)*SX,len:7*SX,z:6*SZ,h:4.6*SZ,w:3.4*SY};
+/* midship section: flat bottom, bilge radius R, vertical side */
+function midHB(Z){if(Z>=R)return BH;const dz=R-Z;return BH-R+Math.sqrt(Math.max(0,R*R-dz*dz));}
+
+/* --- bow --- */
+/* stem line: through FP (x = LBP) at the design waterline, raked forward; the forefoot rounds it into the keel (tangent to it) */
+function stemX(Z){const f=HF.forefoot;let x=L+(Z-T)*TAN_RAKE;if(Z<f.h){const t=(f.h-Math.max(Z,0))/f.h;x-=f.r*(1-Math.sqrt(1-t*t));}return x;}
+/* waterline fullness p (waterlines 1 − t^p): the entrance angle at the design waterline, a little finer below,
+   fuller towards the forecastle deck (= flare); smooth in Z so the shell has no knuckle */
+const Z_FC=D+HF.sheer.fwd+HF.forecastle.h;
+const P0=Math.tan(rad(HF.entrance))*(stemX(T)-HF.midbody.x1)/BH;
+function fullness(Z){return Z<=T?P0*(0.75+0.25*smooth(-T,T,Z)):P0+(HF.flare-P0)*smooth(T,Z_FC,Z);}
+/* forebody field: from the end of the midbody (t = 0) to the stem (t = 1), negative past the stem */
+function foreF(X,Z){const x1=HF.midbody.x1;if(X<=x1)return sq(midHB(Z));const t=(X-x1)/(stemX(Z)-x1);return sq(midHB(Z)*(1-Math.pow(t,fullness(Z))));}
+/* the bulb ellipsoid (centre x, z; semi-axes along x, z, y) — the 3D bow cap rounds the tip with it (hullMesh.js) */
+export const BULB={x:HF.bulb.x,len:HF.bulb.len,z:HF.bulb.z,h:HF.bulb.h,w:HF.bulb.w};
+function bulbF(X,Z){return BULB.w**2*(1-((X-BULB.x)/BULB.len)**2-((Z-BULB.z)/BULB.h)**2);}
+
+/* --- stern --- */
+/* bottom of the afterbody: 0 at run.x0, rising smoothly (flat at both ends) to the transom's lower edge */
+function runZ(X){const r=HF.run,u=clamp((r.x0-X)/(r.x0-X_MIN),0,1);return HF.transom.z*(1-(1-u**r.q)**r.r);}
+/* the skeg's raked aft edge: x at height Z (x1 at the keel → x2 where it meets the counter) */
+export function skegAftX(Z){const s=HF.skeg;return s.x1+(s.x2-s.x1)*clamp(Z/runZ(s.x2),0,1);}
+/* afterbody field: sections narrowing and rounding aft over the rising bottom (U sections by the skeg, a flatter counter
+   towards the transom), unioned with the skeg fin so the bottom gathers into it */
+function aftF(X,Z){
+  const u=clamp((HF.run.x0-X)/(HF.run.x0-X_MIN),0,1),bw=BH*(1-(1-HF.transom.w)*u**2.5);
+  const rb=(R+(bw-R)*smooth(0,0.35,u))*(1-0.4*smooth(0.72,1,u)),dz=Z-runZ(X);
+  const h=dz>=rb?bw:dz>=0?bw-rb+Math.sqrt(rb*rb-(rb-dz)**2):bw-rb+30*dz;
+  // skeg: a thin fin at its aft edge, widening forward into a V that merges with the bottom (deadwood); held inside the
+  // section's breadth (0.9 bw), so high up it never pushes the side out past the beam
+  const s=HF.skeg,xe=skegAftX(Z),w=Math.min(s.half+s.v*Z*smooth(s.x1+2,32,X),0.9*bw),hs=X>=xe?w:w-8*(xe-X);
+  return smax(sq(h),sq(hs),s.blend);
+}
 /* smallest curvature radius of the bulb ellipsoid at (X, Z) (m): 1 / the larger principal curvature at its surface point
    (the tightest bend in any direction) — Infinity off the ellipsoid */
 export function bulbRadius(X,Z){
@@ -59,14 +91,27 @@ export function unmeasurable(X,Z){
   for(const m of MANUAL){
     if(X<m.x0-1e-6||X>m.x1+1e-6||Z<m.z0-1e-6||Z>m.z1+1e-6)continue;
     if(m.key!=='bulb')return m.key;
-    const x=toO(X),z=Z/SZ;
-    if(X>=BULB.x&&bulbHB(x,z)>0&&bulbHB(x,z)>=hullHB(x,z)-1e-6&&bulbRadius(X,Z)<m.rMax)return m.key;
+    const b=bulbF(X,Z);
+    if(X>=BULB.x&&b>0&&b>=foreF(X,Z)-1e-6&&bulbRadius(X,Z)<m.rMax)return m.key;
   }
   return null;
 }
-export function deckZ(X){return deckZo(toO(X))*SZ;}
-export function keelZ(X){return keelZo(toO(X))*SZ;}
-export function HB(X,Z){const x=toO(X),z=Z/SZ;return Math.max(hullHB(x,z),z>=0?bulbHB(x,z):0)*SY;}
+/* half-breadth (m) at (X, Z): forebody ∪ bulb, midbody, afterbody ∪ skeg; 0 outside the shell */
+export function HB(X,Z){
+  if(Z<-1e-6||Z>deckZ(X)+1e-6)return 0;
+  const f=X>=HF.midbody.x1?smax(foreF(X,Z),bulbF(X,Z),HF.bulb.blend):X<=HF.run.x0?aftF(X,Z):sq(midHB(Z));
+  return f>0?Math.sqrt(f):0;
+}
+/* keel (lowest shell point on the centreline): the baseline, except abaft the skeg — its raked aft edge, then the
+   counter over the propeller aperture (found on HB) */
+export function keelZ(X){
+  if(X>=HF.skeg.x1)return 0;
+  const has=Z=>HB(X,Z)>0.005,top=deckZ(X);let a=0,b=null;
+  for(let Z=0;Z<=top;Z+=0.1){if(has(Z)){b=Z;break;}a=Z;}
+  if(b===null)return top;if(b===0)return 0;
+  for(let k=0;k<20;k++){const m=(a+b)/2;if(has(m))b=m;else a=m;}
+  return b;
+}
 
 export function section(X){
   const zk=keelZ(X),zd=deckZ(X);
@@ -84,8 +129,8 @@ export function strakeLower(i){return i<0?0:KEEL_HALF+STRAKE_W*i;}   // i = -1 f
 export const ZONES=['선저','빌지','선측','흘수선','건현','선수','선미'];
 /* 선수 = FR 220 이후, 선미 = FR 10 이전. 나머지는 높이: 선저 · 빌지 · 선측(수선 아래) · 흘수선(수선부 5.6–9.4 m) · 건현 */
 export function zoneOf(X,Z){if(X>=BOW_FR*FS)return 5;if(X<STERN_FR*FS)return 6;if(Z<0.15)return 0;if(Z<R+0.6)return 1;if(Z<DRAFT_LIGHT)return 2;if(Z<WL_TOP)return 3;return 4;}
-/* frame card: where along the hull (the form's own run / parallel midbody / entrance limits) */
-export function regionOf(X){const xn=toO(X)/O.L;if(X<STERN_FR*FS)return '선미';if(xn<0.24)return '선미 곡면부';if(xn<0.70)return '평행 중앙부';if(X<BOW_FR*FS)return '선수 곡면부';return '선수';}
+/* frame card: where along the hull (the run / parallel midbody / entrance limits, HULL_FORM.midbody) */
+export function regionOf(X){const M=HF.midbody;if(X<STERN_FR*FS)return '선미';if(X<M.x0)return '선미 곡면부';if(X<=M.x1)return '평행 중앙부';if(X<BOW_FR*FS)return '선수 곡면부';return '선수';}
 export function strakeAt(X,Z){const s=section(X);let j=NB;for(let k=0;k<G-1;k++){if(s.Zs[k]<=Z&&s.Zs[k+1]>=Z&&k>=NB){j=k;break;}}return strakeName(s.gs[j]);}
 
 /* point on the shell at girth g (m from keel CL) of section s; null where the shell is degenerate */

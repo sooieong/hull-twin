@@ -24,6 +24,7 @@ const ICON_OK='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="1
 const ICON_PICK='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>';
 const state=(icon,t,s)=>emptyState(t,s,{icon});
 const FIG_ASPECT=1.1;   // section figure width : height (the default layout's ratio)
+const SIDE_W=128;       // px: the side cards' column at its widest in the normal layout (style.css .dt-side) — the maximised cards scale from it
 
 /* photo lightbox: closes on the backdrop, the close button or Esc */
 function createLightbox(){
@@ -66,13 +67,14 @@ export function createDetailPanel(body,store,ui){
     if(layer==='defect'){
       const has=!!r.defect,caption=has?`${DEFECT_LABEL[r.defect]}·${area(r.defectArea)}·${recLoc(r)}`:'';
       const media=!has?state(ICON_OK,'손상 없음','이 지점에서 발견된 도막 손상이 없습니다')
-        // the whole photo in a frame of the photo's own ratio, the largest that fits the cell, centred (fitPhoto)
+        // a wide cell: filled (cover, centred) · a tall one: the whole photo in a frame of its own ratio, centred (fitPhoto)
         :r.photo?`<button class="dt-img" title="크게 보기" aria-label="사진 크게 보기"><img src="${esc(r.photo)}" alt="${esc(DEFECT_LABEL[r.defect])} 사진·${recLoc(r)}"></button>`
         :state(ICON_PHOTO,'사진 없음','이 손상에 연결된 사진이 없습니다');
       const kind=`<b class="dt-word"${has?` style="color:${LV_COLOR[colorLevel]}"`:''}>${has?esc(DEFECT_LABEL[r.defect]):'없음'}</b>`;
       const conf=has&&r.aiConfidence!=null?dropHtml(r.aiConfidence,'%'):'<b class="dt-word">—</b>';
       body.innerHTML=`<div class="dt"><div class="dt-main"><div class="dt-media">${media}</div>
         <div class="dt-side">${sideCard('종류',kind,'kind')}${sideCard('AI 신뢰도',conf,'ai')}</div></div></div>`;
+      sizeSide();
       const btn=body.querySelector('.dt-img'),img=btn&&btn.querySelector('img');
       if(img){
         img.addEventListener('error',()=>{img.closest('.dt-media').innerHTML=state(ICON_PHOTO,'사진 없음','사진 파일을 불러올 수 없습니다');},{once:true});
@@ -84,13 +86,23 @@ export function createDetailPanel(body,store,ui){
     const m=thickness(r,layer),card=([k,v,u],cls,color)=>`<div class="dt-card ${cls}"><span>${k}</span>${dropHtml(v,u,color)}</div>`;
     body.innerHTML=`<div class="dt"><div class="dt-main"><div class="dt-fig"></div>
       <div class="dt-side">${card(m.side[0],'ref',LV_COLOR[colorLevel])}${m.side[1]?card(m.side[1],'prev',PREV_COLOR):''}</div></div></div>`;
-    drawFig(m,colorLevel);
+    sizeSide();drawFig(m,colorLevel);
   }
-  /* damage photo: the frame (button) takes the photo's ratio at the largest size that fits the cell; the cell centres it */
+  const isMax=()=>!!body.closest('.pane.max');
+  /* damage photo (re-run on every resize):
+     - not maximised and the cell wider than tall: the frame fills the cell, the photo covers it from its centre
+     - otherwise (maximised, S.SHELL folded): the frame takes the photo's ratio at the largest size that fits; the cell centres it */
   function fitPhoto(){
     const btn=body.querySelector('.dt-img'),img=btn&&btn.querySelector('img');if(!img||!img.naturalWidth)return;
-    const cell=btn.parentElement,cw=cell.clientWidth,ch=cell.clientHeight,ratio=img.naturalWidth/img.naturalHeight;
-    const W=Math.min(cw,ch*ratio);btn.style.width=`${Math.floor(W)}px`;btn.style.height=`${Math.floor(W/ratio)}px`;
+    const cell=btn.parentElement,cw=cell.clientWidth,ch=cell.clientHeight,ratio=img.naturalWidth/img.naturalHeight,fill=cw>ch&&!isMax();
+    const W=fill?cw:Math.min(cw,ch*ratio),H=fill?ch:W/ratio;
+    btn.style.width=`${Math.floor(W)}px`;btn.style.height=`${Math.floor(H)}px`;
+  }
+  /* maximised: the side cards' column is ~20% of the panel (CSS); --k = its width / the normal column's, which scales the
+     cards' height, padding and type (style.css .pane.max .dt-side) */
+  function sizeSide(){
+    const side=body.querySelector('.dt-side');if(!side)return;
+    if(isMax())side.style.setProperty('--k',(side.clientWidth/SIDE_W).toFixed(3));else side.style.removeProperty('--k');
   }
   /* the section figure keeps FIG_ASPECT at any panel size: the largest such box in the cell, centred (sectionSvg fills what it gets) */
   function drawFig(m,level){
@@ -98,7 +110,7 @@ export function createDetailPanel(body,store,ui){
     const cw=fig.clientWidth,ch=fig.clientHeight,W=Math.round(Math.min(cw,ch*FIG_ASPECT)),H=Math.round(W/FIG_ASPECT);
     fig.innerHTML=W>40&&H>60?sectionSvg(m,level,W,H):'';
   }
-  new ResizeObserver(()=>{const r=last&&last.r;if(r&&last.layer==='defect')fitPhoto();if(r&&last.layer!=='defect')drawFig(thickness(r,ui.layer),Math.min(gradeOf(judge(r,ui.layer).level,isTop(r,ui.layer)),CRIT));}).observe(body);
+  new ResizeObserver(()=>{const r=last&&last.r;sizeSide();if(r&&last.layer==='defect')fitPhoto();if(r&&last.layer!=='defect')drawFig(thickness(r,ui.layer),Math.min(gradeOf(judge(r,ui.layer).level,isTop(r,ui.layer)),CRIT));}).observe(body);
   // the mapping notice carries the progress, so robot moves (pose) refresh it too while nothing is shown
   store.subscribe(k=>{if(k.has('state')){clearTimeout(timer);timer=null;render();}
     else if((k.has('records')||k.has('pose')&&last&&!last.r)&&!timer)timer=setTimeout(()=>{timer=null;render();},250);});

@@ -17,7 +17,7 @@ const ptLocH=r=>numHtml(recLoc(r)),zoneLocH=z=>numHtml(zoneLoc(z));
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 /* judgement chip: 최우선 보수 / 경고 / 주의 / 정상 — cx: 최우선 보수 (a point: isTop(r, layer), a zone: z.top) */
 const chip=(l,cx,layer)=>{const g=gradeOf(l,cx);return `<span class="rp-lv rp-lv${g}">${gradeIcon(g)}${gradeLabel(l,cx,layer)}</span>`;};
-import logoReport from '../assets/report_logo.png';   // the report's own logo (orange letters, dark magnifier) for the white page
+import logoReport from '../assets/report_logo.png';   // the report's own logo (dark letters and magnifier, orange "OC") for the white page
 const TYPE={dft:'도막',plate:'강판',defect:'손상'};
 
 function page(n,title,body,d){

@@ -3,9 +3,10 @@
    배경 흰색, 선체 연회색, 히트맵은 판정색. 시점: 우현 ISO, 선저.
    ========================================================= */
 import * as THREE from 'three';
-import { XC, NX, G, D, B, FS, FRMAX, stX, stSec, recordU, section, NB } from '../hull.js';
+import { XC, XMIN, NX, G, D, B, FS, FRMAX, stX, stSec, recordU, section, NB } from '../hull.js';
 import { LAYERS } from '../data/criteria.js';
 import { nV, pos, girth, index, normal, bowCap, SUPER_BOXES } from '../hullMesh.js';
+import { sternGearGeometry } from '../sternGear.js';
 import { heatOf, heatRGB, heatAlpha, buildIndex, idw } from '../heatmap.js';
 
 /* 장면 전용 색 (보고서 3D 그림): 흰 배경·조명·선체 회색·굴뚝 띠·프레임선. 히트맵 판정색은 heatmap.js(styles/tokens.js)를 쓴다. */
@@ -45,9 +46,12 @@ export function renderHullViews(records,jobs){
     g.setAttribute('color',new THREE.BufferAttribute(new Float32Array(nV*3),3));return g;};
   const mat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.8,metalness:0,side:THREE.DoubleSide});
   const gS=geo(),gP=geo(),mS=new THREE.Mesh(gS,mat),mP=new THREE.Mesh(gP,mat);mP.scale.z=-1;scene.add(mS,mP);
-  // the rounded bulb tip (not measured: the plain hull colour)
+  // the rounded bulb tip, the transom and the stern gear — propeller, rudder (not measured: the plain hull colour)
   {const cg=new THREE.BufferGeometry();cg.setAttribute('position',new THREE.Float32BufferAttribute(bowCap.pos,3));cg.setAttribute('normal',new THREE.BufferAttribute(bowCap.normal,3));cg.setIndex(bowCap.index);
-    const cm=new THREE.MeshStandardMaterial({color:new THREE.Color(...BASE),roughness:0.8,side:THREE.DoubleSide});[1,-1].forEach(sd=>{const m=new THREE.Mesh(cg,cm);m.scale.z=sd;scene.add(m);});}
+    const cm=new THREE.MeshStandardMaterial({color:new THREE.Color(...BASE),roughness:0.8,side:THREE.DoubleSide});[1,-1].forEach(sd=>{const m=new THREE.Mesh(cg,cm);m.scale.z=sd;scene.add(m);});
+    const s=stSec[0],tp=[],ti=[];for(let j=0;j<G;j++){tp.push(XMIN-XC,s.Zs[j],-s.Ys[j],XMIN-XC,s.Zs[j],s.Ys[j]);if(j<G-1){const a=j*2;ti.push(a,a+1,a+2,a+1,a+3,a+2);}}
+    const tg=new THREE.BufferGeometry();tg.setAttribute('position',new THREE.Float32BufferAttribute(tp,3));tg.setIndex(ti);tg.computeVertexNormals();scene.add(new THREE.Mesh(tg,cm));
+    const gear=sternGearGeometry();[gear.rudder,...gear.prop].forEach(g=>scene.add(new THREE.Mesh(g,cm)));}
   // deck, superstructure and every-50-frame lines for orientation
   const deckPos=[],deckIdx=[];for(let i=0;i<=NX;i++){const s=stSec[i],X=stX[i];deckPos.push(X-XC,s.Zs[G-1],-s.Ys[G-1],X-XC,s.Zs[G-1],s.Ys[G-1]);if(i<NX){const a=i*2;deckIdx.push(a,a+2,a+1,a+1,a+2,a+3);}}
   const dg=new THREE.BufferGeometry();dg.setAttribute('position',new THREE.Float32BufferAttribute(deckPos,3));dg.setIndex(deckIdx);dg.computeVertexNormals();

@@ -18,11 +18,11 @@ button,select,input{font:inherit;color:inherit}
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 10px}
 
 /* ---------- top bar ---------- */
-.topbar{display:flex;align-items:center;gap:18px;height:54px;border-bottom:1px solid var(--line);min-width:0}
+.topbar{display:flex;align-items:center;gap:18px;height:60px;border-bottom:1px solid var(--line);min-width:0}
 .brand{display:flex;align-items:center;gap:10px;flex:none}
-.brand-logo{display:block;height:30px;width:auto}   /* src/assets/logo.png: ship icon + "Dr.DOCK", trimmed, transparent */
+.brand-logo{display:block;height:40px;width:auto}   /* src/assets/logo.png: ship + "DR.DOCK" under a magnifier, trimmed, transparent (width from its ratio) */
 .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-/* ship + docking select as one bundle: Wally Schirra │ docking ▾ */
+/* ship + docking select as one bundle: ship name │ docking ▾ */
 .ship-dock .ship{display:flex;align-items:center;gap:8px;color:var(--text-2);min-width:0;overflow:hidden;white-space:nowrap}
 .ship-dock .ship b{color:var(--text);font-weight:600}
 .ship-dock .vsep{width:1px;height:16px;margin:0 2px 0 4px;background:var(--line-strong);flex:none}
@@ -113,11 +113,9 @@ button,select,input{font:inherit;color:inherit}
 .lg-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;font-size:var(--fs-body);color:var(--text-2)}
 .lg-row>span+i{margin-left:8px}   /* gap between the two pairs on a row */
 .lg-row.lg-one{flex-wrap:nowrap;white-space:nowrap}   /* 최우선 보수 rule on one line next to its chip */
-.pop .sw-hull{width:12px;height:12px;border-radius:2px;background:var(--hull);flex:none}
-.pop .sw-hull.actual{background:linear-gradient(180deg,var(--hull-above) 50%,var(--hull-below) 50%)}   /* 실제 look: grey above, red-brown below */
+.pop .sw-hull{width:12px;height:12px;border-radius:2px;flex:none;background:linear-gradient(180deg,var(--hull-above) 50%,var(--hull-below) 50%)}   /* 실선 hull: grey above, red-brown below */
 .pop .hatch{width:12px;height:12px;border-radius:2px;flex:none;   /* 측정 불가: the 3D hatch — dark + light stripes over the hull */
-  background:repeating-linear-gradient(135deg,var(--hatch-dark) 0 1.6px,var(--hatch-light) 1.6px 2.4px,transparent 2.4px 4.2px),var(--hull)}
-.pop .hatch.actual{background:repeating-linear-gradient(135deg,var(--hatch-dark) 0 1.6px,var(--hatch-light) 1.6px 2.4px,transparent 2.4px 4.2px),
+  background:repeating-linear-gradient(135deg,var(--hatch-dark) 0 1.6px,var(--hatch-light) 1.6px 2.4px,transparent 2.4px 4.2px),
   linear-gradient(180deg,var(--hull-above) 50%,var(--hull-below) 50%)}
 .pane-body{position:relative;flex:1;min-height:0}
 #vp{position:absolute;inset:0}
@@ -228,11 +226,18 @@ button,select,input{font:inherit;color:inherit}
 .dt-side .dt-card{flex:none;height:74px;justify-content:space-between;padding:7px 9px}
 .dt-side .dt-card>span:not(.num-drop){font-size:var(--fs-meta)}
 .dt-side .dt-word{font-size:var(--fs-sub);font-weight:600;line-height:1.2;color:var(--text)}   /* a word value (손상 종류), same card as the numbers */
+/* maximised: the column is ~20% of the panel (160–280px) and the cards grow with it — height, padding, gap and type
+   × --k (detail.js sizeSide: column width / 128px); the units follow the number (em), the corners stay as the photo's */
+.pane.max .dt-side{width:clamp(160px,20%,280px);gap:calc(8px * var(--k,1))}
+.pane.max .dt-side .dt-card{height:calc(74px * var(--k,1));padding:calc(7px * var(--k,1)) calc(9px * var(--k,1))}
+.pane.max .dt-side .dt-card>span:not(.num-drop){font-size:calc(var(--fs-meta) * var(--k,1))}
+.pane.max .dt-side .dt-word{font-size:calc(var(--fs-sub) * var(--k,1))}
+.pane.max .dt-side .num-drop{font-size:calc(var(--fs-num-l) * var(--k,1))}
 .dt-fig svg{position:absolute;inset:0;margin:auto;display:block}   /* fixed-ratio figure, centred in the cell (detail.js FIG_ASPECT) */
 .dt-media{flex:1;min-height:0;min-width:0;display:flex;align-items:center;justify-content:center;overflow:hidden}   /* the panel background around the photo */
-/* the photo's frame: sized to the photo's ratio by detail.js fitPhoto, corners as the side cards */
+/* the photo's frame, sized by detail.js fitPhoto (a wide cell: the whole cell · a tall one: the photo's ratio), corners as the side cards */
 .dt-img{flex:none;display:block;padding:0;border:0;border-radius:6px;overflow:hidden;background:none;cursor:zoom-in}
-.dt-img img{display:block;width:100%;height:100%;object-fit:cover}   /* the frame is the photo's ratio to the pixel: cover only absorbs the rounding (< 1px), never distorts */
+.dt-img img{display:block;width:100%;height:100%;object-fit:cover;object-position:center}   /* a wide cell crops from the centre; in a photo-ratio frame cover only absorbs the rounding (< 1px) */
 .lightbox{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:32px;background:var(--backdrop)}
 .lightbox figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:10px;max-width:100%;max-height:100%}
 .lightbox img{max-width:90vw;max-height:calc(100vh - 110px);object-fit:contain;display:block;border-radius:4px}

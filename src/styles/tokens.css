@@ -8,7 +8,7 @@
    surfaces       --bg --surface --surface-2 --surface-3 --glass --pop-bg --tip-bg --line --line-strong --hatch-dark --hatch-light --hatch-line
    text           --text (제목·숫자·FR) · --text-2 (판정 이름·항목 제목·위치·설명·버튼) · --muted (건수·순위·축 라벨·태그)
    judgement      --lv-ok --lv-warn --lv-crit --lv-top
-   3D hull        --zone-label --zone-label-bg --hull --hull-below --hull-above
+   3D hull        --zone-label --zone-label-bg --hull-below --hull-above
    translucent    --orange-a10 --orange-a18 --orange-a35 --orange-a60 --orange-a0 --peach-a35
                   --warn-bg --warn-line --crit-bg --crit-line --shadow --backdrop
    font           --font (Pretendard — words and numbers; numbers add tabular-nums)

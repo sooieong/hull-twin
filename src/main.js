@@ -31,10 +31,10 @@ const SCENE={
   hemiSky:0xb8c7e6,hemiGround:0x5a6478,key:0xffffff,rim:0xC9D3E6,fill:0xd5dcea,   // lights
   hullBp:0x0c1528,back:0x0a1222,                                                 // 도면 hull, the shell's inside
   deck:0xAAB2BD,deckBp:0x0c1528,transom:0xC4CAD2,transomBp:0x0c1528,
-  frame:0x5C687D,frameMaj:0x34415A,sheer:0x34415A,seam:0x5C687D,                 // shell lines (실선·실제)
+  frame:0x5C687D,frameMaj:0x34415A,sheer:0x34415A,seam:0x5C687D,                 // shell lines (실선)
   zone:0x1F2D4A,zoneBp:0xC9D3E3,                                                 // 구역 경계 lines
   sup:0xC9CED6,supBp:0x0f1a30,supEdge:0x5F6A7C,band:0x0b0b0b,                    // superstructure, funnel band
-  floor:0x060b15,gridMin:0x0c1527,gridMaj:0x172540,dockWall:0x22355a,block:0x2a303c,blockCap:0x5a3a22   // dock
+  floor:0x060b15,gridMin:0x0c1527,gridMaj:0x172540,block:0x2a303c,blockCap:0x5a3a22   // dock
 };
 
 (function(){
@@ -118,12 +118,10 @@ const clipMats=[];
 function cm(m){clipMats.push(m);return m;}
 
 /* hull shell */
-const colReal=new Float32Array(nV*3),colBp=new Float32Array(nV*3),colActual=new Float32Array(nV*3);
-const cHull=new THREE.Color(COLOR.hull),cBp=new THREE.Color(SCENE.hullBp);   // 실선: light achromatic hull (SPEC 4.4) · 도면: dark navy
-for(let k=0;k<nV;k++){cHull.toArray(colReal,k*3);cBp.toArray(colBp,k*3);}
-// 실제: painted like the real ship — antifouling red-brown below the design waterline, grey above (pos y = ship Z)
-{const below=new THREE.Color(COLOR.hullBelow),above=new THREE.Color(COLOR.hullAbove);
-  for(let k=0;k<nV;k++)(pos[k*3+1]<T?below:above).toArray(colActual,k*3);}
+const colReal=new Float32Array(nV*3),colBp=new Float32Array(nV*3);
+// 실선: painted like the real ship — antifouling red-brown below the design waterline, grey above (pos y = ship Z) · 도면: dark navy
+{const below=new THREE.Color(COLOR.hullBelow),above=new THREE.Color(COLOR.hullAbove),cBp=new THREE.Color(SCENE.hullBp);
+  for(let k=0;k<nV;k++){(pos[k*3+1]<T?below:above).toArray(colReal,k*3);cBp.toArray(colBp,k*3);}}
 const hullGeo=new THREE.BufferGeometry();
 hullGeo.setAttribute('position',new THREE.BufferAttribute(pos,3));
 hullGeo.setAttribute('normal',new THREE.BufferAttribute(hullNormal,3));   // hullMesh: one normal on the centreline seam for both sides
@@ -169,7 +167,7 @@ const hatchMesh=g=>{const m=new THREE.Mesh(g,hatchMat);m.renderOrder=2;return m;
   const mg=new THREE.BufferGeometry();mg.setAttribute('position',new THREE.Float32BufferAttribute(mp,3));mg.setAttribute('uv',new THREE.Float32BufferAttribute(muv,2));
   const mS=new THREE.Mesh(mg,mat),mP=new THREE.Mesh(mg,mat);mP.scale.z=-1;mS.renderOrder=mP.renderOrder=2;hullGroup.add(mS,mP);}
 
-/* bulb tip: the cap that rounds it off (hullMesh.bowCap), and the stern gear (sternGear.js): skeg, propeller, rudder.
+/* bulb tip: the cap that rounds it off (hullMesh.bowCap), and the stern gear (sternGear.js): propeller, rudder (the skeg is shell).
    Not measured (수동 측정): no heat — a base colour per look (paintGear) with the hatch over it; 도면 adds outlines like the other lines */
 const gearMats={cap:cm(new THREE.MeshStandardMaterial({roughness:0.7,metalness:0.05,side:THREE.DoubleSide})),
   plate:cm(new THREE.MeshStandardMaterial({roughness:0.7,metalness:0.05,side:THREE.DoubleSide})),
@@ -184,16 +182,16 @@ const gearEdges=new THREE.Group();gearEdges.visible=false;
   [1,-1].forEach(sd=>{const m=new THREE.Mesh(capG,gearMats.cap),hg=new THREE.BufferGeometry();m.scale.z=sd;
     hg.setAttribute('position',new THREE.Float32BufferAttribute(tri.flatMap(k=>[P[k*3],P[k*3+1],P[k*3+2]*sd]),3));hullGroup.add(m,hatchMesh(worldUV(hg)));});
   const G3=sternGearGeometry(),add=(g,mat)=>{hullGroup.add(new THREE.Mesh(g,mat),hatchMesh(worldUV(g)));gearEdges.add(new THREE.LineSegments(new THREE.EdgesGeometry(g,30),gearEdgeMat));};
-  add(G3.skeg,gearMats.plate);add(G3.rudder,gearMats.plate);G3.prop.forEach(g=>add(g,gearMats.prop));
+  add(G3.rudder,gearMats.plate);G3.prop.forEach(g=>add(g,gearMats.prop));
   hullGroup.add(gearEdges);}
-/* base colours of the cap and the gear for the look (실제: antifouling skeg·rudder·bulb, bronze propeller), dimmed like
-   the unmeasured shell while a run is going */
+/* base colours of the cap and the gear for the look (실선: antifouling bulb·rudder, bronze propeller; the skeg is shell),
+   dimmed like the unmeasured shell while a run is going */
 function paintGear(dimOn){
-  const pick=(real,bp,actual)=>new THREE.Color(look==='bp'?bp:look==='actual'?actual:real);
+  const pick=(real,bp)=>new THREE.Color(look==='bp'?bp:real);
   const dim=c=>{if(dimOn){const D=DIM[look];c.r+=(D[0]-c.r)*0.7;c.g+=(D[1]-c.g)*0.7;c.b+=(D[2]-c.b)*0.7;}return c;};
-  gearMats.cap.color.copy(dim(pick(COLOR.hull,SCENE.hullBp,COLOR.hullBelow)));
-  gearMats.plate.color.copy(dim(pick(COLOR.hull,SCENE.hullBp,COLOR.hullBelow)));
-  gearMats.prop.color.copy(dim(pick(COLOR.hull,SCENE.hullBp,COLOR.bronze)));
+  gearMats.cap.color.copy(dim(pick(COLOR.hullBelow,SCENE.hullBp)));
+  gearMats.plate.color.copy(dim(pick(COLOR.hullBelow,SCENE.hullBp)));
+  gearMats.prop.color.copy(dim(pick(COLOR.bronze,SCENE.hullBp)));
   gearEdges.visible=look==='bp';
 }
 
@@ -204,7 +202,7 @@ for(let i=0;i<=NX;i++){const s=stSec[i],X=stX[i];const Y=s.Ys[G-1],Z=s.Zs[G-1];d
 const deckGeo=new THREE.BufferGeometry();deckGeo.setAttribute('position',new THREE.Float32BufferAttribute(deckPos,3));deckGeo.setIndex(deckIdx);deckGeo.computeVertexNormals();
 const deckMat=cm(new THREE.MeshStandardMaterial({color:SCENE.deck,roughness:0.85,metalness:0.1,side:THREE.DoubleSide}));
 const deck=new THREE.Mesh(deckGeo,deckMat);hullGroup.add(deck);
-const trPos=[],trIdx=[];{const s=stSec[0];for(let j=0;j<G;j++){trPos.push(-XC,s.Zs[j],-s.Ys[j],-XC,s.Zs[j],s.Ys[j]);if(j<G-1){const a=j*2;trIdx.push(a,a+1,a+2,a+1,a+3,a+2);}}}
+const trPos=[],trIdx=[];{const s=stSec[0];for(let j=0;j<G;j++){trPos.push(XMIN-XC,s.Zs[j],-s.Ys[j],XMIN-XC,s.Zs[j],s.Ys[j]);if(j<G-1){const a=j*2;trIdx.push(a,a+1,a+2,a+1,a+3,a+2);}}}
 const trGeo=new THREE.BufferGeometry();trGeo.setAttribute('position',new THREE.Float32BufferAttribute(trPos,3));trGeo.setIndex(trIdx);trGeo.computeVertexNormals();
 const trMat=cm(new THREE.MeshStandardMaterial({color:SCENE.transom,roughness:0.6,metalness:0.18,side:THREE.DoubleSide}));
 hullGroup.add(new THREE.Mesh(trGeo,trMat));
@@ -244,7 +242,7 @@ const bpArr=[];WLS.forEach(Z=>{for(let X=XMIN;X<XMAX;X+=0.6){const y1=HB(X,Z),y2
 for(let i=0;i<=20;i++)sectionSegs(XMIN+i*(XMAX-XMIN)/20,bpArr,0.07);
 const bpLines=lineSeg(bpArr,bpMat);bpLines.visible=false;
 hullGroup.add(frames,seams,dwl,bpLines);
-/* 실제 look: a thin white contour around the heatmap so it reads on the red-brown hull (rebuilt with the heat, paintHull) */
+/* 실선 look: a thin white contour around the heatmap so it reads on the red-brown hull (rebuilt with the heat, paintHull) */
 const heatEdgeMat=cm(new THREE.LineBasicMaterial({color:COLOR.draw.heatEdge,transparent:true,opacity:0.9}));
 const heatEdgeS=new THREE.LineSegments(new THREE.BufferGeometry(),heatEdgeMat),heatEdgeP=new THREE.LineSegments(new THREE.BufferGeometry(),heatEdgeMat);
 heatEdgeP.scale.z=-1;heatEdgeS.visible=heatEdgeP.visible=false;hullGroup.add(heatEdgeS,heatEdgeP);
@@ -267,19 +265,14 @@ function box(x0,x1,z0,z1,w,mat=supMat,yc=0){const g=new THREE.BoxGeometry(x1-x0,
 SUPER_BOXES.forEach(([x0,x1,z0,z1,w,band])=>box(x0,x1,z0,z1,w,band?bandMat:supMat));
 scene.add(superGroup);
 
-/* dock: floor, grid, walls, keel blocks */
+/* dock: floor, grid, keel blocks (LAYERS "도크·킬 블록" shows or hides them all) */
 const dockGroup=new THREE.Group();
 const FLOOR=-1.8;
 const floor=new THREE.Mesh(new THREE.PlaneGeometry(380*SX,120*SY),new THREE.MeshBasicMaterial({color:SCENE.floor}));floor.rotation.x=-Math.PI/2;floor.position.y=FLOOR-0.02;dockGroup.add(floor);
 const gMin=[],gMaj=[];
 for(let x=-300;x<=300;x+=5){const a=x%25===0?gMaj:gMin;a.push(x,FLOOR,-170,x,FLOOR,170);}
 for(let z=-170;z<=170;z+=5){const a=z%25===0?gMaj:gMin;a.push(-300,FLOOR,z,300,FLOOR,z);}
-scene.add(lineSeg(gMin,new THREE.LineBasicMaterial({color:SCENE.gridMin})));
-scene.add(lineSeg(gMaj,new THREE.LineBasicMaterial({color:SCENE.gridMaj})));
-const dw=[];const DX0=-190*SX,DX1=190*SX,DZ=60*SY,DH=18*SZ;
-[[FLOOR],[DH]].forEach(([y])=>{dw.push(DX0,y,-DZ,DX1,y,-DZ,DX0,y,DZ,DX1,y,DZ,DX0,y,-DZ,DX0,y,DZ);});
-for(let x=DX0;x<=DX1+1e-6;x+=(DX1-DX0)/19){dw.push(x,FLOOR,-DZ,x,DH,-DZ,x,FLOOR,DZ,x,DH,DZ);}
-dockGroup.add(lineSeg(dw,new THREE.LineBasicMaterial({color:SCENE.dockWall,transparent:true,opacity:0.7})));
+dockGroup.add(lineSeg(gMin,new THREE.LineBasicMaterial({color:SCENE.gridMin})),lineSeg(gMaj,new THREE.LineBasicMaterial({color:SCENE.gridMaj})));
 const blkMat=new THREE.MeshStandardMaterial({color:SCENE.block,roughness:0.9});
 const capMat=new THREE.MeshStandardMaterial({color:SCENE.blockCap,roughness:0.9});
 const blkG=new THREE.BoxGeometry(BLOCK_SIZE.dx,1.5,BLOCK_SIZE.dy),capG=new THREE.BoxGeometry(BLOCK_SIZE.dx,0.3,BLOCK_SIZE.dy);
@@ -391,8 +384,9 @@ function updateHeat(){
   paintHull();
 }
 function scheduleHeat(){if(heatT)return;heatT=setTimeout(()=>{heatT=null;updateHeat();},100);}
-// not-yet-measured shell while mapping or paused (the map "appears" behind the robot)
-const DIM={real:[0.3,0.33,0.39],bp:[0.02,0.035,0.07],actual:[0.3,0.33,0.39]};
+// not-yet-measured shell while mapping or paused (the map "appears" behind the robot): 70% towards a colour darker than
+// both 실선 paints (red-brown, grey), so the unmeasured shell reads darker on either
+const DIM={real:[0.12,0.13,0.16],bp:[0.02,0.035,0.07]};
 let look='real';
 /* the heat contour at half of the colour ramp (heatAlpha), as line segments across the shell triangles, lifted off the shell */
 const EDGE_H=HEAT.alphaFrom+0.5*(HEAT.alphaTo-HEAT.alphaFrom),EDGE_OFF=0.07;
@@ -405,7 +399,7 @@ function heatEdges(line,h){
   line.geometry.dispose();line.geometry=new THREE.BufferGeometry();line.geometry.setAttribute('position',new THREE.Float32BufferAttribute(out,3));
 }
 function paintHull(){
-  const base=look==='bp'?colBp:look==='actual'?colActual:colReal,show=true,DIMC=DIM[look];
+  const base=look==='bp'?colBp:colReal,show=true,DIMC=DIM[look];
   const dimOn=!!store&&(store.mapState==='mapping'||store.mapState==='paused');
   [[geoS,heatS,covS],[geoP,heatP,covP]].forEach(([g,h,cov])=>{const attr=g.attributes.color,c=attr.array;
     for(let k=0;k<nV;k++){const o=k*3;let r=base[o],gr=base[o+1],b=base[o+2];
@@ -414,7 +408,7 @@ function paintHull(){
       if(a>0){const hc=heatRGB(h[k]);r+=(hc[0]/255-r)*a;gr+=(hc[1]/255-gr)*a;b+=(hc[2]/255-b)*a;}
       c[o]=r;c[o+1]=gr;c[o+2]=b;}
     attr.needsUpdate=true;});
-  const edges=look==='actual';heatEdgeS.visible=heatEdgeP.visible=edges;
+  const edges=look==='real';heatEdgeS.visible=heatEdgeP.visible=edges;
   if(edges){heatEdges(heatEdgeS,heatS);heatEdges(heatEdgeP,heatP);}
   paintGear(dimOn);
 }
@@ -530,11 +524,10 @@ window.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
   else if(!csPop.hidden){openCs(false);csBtn.focus();e.preventDefault();}
   else if(!valPop.hidden){openVal(false);valBtn.focus();e.preventDefault();}
 },true);
-/* 실선 | 도면 | 실제 (VIEW row): 도면 = dark navy hull, orange design lines (waterlines, stations, frames);
-   실제 = painted like the ship (red-brown below the DWL, grey above), the heatmap with a thin white contour. The heatmap always stays */
+/* 실선 | 도면 (VIEW row): 실선 = painted like the ship (red-brown below the DWL, grey above), the heatmap with a thin white
+   contour; 도면 = dark navy hull, orange design lines (waterlines, stations, frames). The heatmap always stays */
 function setLook(l){
   look=l;const bp=l==='bp';
-  document.querySelectorAll('#legendPop .sw-hull, #legendPop .hatch').forEach(sw=>sw.classList.toggle('actual',l==='actual'));
   document.querySelectorAll('[data-look]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.look===l)));
   hullMat.roughness=bp?0.95:0.7;
   deckMat.color.set(bp?SCENE.deckBp:SCENE.deck);trMat.color.set(bp?SCENE.transomBp:SCENE.transom);
