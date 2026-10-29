@@ -44,6 +44,7 @@ export const COLOR={
     lv:['#8A93A3','#C98A12','#E23D4B'],            // 정상 · 주의 (amber darkened to read on white) · 경고
     lvFill:['#8A93A3','#F2B53A','#E23D4B'],        // map / bar fills
     normalFill:'#DCE1E8',shellFill:'#F4F6F9',shellLine:'#5B6474',dwl:DWL,warnLabel:'#B87400',
+    good:'#1E8A4C',                                 // an improvement (5장 보수 효과: 보수 후 숫자) — never a judgement
     material:{plate:'#C3C9D2',dft:'#EAD3A2'}}      // section figure (report)
 };
 /* the font stack (single quotes, so it also fits SVG attributes). Pretendard: 400 · 500 · 600 · 700 (styles/fonts.css) */
@@ -79,7 +80,8 @@ export const CSS_VARS={
   '--rp-line':COLOR.rp.line,'--rp-line-2':COLOR.rp.line2,'--rp-line-3':COLOR.rp.line3,'--rp-line-strong':COLOR.rp.lineStrong,
   '--rp-fill':COLOR.rp.fill,'--rp-fill-2':COLOR.rp.fill2,'--rp-fill-3':COLOR.rp.fill3,'--rp-photo':COLOR.rp.photo,'--rp-photo-text':COLOR.rp.photoText,
   '--rp-tag-line':COLOR.rp.tagLine,'--rp-warn-line':COLOR.rp.warnLine,'--rp-warn-text':COLOR.rp.warnText,'--rp-warn-bg':COLOR.rp.warnBg,
-  '--rp-crit-text':COLOR.rp.critText,'--rp-crit-bg':COLOR.rp.critBg,'--rp-preview-bg':COLOR.rp.previewBg,'--rp-page-shadow':COLOR.rp.pageShadow
+  '--rp-crit-text':COLOR.rp.critText,'--rp-crit-bg':COLOR.rp.critBg,'--rp-preview-bg':COLOR.rp.previewBg,'--rp-page-shadow':COLOR.rp.pageShadow,
+  '--rp-good':COLOR.rp.good
 };
 /* set every CSS variable on :root (called once, before the first paint — styles/applyTokens.js) */
 export function applyTokens(root=document.documentElement){

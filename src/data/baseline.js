@@ -4,6 +4,7 @@
    좌표: x = AP 0, 선수 방향 + · y = 중심선 0, 좌현 +, 우현 − · z = 기선 0, 위 + (m)
    ========================================================= */
 export const SHIP={hull:'H-2491',name:'H-2491',kind:'파나막스급 상선'};   // hull: 보고서 파일명의 선체 번호 · name: 머리말·보고서 표지
+export const ROBOT='MAGNI';             // 측정 로봇 이름: 상태바·툴팁·측정 레코드(robot)·보고서 표지
 
 /* 제원 (m) */
 export const LOA=210, BEAM=32.3, LBP=199.3;
@@ -75,3 +76,10 @@ export const STERN_GEAR={
 };
 /* 선수·선미 위치 속성 (SPEC 11.4): 선수 FR 약 220 이후, 선미 FR 10 이전 */
 export const BOW_FR=220, STERN_FR=10;
+
+/* 보수 효과 추정 (보고서 5장 마찰 저항 증가, 가정): Townsin 식의 평균 선체 거칠기 AHR (µm)을 면적마다 정한다.
+   정상 도막 · 도막 이상 구역(도막 두께 주의 이상·스크래치) · 도막 떨어짐 구역 · 새 도막(재도장 후) */
+export const AHR={normal:150,coatAbnormal:300,flaking:500,newCoat:100};
+export const SERVICE_SPEED=14;          // 운항 속도 (노트)
+export const SEA_NU=1.1883e-6;          // 해수 동점성계수 (m²/s, 15 °C, ITTC)
+export const STEEL_DENSITY=7.85;        // 강재 밀도 (t/m³): 보고서 5장 강판 교체 중량 = 면적 × 원두께 × 밀도

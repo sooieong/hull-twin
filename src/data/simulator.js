@@ -5,6 +5,7 @@ import { RobotSource } from './robotSource.js';
 import { createSynth } from './synth.js';
 import { photoFor } from './photos.js';
 import { FS, ZONES, zoneOf, strakeName } from '../hull.js';
+import { ROBOT } from './baseline.js';
 
 export const BASE_SPEED=3.6;      // ×1 재생 속도의 로봇 주행 속도 (m/s, 시연용)
 const TICK_MS=50;
@@ -22,13 +23,13 @@ export class SimulatorSource extends RobotSource{
     });
     this.speed=1;this.timer=null;this.paused=false;this.s=0;this.next=0;this.k=0;this.last=0;
   }
-  record(b,ts){const {_at,_first,...r}=b;return {...r,ts};}
+  record(b,ts){const {_at,_first,...r}=b;return {...r,robot:ROBOT,ts};}
   /* 1차 리도킹 기록 (같은 측정점): 화면 값(dft·plate·defect…)은 asFound(정비 전 측정), asFound·afterRepair 두 벌을 함께 싣는다.
      이보다 앞선 도킹(신조 인도)의 측정은 없어 …Prev는 비운다. end = 그때 매핑을 마친 시각 (예시) */
   firstDockRecords(end=new Date(2021,9,15,17,0).getTime()){
     const P=this.plan;
     return this.base.map(({_at,_first:{asFound,afterRepair,photo},id,X,Y,Z,fr,strake,side,zone,dftDesign,plateOrig})=>({
-      id,X,Y,Z,fr,strake,side,zone,dftDesign,plateOrig,...asFound,dftPrev:null,platePrev:null,photo,asFound,afterRepair,
+      id,X,Y,Z,fr,strake,side,zone,dftDesign,plateOrig,...asFound,dftPrev:null,platePrev:null,photo,asFound,afterRepair,robot:ROBOT,
       ts:Math.round(end-(P.total-_at)/BASE_SPEED*1000)}));
   }
 

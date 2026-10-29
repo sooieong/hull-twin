@@ -12,7 +12,7 @@
    layer 'all': 세 레이어를 합친 기준 (보고서 5장 보수 계획). 점의 판정 = 세 레이어 중 가장 나쁜 판정, 순서는 우선순위 점수.
    ========================================================= */
 import { LETTERS, ZONES, FRMIN, recordU } from '../hull.js';
-import { OK, CRIT, LAYERS, judge, isCompound, isTop, topGroup, actionFor, scoreOf, dftRatio, plateLoss, ACTION } from './criteria.js';
+import { OK, LAYERS, judge, isCompound, isTop, topGroup, actionFor, scoreOf, dftRatio, plateLoss, ACTION_ORDER } from './criteria.js';
 
 export const ZONE_LINK={dist:1.6};   // m: 측정 격자 1.1 m의 대각선(1.56 m)까지 이웃
 export const PLATE_FRAMES=7;         // 보수 1건의 프레임 구간 (외판 1장 길이, 약 6–8프레임)
@@ -27,12 +27,13 @@ export function judgeAll(r){
     const sc=scoreOf(j.level,j.degree,false);if(sc>best){best=sc;primary=l;level=j.level;degree=j.degree;}}
   return {level,degree,types,primary};
 }
-function actionAll(r,level,top){
-  if(level===OK)return null;
-  if(top)return ACTION.steelRepaint;
-  if(judge(r,'plate').level===CRIT)return ACTION.steel;
-  if(judge(r,'dft').level===CRIT||judge(r,'defect').level===CRIT)return ACTION.repaint;
-  return ACTION.local;
+/* 'all' zone action: the heaviest of every point's per-layer action (ACTION_ORDER), so a place that needs repair in several
+   layers counts once, as its heaviest repair */
+function actionAll(items){
+  let best=ACTION_ORDER.length;
+  for(const {r} of items)for(const l of LAYERS){const lv=judge(r,l).level;if(lv===OK)continue;
+    best=Math.min(best,ACTION_ORDER.indexOf(actionFor(r,l,lv,isTop(r,l))));}
+  return ACTION_ORDER[best]??null;
 }
 
 /* neighbours → clusters (union-find) on the shell surface (x, u in m). items: [{r, si, level}] · sameLevel: only link equal judgements */
@@ -86,7 +87,7 @@ export function groupZones(records,layer,top=topClusters(records,layer)){
     for(const a of items){frMin=Math.min(frMin,a.r.fr);frMax=Math.max(frMax,a.r.fr);siMin=Math.min(siMin,a.si);siMax=Math.max(siMax,a.si);
       sides.add(a.r.side);zc[a.r.zone]=(zc[a.r.zone]||0)+1;a.types.forEach(t=>types.add(t));}
     return {worst:w.r,items,count:items.length,level:w.level,degree:w.degree,compound,top:isTopZone,value:w.value,
-      score:scoreOf(w.level,w.degree,compound),action:all?actionAll(w.r,w.level,isTopZone):actionFor(w.r,layer,w.level,isTopZone),
+      score:scoreOf(w.level,w.degree,compound),action:all?actionAll(items):actionFor(w.r,layer,w.level,isTopZone),
       frMin,frMax,strakeMin:strakeOf(siMin),strakeMax:strakeOf(siMax),side:sides.size>1?'PS':[...sides][0],
       // zone name: the one most points are in; a tie goes by the fixed ZONES order (not the layer's point order)
       zone:Object.keys(zc).sort((a,b)=>zc[b]-zc[a]||ZONES.indexOf(a)-ZONES.indexOf(b))[0],ids:new Set(items.map(a=>a.r.id)),
@@ -98,6 +99,13 @@ export function groupZones(records,layer,top=topClusters(records,layer)){
   const rest=[];for(const r of records){if(inTop.has(r.id))continue;const a=item(r);if(a.level>OK)rest.push(a);}
   return [...top.flatMap(c=>plates(c.map(item))).map(items=>zone(items,true)),
     ...cluster(rest,true).flatMap(plates).map(items=>zone(items,false))].sort(order);
+}
+
+/* a judgement group's action = the one most of its zones have (ties: the first zone's) — the 보수 목록 group title
+   (dashboard) and the report tables' group rows */
+export function groupAction(zones){
+  const n=new Map();zones.forEach(z=>n.set(z.action,(n.get(z.action)||0)+1));
+  return [...n.entries()].sort((a,b)=>b[1]-a[1])[0][0];
 }
 
 /* the store's zones for a layer, once per data version. The 최우선 보수 clusters are cached per criterion group,

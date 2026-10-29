@@ -18,6 +18,7 @@
 
 .rp-box{border:1px solid var(--rp-line);border-radius:6px;padding:8px 10px;min-width:0}
 .rp-box h3{margin:0 0 6px;font-size:12px;font-weight:600;color:var(--rp-text);padding-left:7px;border-left:3px solid var(--ho-orange);line-height:1.2}
+.rp-box h3 small{margin-left:6px;font-size:10px;font-weight:400;color:var(--rp-muted)}   /* the box's reference (설계 기준 …) */
 .rp-grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
 .rp-col{display:flex;flex-direction:column;gap:10px;min-width:0}
 .rp-tight .rp-box{padding-bottom:6px}
@@ -34,6 +35,9 @@
 .rp-lv2{background:var(--rp-crit-bg);border:1px solid var(--lv-crit);color:var(--rp-crit-text)}
 .rp-lv3{background:var(--lv-top);border:1px solid var(--lv-top);color:var(--text)}
 .rp-lv .gi,.rp-legend .gi{width:10px;height:10px}
+/* html2canvas paints a block <img> inside an inline-flex chip before the chip's background, so the solid red 최우선 보수 chip
+   covered its siren in the PDF: a positioned icon is painted after it (as browsers do) */
+.rp-page .gi{position:relative}
 .rp-none{margin:4px 0;color:var(--rp-muted)}
 
 .rp-legend{display:flex;gap:14px;margin-top:4px;font-size:10px;color:var(--rp-text-2)}
@@ -41,10 +45,17 @@
 .rp-legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
 .rp-legend i.dot{border-radius:50%;border:5px solid var(--lv-top);width:0;height:0}
 .rp-legend i.dia{width:8px;height:8px;border:1.5px solid var(--lv-warn);transform:rotate(45deg);border-radius:0}
-.rp-3d2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.rp-3d2 figure{margin:0;border:1px solid var(--rp-line);border-radius:6px;overflow:hidden}
-.rp-3d2 img{display:block;width:100%;height:128px;object-fit:cover}
+.rp-dash{color:var(--rp-muted)}
+/* 2·3·4장 위쪽 2 × 2: 큰 전개도 | 단면 비교 (아래 경계가 같다) · 작은 3D 2개 | 구역별 (위·아래 경계가 같다).
+   아래 줄은 남은 높이를 다 쓰고, 3D 그림은 칸 높이에 맞춰 늘어난다 */
+.rp-dist{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:10px 12px;flex:1;min-height:0}
+.rp-3d2{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:0}
+.rp-3d2 figure{margin:0;border:1px solid var(--rp-line);border-radius:6px;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.rp-3d2 img{display:block;width:100%;flex:1 1 0;min-height:0;object-fit:contain}
 .rp-3d2 figcaption{font-size:10px;color:var(--rp-muted);padding:2px 8px;border-top:1px solid var(--rp-line-2)}
+.rp-3d2.rp-stack{grid-template-columns:1fr;grid-template-rows:1fr 1fr}   /* 4장: the bottom row is taller (photos) — one view above the other */
+.rp-area td,.rp-area th{padding-top:2px;padding-bottom:2px}
+.rp-prio td{padding-top:2px;padding-bottom:2px}
 
 /* page 1 */
 .rp-cover{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;padding:10px 14px;border-radius:6px;background:var(--rp-fill-2);border-left:6px solid var(--ho-orange)}
@@ -56,16 +67,20 @@
 .rp-verdict{display:flex;align-items:baseline;gap:14px;padding:6px 14px;border:1.5px solid var(--rp-text);border-radius:6px}
 .rp-verdict small{font-size:11px;color:var(--rp-muted)}
 .rp-verdict b{font-size:17px}
-.rp-p1{display:grid;grid-template-columns:340px minmax(0,1fr);gap:12px;flex:1;min-height:0}
-.rp-cards{display:flex;flex-direction:column;gap:8px}
-.rp-card{border:1px solid var(--rp-line);border-radius:6px;padding:7px 12px}
-.rp-card h3{margin:0 0 3px;font-size:12px}
-.rp-cnt{display:flex;gap:16px;margin-bottom:4px}
-.rp-cnt span{display:flex;align-items:baseline;gap:4px}
-.rp-cnt small{font-size:10px;color:var(--rp-muted)}
-.rp-cnt b{font-size:20px;font-weight:600}
-.rp-pcts{display:flex;gap:6px;font-size:10px;color:var(--rp-muted);margin-top:2px}
-.rp-worst{margin:4px 0 0;font-size:11px;color:var(--rp-text-2)}
+/* the row is the space left on the page; the cards share it and the 3D picture beside them is exactly as tall as the stack */
+.rp-p1{display:grid;grid-template-columns:340px minmax(0,1fr);grid-template-rows:minmax(0,1fr);gap:12px;flex:1;min-height:0}
+.rp-cards{display:flex;flex-direction:column;gap:8px;min-height:0}
+.rp-card{flex:1;display:flex;flex-direction:column;justify-content:space-between;border:1px solid var(--rp-line);border-radius:6px;padding:8px 12px}
+.rp-card h3{display:flex;align-items:baseline;margin:0;font-size:12px}
+.rp-card h3 small{margin-left:auto;font-size:10px;font-weight:400;color:var(--rp-muted)}
+.rp-cnt{display:grid;grid-template-columns:repeat(3,1fr)}
+.rp-cnt span{display:flex;flex-direction:column;gap:1px;padding-left:10px;border-left:1px solid var(--rp-line)}
+.rp-cnt span:first-child{padding-left:0;border-left:0}
+.rp-cnt small{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--rp-muted);white-space:nowrap}
+.rp-cnt small .gi{width:12px;height:12px}
+.rp-cnt b{font-size:22px;font-weight:600;line-height:1.15}
+.rp-cnt b i{font-style:normal;font-size:max(var(--unit-min),calc(var(--unit) * 1em));margin-left:2px;font-weight:600}
+.rp-worst{margin:0;font-size:11px;color:var(--rp-text-2)}
 .rp-worst b{font-size:14px;color:var(--rp-text);margin:0 6px 0 2px}
 .rp-worst small{color:var(--rp-muted)}
 .rp-big3d{margin:0;border:1px solid var(--rp-line);border-radius:6px;overflow:hidden;display:flex;flex-direction:column;min-height:0}
@@ -80,32 +95,48 @@
 .rp-kv dd{margin:0}
 .rp-kv small{color:var(--rp-muted)}
 
-/* page 3 */
+/* pages 2, 3 */
 .rp-secs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .rp-sec{margin:0;display:flex;flex-direction:column;align-items:center}
 .rp-sec figcaption{font-size:9.5px;line-height:1.35;color:var(--rp-text-2);text-align:center}
 .rp-sec figcaption b:not(.fr){color:var(--ho-orange)}   /* the rank number; an FR reference keeps the text colour */
 
 /* page 4 */
-.rp-phs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.rp-ph{margin:0;display:flex;flex-direction:column;border:1px solid var(--rp-line);border-radius:4px;overflow:hidden}
-.rp-ph img,.rp-ph .rp-nophoto,.rp-ph.empty div{display:block;width:100%;height:104px;object-fit:cover}
+/* the photo box fills its row (level with the stacked 3D views): photos grow with it */
+.rp-dist > .rp-box{display:flex;flex-direction:column;min-height:0}
+.rp-phs{flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,minmax(0,1fr));gap:8px}
+.rp-ph{margin:0;display:flex;flex-direction:column;min-height:0;border:1px solid var(--rp-line);border-radius:4px;overflow:hidden}
+.rp-ph img,.rp-ph .rp-nophoto,.rp-ph.empty div{display:block;width:100%;flex:1 1 0;min-height:0;object-fit:cover}
 .rp-nophoto,.rp-ph.empty div{display:grid!important;place-items:center;background:var(--rp-photo);color:var(--rp-photo-text);font-size:11px}
 .rp-ph figcaption{display:flex;flex-direction:column;gap:1px;padding:3px 6px;font-size:9.5px;line-height:1.35;color:var(--rp-text-2)}
 
 /* page 5 */
-.rp-plan td{padding:2px 6px}
-.rp-plan tr.rp-cx td:first-child{box-shadow:inset 4px 0 0 var(--lv-top)}
-.rp-tag{display:inline-block;margin-right:3px;padding:0 5px;border:1px solid var(--rp-tag-line);border-radius:3px;font-size:9.5px;line-height:14px;color:var(--rp-text-2)}
-.rp-qty{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.rp-qty div{border:1px solid var(--rp-line);border-left:4px solid var(--rp-text);border-radius:6px;padding:6px 12px;display:flex;flex-direction:column}
-.rp-qty small{font-size:10.5px;color:var(--rp-muted)}
-.rp-qty b{font-size:24px;font-weight:600;line-height:1.1}
-.rp-qty b i{font-style:normal;font-size:max(var(--unit-min),calc(var(--unit) * 1em));margin-left:3px;font-weight:600}   /* unit: 0.55 × the number (at least 10px), same colour */
-.rp-qty span{font-size:10px;color:var(--rp-muted)}
-.rp-watch p{margin:0 0 4px;font-size:11.5px}
-.rp-watch ul{margin:0;padding-left:18px;font-size:11px;line-height:1.5}
-.rp-crit td{white-space:normal}
+/* KPI 카드 두 줄: 보수 효과 3장 · 보수 물량 3장 in the same 3 columns, each under a small row name, one footnote line under both.
+   Both card rows are 1fr in a grid of auto height, so they take the taller row's height (same card height in both rows) */
+.rp-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto 1fr auto 1fr auto;gap:3px 10px;flex:none}
+.rp-kpi-h{grid-column:1 / -1;margin:0;font-size:10px;font-weight:600;color:var(--rp-muted)}
+.rp-kpis > .rp-kpi-h:not(:first-child){margin-top:4px}
+.rp-eff-c{border:1px solid var(--rp-line);border-top:3px solid var(--ho-orange);border-radius:6px;padding:5px 12px 6px;display:flex;flex-direction:column}
+.rp-eff-c > small{font-size:11px;font-weight:600;color:var(--rp-text-2)}
+.rp-eff-c p{display:flex;align-items:baseline;gap:6px;margin:1px 0}
+.rp-eff-c p span{font-size:15px;font-weight:400;color:var(--rp-muted)}
+.rp-eff-c p > i{font-style:normal;color:var(--rp-muted)}
+.rp-eff-c b{font-size:20px;font-weight:700;line-height:1.15;color:var(--rp-text)}
+.rp-eff-c b i{font-style:normal;font-size:max(var(--unit-min),calc(var(--unit) * 1em));margin-left:2px;font-weight:600}   /* unit: 0.55 × the number */
+.rp-eff-c b.good{color:var(--rp-good)}
+.rp-eff-n{font-size:9.5px;line-height:1.35;color:var(--rp-muted)}
+.rp-eff-foot{grid-column:1 / -1;margin:1px 0 0;font-size:9.5px;color:var(--rp-muted)}
+.rp-watch p{margin:0 0 4px;font-size:11px}
+.rp-watch-t td{padding-top:1px;padding-bottom:1px}
+.rp-watch-t .rp-lv{line-height:14px}
+/* 판정 기준: the 최우선 보수 rule in its own block above the table (it does not fit the 경고·주의·정상 columns) */
+.rp-toprule{display:grid;grid-template-columns:auto 1fr;column-gap:12px;align-items:start;margin:0 0 6px;padding:4px 8px;border-radius:4px;background:var(--rp-fill-2);font-size:11px}
+.rp-toprule b{display:flex;align-items:center;gap:4px;font-weight:600;line-height:1.4}
+.rp-toprule b .gi{width:11px;height:11px}
+.rp-toprule p{margin:0;line-height:1.4;color:var(--rp-text-2)}
+.rp-crit td{white-space:normal;padding-top:2px;padding-bottom:2px}
+.rp-crit td:first-child{white-space:nowrap}
+.rp-disclaim{margin:4px 0 0;font-size:10px;color:var(--rp-muted)}
 
 /* offscreen pages being rasterised for the PDF */
 .rp-offscreen{position:fixed;left:-20000px;top:0;pointer-events:none}

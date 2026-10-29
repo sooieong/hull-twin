@@ -4,12 +4,12 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { clamp, smooth, L, B, D, T, R, FS, XMIN, XMAX, XC, FRMIN, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS, SX, SY, SZ,
   deckZ, keelZ, HB, section, atGirth, strakeLower, recordU, strakeName, ZONES, zoneOf, regionOf, stX, stSec, stIndex, KEEL_BLOCKS, BLOCK_SIZE , unmeasurable } from './hull.js';
-import { DRAFT_LIGHT, WL_TOP, BOW_FR, STERN_FR } from './data/baseline.js';
+import { DRAFT_LIGHT, WL_TOP, BOW_FR, STERN_FR, ROBOT } from './data/baseline.js';
 import { CRITERIA, TOP_RULE, TOP, CRIT, WARN, topGroup, judge, isTop, gradeOf } from './data/criteria.js';
 import { gradeChip } from './gradeUi.js';
 import { LAYER_LABEL, DEFECT_LABEL, ACTION, value, ptLoc, coords, metres, num, numHtml, progress, dateTime } from './format.js';
 import { COLOR, FS as TYPE, font } from './styles/tokens.js';
-import { HEAT, heatOf, heatRGB, heatAlpha, buildIndex, addToIndex, idw, coverage, nearest } from './heatmap.js';
+import { HEAT, heatAlpha, coverage, nearest, createPaint } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
 import { createUiState } from './uiState.js';
 import { createKpiPanel, VALUE_NOTE } from './kpi.js';
@@ -360,15 +360,17 @@ hooks.onHover.push((X,src)=>{
   if(src!=='3d')hoverDot.visible=false;
 });
 
-/* heatmap: IDW of the current layer's judgement over the shell, abnormal areas only (SPEC 4.4) — always shown (SPEC 10.8) */
-const heatS=new Float32Array(nV),heatP=new Float32Array(nV),covS=new Float32Array(nV),covP=new Float32Array(nV);
-let store=null,heatIx=buildIndex([]),heatT=null,heatArr=null,heatLen=0;
+/* heatmap over the shell, abnormal areas only (SPEC 4.4) — always shown (SPEC 10.8). Painted per vertex by heatmap.createPaint:
+   IDW of the judgement for 도막 두께·강판 두께, fixed damage colours for 도막 손상 (the same painter as the S.SHELL and the report) */
+const N3=new Float32Array(nV*3);
+const paintS={a:new Float32Array(nV),rgb:N3.slice(),cov:new Float32Array(nV)},paintP={a:new Float32Array(nV),rgb:N3.slice(),cov:new Float32Array(nV)};
+let store=null,paint=createPaint('dft'),heatIx=paint.ix,heatT=null,heatArr=null,heatLen=0;
 const hw={w:0};
-function heatVertex(k,X,g){heatS[k]=idw(heatIx,X,-g,hw);covS[k]=coverage(hw.w);heatP[k]=idw(heatIx,X,g,hw);covP[k]=coverage(hw.w);}
+function vertexPaint(P,k,X,u){paint.at(X,u,hw);P.a[k]=hw.a;P.cov[k]=coverage(hw.w);if(hw.rgb){const o=k*3;P.rgb[o]=hw.rgb[0];P.rgb[o+1]=hw.rgb[1];P.rgb[o+2]=hw.rgb[2];}}
+function heatVertex(k,X,g){vertexPaint(paintS,k,X,-g);vertexPaint(paintP,k,X,g);}
 function rebuildHeat(){
-  const layer=ui.layer;
   heatArr=store?store.records:[];heatLen=heatArr.length;
-  heatIx=buildIndex(heatArr.map(r=>({X:r.X,u:recordU(r),h:heatOf(r,layer),r})));
+  paint=createPaint(ui.layer,heatArr);heatIx=paint.ix;
   for(let i=0;i<=NX;i++){const X=stX[i];for(let j=0;j<G;j++){const k=i*G+j;heatVertex(k,X,girth[k]);}}
   paintHull();
 }
@@ -377,8 +379,8 @@ function updateHeat(){
   const R=store.records;
   if(R!==heatArr||R.length<heatLen){rebuildHeat();return;}
   if(R.length===heatLen)return;
-  const layer=ui.layer,rad=HEAT.radius,fresh=R.slice(heatLen);heatLen=R.length;
-  fresh.forEach(r=>addToIndex(heatIx,{X:r.X,u:recordU(r),h:heatOf(r,layer),r}));
+  const rad=HEAT.radius,fresh=R.slice(heatLen);heatLen=R.length;   // a damage paints at most DAMAGE.rMax = HEAT.radius around it
+  fresh.forEach(paint.add);
   fresh.forEach(r=>{const u=Math.abs(recordU(r)),i0=Math.max(0,Math.floor((r.X-rad-XMIN)/(XMAX-XMIN)*NX)),i1=Math.min(NX,Math.ceil((r.X+rad-XMIN)/(XMAX-XMIN)*NX));
     for(let i=i0;i<=i1;i++)for(let j=0;j<G;j++){const k=i*G+j;if(Math.abs(girth[k]-u)<rad||girth[k]<rad)heatVertex(k,stX[i],girth[k]);}});
   paintHull();
@@ -388,12 +390,13 @@ function scheduleHeat(){if(heatT)return;heatT=setTimeout(()=>{heatT=null;updateH
 // both 실선 paints (red-brown, grey), so the unmeasured shell reads darker on either
 const DIM={real:[0.12,0.13,0.16],bp:[0.02,0.035,0.07]};
 let look='real';
-/* the heat contour at half of the colour ramp (heatAlpha), as line segments across the shell triangles, lifted off the shell */
-const EDGE_H=HEAT.alphaFrom+0.5*(HEAT.alphaTo-HEAT.alphaFrom),EDGE_OFF=0.07;
+/* the heat contour at half of the colour ramp (painted strength = heatAlpha halfway up its ramp), as line segments across the
+   shell triangles, lifted off the shell */
+const EDGE_A=heatAlpha(HEAT.alphaFrom+0.5*(HEAT.alphaTo-HEAT.alphaFrom)),EDGE_OFF=0.07;
 function heatEdges(line,h){
   const I=hullIndex,N=hullGeo.attributes.normal.array,out=[];
-  const at=(a,b)=>{const t=(EDGE_H-h[a])/(h[b]-h[a]);for(let q=0;q<3;q++)out.push(pos[a*3+q]+(pos[b*3+q]-pos[a*3+q])*t+(N[a*3+q]+(N[b*3+q]-N[a*3+q])*t)*EDGE_OFF);};
-  for(let t=0;t<I.length;t+=3){const v=[I[t],I[t+1],I[t+2]],up=v.map(k=>h[k]>=EDGE_H);
+  const at=(a,b)=>{const t=(EDGE_A-h[a])/(h[b]-h[a]);for(let q=0;q<3;q++)out.push(pos[a*3+q]+(pos[b*3+q]-pos[a*3+q])*t+(N[a*3+q]+(N[b*3+q]-N[a*3+q])*t)*EDGE_OFF);};
+  for(let t=0;t<I.length;t+=3){const v=[I[t],I[t+1],I[t+2]],up=v.map(k=>h[k]>=EDGE_A);
     if(up[0]===up[1]&&up[1]===up[2])continue;
     for(let e=0;e<3;e++){const a=v[e],b=v[(e+1)%3];if(up[e]!==up[(e+1)%3])at(a,b);}}
   line.geometry.dispose();line.geometry=new THREE.BufferGeometry();line.geometry.setAttribute('position',new THREE.Float32BufferAttribute(out,3));
@@ -401,22 +404,22 @@ function heatEdges(line,h){
 function paintHull(){
   const base=look==='bp'?colBp:colReal,show=true,DIMC=DIM[look];
   const dimOn=!!store&&(store.mapState==='mapping'||store.mapState==='paused');
-  [[geoS,heatS,covS],[geoP,heatP,covP]].forEach(([g,h,cov])=>{const attr=g.attributes.color,c=attr.array;
+  [[geoS,paintS],[geoP,paintP]].forEach(([g,P])=>{const attr=g.attributes.color,c=attr.array,cov=P.cov,hc=P.rgb;
     for(let k=0;k<nV;k++){const o=k*3;let r=base[o],gr=base[o+1],b=base[o+2];
       if(dimOn){const d=(1-cov[k])*0.7;r+=(DIMC[0]-r)*d;gr+=(DIMC[1]-gr)*d;b+=(DIMC[2]-b)*d;}
-      const a=show?heatAlpha(h[k]):0;
-      if(a>0){const hc=heatRGB(h[k]);r+=(hc[0]/255-r)*a;gr+=(hc[1]/255-gr)*a;b+=(hc[2]/255-b)*a;}
+      const a=show?P.a[k]:0;
+      if(a>0){r+=(hc[o]/255-r)*a;gr+=(hc[o+1]/255-gr)*a;b+=(hc[o+2]/255-b)*a;}
       c[o]=r;c[o+1]=gr;c[o+2]=b;}
     attr.needsUpdate=true;});
   const edges=look==='real';heatEdgeS.visible=heatEdgeP.visible=edges;
-  if(edges){heatEdges(heatEdgeS,heatS);heatEdges(heatEdgeP,heatP);}
+  if(edges){heatEdges(heatEdgeS,paintS.a);heatEdges(heatEdgeP,paintP.a);}
   paintGear(dimOn);
 }
 /* ? legend: the current layer only — name · 최우선 보수 · 경고 · 주의 (the list's chips + criteria) · 정상 / 측정 불가 */
 const LEGEND={
   dft:{w:`${CRITERIA.dft.warn*100}% 미만`,c:`${CRITERIA.dft.crit*100}% 미만`},
   plate:{w:`감소율 ${CRITERIA.plate.warn*100}% 이상`,c:`감소율 ${CRITERIA.plate.crit*100}% 이상`},
-  defect:{w:`→ ${ACTION.touchUp}`,c:`→ ${ACTION.partRepaint}`}   // the chips already name the damage; the line gives its repair
+  defect:{w:`→ ${ACTION.touchUp}`,c:`→ ${ACTION.repaint}`}   // the chips already name the damage; the line gives its repair
 };
 function syncLayer(){const l=ui.layer,row=(g,t)=>`${gradeChip(g,l)}<span>${t}</span>`;
   document.querySelectorAll('[data-layer]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.layer===l)));
@@ -481,6 +484,7 @@ function syncProgress(p){
 }
 const poseText=p=>ptLoc(p.X,p.side,p.Z);   // FR152+0.36 m·좌현·z 6.20 m
 let mapMode=null,robotSeen=false;
+$('#stRobotWrap').title=`측정 로봇 ${ROBOT}`;$('#followBtn').title=`매핑 중 ${ROBOT}가 있는 면으로 카메라를 다시 돌립니다`;   // tooltips name the robot (baseline.ROBOT)
 function syncMap(){
   const st=store.mapState,active=st==='mapping'||st==='paused';
   const ms=$('#mapState');ms.classList.toggle('on',st==='mapping');ms.classList.toggle('paused',st==='paused');ms.classList.toggle('done',st==='done');
@@ -509,7 +513,7 @@ function syncMap(){
 function onPose(p){
   follow.raw=followAngle(p);
   setRobotTarget(p,!robotSeen);robotSeen=true;robotWrap.visible=true;showPathAt(p.k);
-  $('#stRobot').innerHTML=numHtml(`RBT-01 매핑 중·${poseText(p)}`);syncProgress(p.progress);
+  $('#stRobot').innerHTML=numHtml(`${ROBOT} 매핑 중·${poseText(p)}`);syncProgress(p.progress);
 }
 $('#mapBtn').addEventListener('click',()=>{if(!store)return;const st=store.mapState;
   if(st==='mapping')store.pause();else if(st==='paused')store.resume();else store.start();});   // done: 재매핑 = fresh run

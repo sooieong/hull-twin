@@ -13,22 +13,29 @@ import { COLOR } from '../styles/tokens.js';
 import { buildReportData, dockContext } from './data.js';
 import { renderHullViews } from './render3d.js';
 import { pagesHtml } from './pages.js';
-import { loadIconData } from '../gradeUi.js';
 
+/* sizes = the picture cells' aspect (report.css .rp-3d2): 2·3장 side by side under the map, 4장 stacked beside the photos */
 const VIEW_JOBS=[{key:'all',view:'iso',w:700,h:400},
-  ...['dft','plate','defect'].flatMap(key=>[{key,view:'iso',w:500,h:250},{key,view:'bottom',w:500,h:250}])];
+  ...['dft','plate'].flatMap(key=>[{key,view:'iso',w:500,h:380},{key,view:'bottom',w:500,h:380}]),
+  {key:'defect',view:'iso',w:520,h:172},{key:'defect',view:'bottom',w:520,h:172}];
 const PAGE={w:1123,h:794,mmW:297,mmH:210};   // A4 가로
 const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
 /* Dr.Dock_Report_H-2491_20261027.pdf — hull number, date made */
 export const reportFileName=(d,dockKey)=>`Dr.Dock_Report_${dockContext(dockKey).hull}_${ymd(d)}.pdf`;
 
+/* every <img> in the report decoded — judgement icons, logo, damage photos, 3D views, charts; one that fails is named in the console */
+async function imagesReady(root){
+  const bad=(await Promise.all([...root.querySelectorAll('img')].map(img=>
+    img.decode?img.decode().then(()=>null,()=>(img.currentSrc||img.src).slice(0,80)):null))).filter(Boolean);
+  if(bad.length)console.warn('[Dr.Dock] 보고서 이미지를 불러오지 못했습니다',bad);
+}
+
 /* the 5 report pages as one element (images decoded, ready to show or to rasterise) */
 export async function buildReportPages(store,now=new Date()){
-  await loadIconData();   // judgement icons as data URIs for the maps (they become images in the PDF)
   const data=buildReportData(store,now),imgs=renderHullViews(store.records,VIEW_JOBS);
   const root=document.createElement('div');root.className='rp-root';root.innerHTML=pagesHtml(data,imgs);
-  await Promise.all([...root.querySelectorAll('img')].map(img=>img.decode?img.decode().catch(()=>{}):null));
+  await imagesReady(root);
   return root;
 }
 
@@ -42,14 +49,15 @@ export async function showPreview(store){
   pv.querySelector('.rp-pv-wait').replaceWith(root);
 }
 
-/* inline SVG (maps with thousands of cells, charts) → <img>, so html2canvas draws one image instead of walking the nodes */
-async function svgsToImages(root){
+/* inline SVG (maps with thousands of cells, charts) → <img>, so html2canvas draws one image instead of walking the nodes
+   (decoded with the rest by imagesReady) */
+function svgsToImages(root){
   const ser=new XMLSerializer();
-  await Promise.all([...root.querySelectorAll('svg[width][height]')].map(svg=>{   // charts only; the CSS-sized logo stays inline
+  root.querySelectorAll('svg[width][height]').forEach(svg=>{   // charts only; the CSS-sized logo stays inline
     const img=new Image();img.width=+svg.getAttribute('width');img.height=+svg.getAttribute('height');img.alt='';
     img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(ser.serializeToString(svg));
-    svg.replaceWith(img);return img.decode().catch(()=>{});
-  }));
+    svg.replaceWith(img);
+  });
 }
 
 /* 5 pages → one html2canvas pass (scale 2, dashboard left out of the clone) → sliced into A4 landscape pages → jsPDF */
@@ -57,10 +65,11 @@ export async function makeReportPdf(store,now=new Date()){
   const [{default:html2canvas},{jsPDF}]=await Promise.all([import('html2canvas'),import('jspdf')]);
   if(document.fonts&&document.fonts.ready)await document.fonts.ready;
   const root=await buildReportPages(store,now);
-  await svgsToImages(root);
+  svgsToImages(root);
   const host=document.createElement('div');host.className='rp-offscreen';host.setAttribute('aria-hidden','true');
   host.appendChild(root);document.body.appendChild(host);
   try{
+    await imagesReady(root);   // again in the document, after the charts became <img>: nothing is captured half-loaded
     const S=2,shot=await html2canvas(root,{scale:S,backgroundColor:COLOR.rp.bg,logging:false,
       ignoreElements:el=>el.classList&&(el.classList.contains('app')||el.classList.contains('toast')||el.classList.contains('lightbox'))});
     const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4',compress:true});

@@ -16,7 +16,7 @@
    ========================================================= */
 import { CRIT, WARN, TOP, gradeName, gradeOf } from './data/criteria.js';
 import { refDropPctNum, dropHtml, areaNum, zoneLoc, num } from './format.js';
-import { zonesOf } from './data/zones.js';
+import { zonesOf, groupAction } from './data/zones.js';
 import { gradeIcon } from './gradeUi.js';
 import { emptyState, mappingState } from './emptyState.js';
 import { CHEV } from './panels.js';
@@ -32,11 +32,6 @@ function valueParts(r,layer){
   return {v:refDropPctNum(r,layer),u:'%'};
 }
 export const VALUE_NOTE={dft:'수치: 설계 대비 감소율',plate:'수치: 원두께 대비 감소율',defect:'수치: 손상 면적(m²)'};   // ? popover in the list header (main.js)
-/* the group's action = the one most of its items have (ties: the first item's) */
-function groupAction(items){
-  const n=new Map();items.forEach(z=>n.set(z.action,(n.get(z.action)||0)+1));
-  return [...n.entries()].sort((a,b)=>b[1]-a[1])[0][0];
-}
 
 /* tilesRoot: KPI 핵심 지표 패널 본문 · listRoot: 보수 대상 패널 본문 · countEl: 보수 대상 패널 헤더의 "총 N건" */
 export function createKpiPanel(tilesRoot,listRoot,countEl,store,ui){

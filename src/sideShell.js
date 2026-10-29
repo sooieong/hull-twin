@@ -5,14 +5,14 @@
    표시(단순화): 선체 외곽선, 가운데 K 선 하나(주황, 왼쪽 K 글자가 라벨), 오른쪽 "우현 / 좌현", 아래 프레임 눈금(100 단위),
          왼쪽 외판열 문자(K부터 세 칸마다), 설계 흘수선(옅은 점선), 킬 블록 측정 불가 구역,
          현재 레이어 히트맵, 선택 지점, 매핑 중 로봇 위치. 지점을 누르면 메인과 똑같이 선택된다.
-   히트맵: 3D와 같은 IDW 보간(heatmap.js)을 저해상도 격자에서 계산해 부드럽게 확대해 칠한다.
-         선체 외곽선 안, 이상 구역만 (색: 앰버 → 레드). 매핑 중에는 0.5초마다 다시 계산한다.
+   히트맵: 3D와 같은 칠하기(heatmap.createPaint — 도막 두께·강판 두께는 IDW 보간, 도막 손상은 판정 색 고정)를
+         저해상도 격자에서 계산해 부드럽게 확대해 칠한다. 선체 외곽선 안, 이상 구역만. 매핑 중에는 0.5초마다 다시 계산한다.
    ========================================================= */
 import { T, FS, FRMIN, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, section, atGirth, girthAtZ, signedGirth, recordU,
   KEEL_BLOCKS, BLOCK_SIZE, unmeasurable } from './hull.js';
 import { COLOR, FS as TYPE, font } from './styles/tokens.js';
 import { OK, judge } from './data/criteria.js';
-import { heatOf, heatRGB, heatAlpha, buildIndex, idw, nearest } from './heatmap.js';
+import { buildIndex, nearest, createPaint } from './heatmap.js';
 import { ROBOT_MARGIN } from './data/scanPath.js';
 
 const C={bg:COLOR.surface,shell:COLOR.draw.shell,outline:COLOR.draw.outline,keel:COLOR.orange,dwl:COLOR.draw.dwl,tick:COLOR.muted,frLabel:COLOR.peach,text:COLOR.text2};
@@ -40,7 +40,7 @@ export function createSideShell(body,store,ui){
   const cv=body.querySelector('canvas'),ctx=cv.getContext('2d');
   // static layers: under the heat (background, shell fill, keel blocks) and over it (lines, labels)
   const under=document.createElement('canvas'),over=document.createElement('canvas'),heat=document.createElement('canvas');
-  let w=0,h=0,dpr=1,dots=[],allIx=buildIndex([]),heatIx=buildIndex([]),shellPath=null,heatClip=null,robot=null,raf=0,timer=null;
+  let w=0,h=0,dpr=1,dots=[],allIx=buildIndex([]),paint=createPaint('dft'),shellPath=null,heatClip=null,robot=null,raf=0,timer=null;
   /* plot box (CSS px): the largest ASPECT box that fits inside the canvas less the label margins, centred.
      Everything — outline, heat, markers, ticks, labels — is placed from this box, so nothing stretches with the panel */
   let bx=0,by=0,bw=1,bh=1;
@@ -93,17 +93,17 @@ export function createSideShell(body,store,ui){
     for(let fr=0;fr<=FRMAX;fr+=step)c.fillText(String(fr),px(fr),by+bh+5);
   }
 
-  /* heat field: IDW of the current layer at every grid cell inside the shell, abnormal only (same as 3D) */
+  /* heat field: the current layer's paint (heatmap.createPaint, as in 3D) at every grid cell inside the shell, abnormal only */
   function rebuildHeat(){
     if(!w)return;
-    const nx=Math.max(2,Math.ceil(bw/HEAT_PX)),ny=Math.max(2,Math.ceil(bh/HEAT_PX));
+    const nx=Math.max(2,Math.ceil(bw/HEAT_PX)),ny=Math.max(2,Math.ceil(bh/HEAT_PX)),o={};
     heat.width=nx;heat.height=ny;const hc=heat.getContext('2d'),img=hc.createImageData(nx,ny),d=img.data;
     for(let i=0;i<nx;i++){
       const fr=FRMIN+(i+0.5)/nx*(FRMAX-FRMIN),g=Fr(fr).g,X=fr*FS;
       for(let j=0;j<ny;j++){
         const u=((j+0.5)/ny*2-1)*G_MAX;if(Math.abs(u)>g)continue;
-        const v=idw(heatIx,X,u),a=heatAlpha(v);if(a<=0)continue;
-        const rgb=heatRGB(v),o=(j*nx+i)*4;d[o]=rgb[0];d[o+1]=rgb[1];d[o+2]=rgb[2];d[o+3]=a*255;
+        paint.at(X,u,o);if(o.a<=0)continue;
+        const k=(j*nx+i)*4;d[k]=o.rgb[0];d[k+1]=o.rgb[1];d[k+2]=o.rgb[2];d[k+3]=o.a*255;
       }
     }
     hc.putImageData(img,0,0);
@@ -111,12 +111,12 @@ export function createSideShell(body,store,ui){
 
   function rebuildData(){
     const layer=ui.layer,R=store.records;
-    dots=[];const all=[],hs=[];
-    for(const r of R){const u=recordU(r),hv=heatOf(r,layer),fr=r.X/FS;all.push({X:fr,u,r});hs.push({X:r.X,u,h:hv});
+    dots=[];const all=[];
+    for(const r of R){const u=recordU(r),fr=r.X/FS;all.push({X:fr,u,r});
       const j=judge(r,layer);if(j.level!==OK)dots.push({X:fr,u,r,level:j.level});}
     dots.sort((a,b)=>a.level-b.level);   // hover / click: the worse of two close points wins
     allIx=buildIndex(all);   // click: (FR, u)
-    heatIx=buildIndex(hs);   // heat: (X m, u m), as in 3D
+    paint=createPaint(layer,R);   // heat: (X m, u m), as in 3D
     rebuildHeat();
   }
 

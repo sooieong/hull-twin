@@ -40,8 +40,12 @@ export const CRITERIA={
    (level 간격 > compound + degree 이어야 이 순서가 유지된다) */
 export const PRIORITY={level:[0,1000,2000],compound:500,degree:100};
 
-export const ACTION={repaint:'재도장',local:'국부 보수',steel:'강판 교체·보강',steelRepaint:'강판 교체·보강 후 재도장',
-  partRepaint:'부분 재도장',touchUp:'터치업'};   // partRepaint / touchUp: 도막 손상 레이어 (도막 떨어짐 / 스크래치)   // steelRepaint: 도막+강판 복합
+/* 판정별 조치 (actionFor): 최우선 보수 → 강판 교체·보강 후 재도장 (모든 레이어)
+   도막 두께: 경고 → 재도장 / 주의 → 국부 보수 · 강판 두께: 경고 → 강판 교체·보강 / 주의 → 국부 보수
+   도막 손상: 경고(도막 떨어짐) → 재도장 / 주의(스크래치) → 터치업 */
+export const ACTION={repaint:'재도장',local:'국부 보수',steel:'강판 교체·보강',steelRepaint:'강판 교체·보강 후 재도장',touchUp:'터치업'};
+/* 무거운 조치 → 가벼운 조치: 한 위치가 여러 레이어에서 보수 대상이면 이 순서의 첫 조치 하나 (보고서 5장 구역별 보수 물량) */
+export const ACTION_ORDER=[ACTION.steelRepaint,ACTION.steel,ACTION.repaint,ACTION.local,ACTION.touchUp];
 export const DEFECT_LABEL={flaking:'도막 떨어짐',scratch:'스크래치'};
 
 /* 이상 정도 0–1: 정상 경계 0, 경고 경계 0.5, worst 1 (x가 클수록 나쁨) */
@@ -74,7 +78,7 @@ export function isCompound(r){return isTop(r,'all');}
 export function actionFor(r,layer,level,top){
   if(level===OK)return null;
   if(top)return ACTION.steelRepaint;
-  if(layer==='defect')return level===CRIT?ACTION.partRepaint:ACTION.touchUp;
+  if(layer==='defect')return level===CRIT?ACTION.repaint:ACTION.touchUp;
   if(layer==='plate')return level===CRIT?ACTION.steel:ACTION.local;
   return level===CRIT?ACTION.repaint:ACTION.local;
 }

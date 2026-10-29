@@ -7,21 +7,23 @@ import { XC, XMIN, NX, G, D, B, FS, FRMAX, stX, stSec, recordU, section, NB } fr
 import { LAYERS } from '../data/criteria.js';
 import { nV, pos, girth, index, normal, bowCap, SUPER_BOXES } from '../hullMesh.js';
 import { sternGearGeometry } from '../sternGear.js';
-import { heatOf, heatRGB, heatAlpha, buildIndex, idw } from '../heatmap.js';
+import { heatOf, heatRGB, heatAlpha, buildIndex, idw, createPaint } from '../heatmap.js';
 
 /* 장면 전용 색 (보고서 3D 그림): 흰 배경·조명·선체 회색·굴뚝 띠·프레임선. 히트맵 판정색은 heatmap.js(styles/tokens.js)를 쓴다. */
 const SCENE={bg:0xffffff,hemiSky:0xffffff,hemiGround:0x8a94a6,key:0xffffff,under:0xffffff,hull:0xcfd4db,band:0x222222,frame:0x7d8798};
 const VIEWS={iso:{p:[240,125,275],t:[0,8,0]},bottom:{p:[150,-340,170],t:[0,4,0]}};
 const BASE=[0.89,0.9,0.92];   // light grey hull
 
-/* heat per vertex for one layer, or 'all' = the worst of the three layers */
+/* colour per vertex for one layer — the dashboard's painter (heatmap.createPaint) — or 'all' = IDW of the worst heat of the
+   three layers (1장 종합 위험도) */
 function vertexColors(records,key){
-  const h=r=>key==='all'?Math.max(...LAYERS.map(l=>heatOf(r,l))):heatOf(r,key);
-  const ix=buildIndex(records.map(r=>({X:r.X,u:recordU(r),h:h(r)})));
+  const ix=key==='all'?buildIndex(records.map(r=>({X:r.X,u:recordU(r),h:Math.max(...LAYERS.map(l=>heatOf(r,l)))}))):null;
+  const paint=key==='all'?null:createPaint(key,records),o={};
+  const at=(X,u)=>{if(paint)return paint.at(X,u,o);const v=idw(ix,X,u);o.a=heatAlpha(v);o.rgb=o.a>0?heatRGB(v):null;return o;};
   const S=new Float32Array(nV*3),P=new Float32Array(nV*3);
   for(let i=0;i<=NX;i++){const X=stX[i];for(let j=0;j<G;j++){const k=i*G+j,g=girth[k];
-    [[S,idw(ix,X,-g)],[P,idw(ix,X,g)]].forEach(([c,hv])=>{const a=heatAlpha(hv),o=k*3;let col=BASE;
-      if(a>0){const hc=heatRGB(hv);col=BASE.map((v,n)=>v+(hc[n]/255-v)*a);}c[o]=col[0];c[o+1]=col[1];c[o+2]=col[2];});}}
+    [[S,-g],[P,g]].forEach(([c,u])=>{const p=at(X,u),q=k*3;let col=BASE;
+      if(p.a>0)col=BASE.map((v,n)=>v+(p.rgb[n]/255-v)*p.a);c[q]=col[0];c[q+1]=col[1];c[q+2]=col[2];});}}
   return {S,P};
 }
 

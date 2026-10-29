@@ -55,14 +55,13 @@ export const drop=(prev,cur,layer)=>`${dropNum(prev,cur,layer)} ${THICK[layer].u
 /* ratios compared with the criteria are rounded down, so 79.96% never shows as "80.0%" next to a "below 80%" judgement */
 export const designRatio=r=>pct(floor1(dftRatio(r)*100));   // current / design
 export const lossRatio=r=>pct(floor1(plateLoss(r)*100));    // loss / original
-export const ratio=x=>pct(floor1(x*100));                    // any 0–1 ratio judged the same way
+export const ratioNum=x=>num(floor1(x*100),1);               // any 0–1 ratio judged the same way, without % (a table cell)
 
 /* reduction against the original thickness (plate) or the design thickness (coating) as a signed %: −27.1%
    (rounded the same way as the ratios above, so it always matches the judgement) */
-export function refDropPctNum(r,layer){
-  const x=layer==='plate'?-floor1(plateLoss(r)*100):floor1(dftRatio(r)*100)-100;
-  return signed(x,1);
-}
+export function refDropPctNum(r,layer){return signed(-refDropRate(r,layer),1);}
+/* the same reduction as a plain rate in % (27.1 for −27.1%): the report's 감소율 columns show the dashboard list's number */
+export const refDropRate=(r,layer)=>layer==='plate'?floor1(plateLoss(r)*100):100-floor1(dftRatio(r)*100);
 export const refDropPct=(r,layer)=>`${refDropPctNum(r,layer)}%`;
 
 /* a reduction (or the area in the same slot) as markup for the shared .num-drop style: the number in one mono face with
@@ -75,7 +74,7 @@ export const dropHtml=(n,unit,color)=>
    text → HTML with its numbers marked: a frame reference (FR152+0.36 m, FR50–55) as .fr (600, tabular figures),
    other numbers with their unit as .n (tabular figures). Escaped. */
 const escHtml=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const NUM_RE=/(FR[−-]?\d+(?:[+−]\d+(?:\.\d+)?(?: m)?|–[−-]?\d+)?)|((?<![A-Za-z\d-])[−+]?\d[\d,]*(?:[.:]\d+)*(?: ?(?:µm|mm|m²|m|%))?)/g;   // digits inside an ID (RBT-01) stay text
+const NUM_RE=/(FR[−-]?\d+(?:[+−]\d+(?:\.\d+)?(?: m)?|–[−-]?\d+)?)|((?<![A-Za-z\d-])[−+]?\d[\d,]*(?:[.:]\d+)*(?: ?(?:µm|mm|m²|m|%))?)/g;   // digits inside an ID (H-2491) stay text
 export const numHtml=s=>escHtml(s).replace(NUM_RE,(m,fr)=>fr?`<b class="fr">${m}</b>`:`<span class="n">${m}</span>`);
 
 /* ---------- area ---------- */
