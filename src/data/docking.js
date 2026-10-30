@@ -3,7 +3,8 @@
    신조 인도 2016.10 → 1차 리도킹 2021.10 → 2차 리도킹 2026.10 (현재)
    헤더 드롭다운: 현재 = 매핑 화면 · 1차 리도킹 = 그때 매핑을 마친 기록 보기 · 신조 인도 = 측정 데이터 없이 3D만
    ========================================================= */
-export const DOCKING_CYCLE_YEARS=5;
+import { DOCKING_CYCLE_YEARS } from './baseline.js';
+export { DOCKING_CYCLE_YEARS };   // 도킹 주기 (baseline.js)
 export const DOCKINGS=[
   {key:'current',date:'2026.10',name:'2차 리도킹',short:'2차',dock:'2번 도크',current:true,next:'2031.10'},
   {key:'first',date:'2021.10',name:'1차 리도킹',short:'1차',next:'2026.10'},

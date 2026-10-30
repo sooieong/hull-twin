@@ -9,8 +9,8 @@ export const LAYER_LABEL={plate:'강판 두께',dft:'도막 두께',defect:'도�
 export const OK=0, WARN=1, CRIT=2;
 export const LEVEL_LABEL=['정상','주의','경고'];   // 레이어별 판정 (통계용)
 
-/* 화면·보고서의 판정 단계: 최우선 보수 / 경고 / 주의 (서로 겹치지 않는다). 최우선 보수는 레이어별 기준(isTop)이며 목록 맨 위에 온다.
-   gradeOf(level, top): top = isTop(r, layer) (지점) 또는 zone.top (구역) */
+/* 화면·보고서의 판정 단계: 최우선 보수 / 경고 / 주의 (서로 겹치지 않는다). 최우선 보수는 세 레이어 공통 기준(isTop)이며 목록 맨 위에 온다.
+   gradeOf(level, top): top = isTop(r) (지점) 또는 zone.top (구역) */
 export const TOP=3;
 export const GRADE_LABEL=['정상','주의','경고','최우선 보수'];   // 단계 이름 (CRIT = 경고)
 /* 도막 손상 레이어는 단계 이름이 손상 종류다 (아이콘·색은 같은 단계 그대로): 주의 = 스크래치, 경고 = 도막 떨어짐 */
@@ -18,16 +18,14 @@ export const DEFECT_GRADE_LABEL=['정상','스크래치','도막 떨어짐','최
 export const gradeName=(g,layer)=>(layer==='defect'?DEFECT_GRADE_LABEL:GRADE_LABEL)[g];
 export function gradeOf(level,top){return top?TOP:level;}
 
-/* 최우선 보수 지점 — 레이어별 기준
-   강판 두께 · 도막 두께: 같은 곳의 강판과 도막 중 하나는 경고, 다른 하나는 주의 이상 (두 레이어가 같은 기준 → 같은 구역)
-   도막 손상: 손상(스크래치 또는 도막 떨어짐)이 있고 그 자리 강판이 주의 이상
-   'all'(보고서 보수 계획): 둘 중 하나라도 해당 */
+/* 최우선 보수 지점 — 세 레이어 공통 기준 하나 (레이어마다 따로 세지 않는다: 어느 레이어 화면·보고서에서든 같은 구역, 같은 건수)
+   다음 둘 중 하나: 같은 곳의 강판과 도막 두께 중 하나는 경고, 다른 하나는 주의 이상
+   · 손상(스크래치 또는 도막 떨어짐)이 있고 그 자리 강판이 주의 이상 */
 export const TOP_RULE={coat:'강판·도막 중 하나는 경고, 다른 하나는 주의 이상',defect:'손상이 있고 그 자리 강판이 주의 이상'};
-export const topGroup=layer=>layer==='defect'||layer==='all'?layer:'coat';
-export function isTop(r,layer){
+export function isTop(r){
   const p=judge(r,'plate').level;if(p===OK)return false;
-  const g=topGroup(layer),coat=()=>{const d=judge(r,'dft').level;return d>OK&&(d===CRIT||p===CRIT);};
-  return g==='defect'?!!r.defect:g==='all'?coat()||!!r.defect:coat();
+  const d=judge(r,'dft').level;
+  return d>OK&&(d===CRIT||p===CRIT)||!!r.defect;
 }
 
 /* 강판·도막 모두 감소율 (기준 두께 대비 줄어든 비율, 0–1), 같은 비교: warn 미만 정상, crit 미만 주의, 이상 경고 (reaches).
@@ -76,7 +74,7 @@ export function judge(r,layer){
 }
 
 /* 같은 지점에 도막 이상(두께 또는 손상)과 강판 이상이 함께 있음 (우선순위 점수의 복합 가산) */
-export function isCompound(r){return isTop(r,'all');}
+export function isCompound(r){return isTop(r);}
 
 /* top: 최우선 보수 (isTop) — 강판을 먼저 고친 뒤 다시 칠한다 */
 export function actionFor(r,layer,level,top){

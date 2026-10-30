@@ -5,7 +5,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { clamp, smooth, L, B, D, T, R, FS, XMIN, XMAX, XC, FRMIN, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS, SX, SY, SZ,
   deckZ, keelZ, HB, section, atGirth, strakeLower, recordU, strakeName, ZONES, zoneOf, regionOf, stX, stSec, stIndex, KEEL_BLOCKS, BLOCK_SIZE , unmeasurable } from './hull.js';
 import { DRAFT_LIGHT, WL_TOP, BOW_FR, STERN_FR, ROBOT } from './data/baseline.js';
-import { CRITERIA, TOP_RULE, TOP, CRIT, WARN, topGroup, judge, isTop, gradeOf } from './data/criteria.js';
+import { CRITERIA, TOP_RULE, TOP, CRIT, WARN, judge, isTop, gradeOf } from './data/criteria.js';
 import { gradeChip } from './gradeUi.js';
 import { LAYER_LABEL, DEFECT_LABEL, ACTION, value, ptLoc, coords, metres, num, numHtml, progress, dateTime } from './format.js';
 import { COLOR, FS as TYPE, font } from './styles/tokens.js';
@@ -425,7 +425,7 @@ const LEGEND={
 function syncLayer(){const l=ui.layer,row=(g,t)=>`${gradeChip(g,l)}<span>${t}</span>`;
   document.querySelectorAll('[data-layer]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.layer===l)));
   $('#lgTitle').textContent=LAYER_LABEL[l];
-  $('#lgTop').innerHTML=row(TOP,TOP_RULE[topGroup(l)]);$('#lgCrit').innerHTML=row(CRIT,LEGEND[l].c);$('#lgWarn').innerHTML=row(WARN,LEGEND[l].w);}
+  $('#lgTop').innerHTML=row(TOP,`${TOP_RULE.coat}<br>또는 ${TOP_RULE.defect}`);$('#lgCrit').innerHTML=row(CRIT,LEGEND[l].c);$('#lgWarn').innerHTML=row(WARN,LEGEND[l].w);}
 document.querySelectorAll('[data-layer]').forEach(b=>b.addEventListener('click',()=>ui.setLayer(b.dataset.layer)));
 const legendBtn=$('#legendBtn'),legendPop=$('#legendPop');
 function openLegend(on){

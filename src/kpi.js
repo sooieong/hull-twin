@@ -28,7 +28,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 /* 오른쪽 수치: 원두께(도막은 설계) 대비 감소율 % — 판정 기준과 같은 기준이라 순위·판정·숫자가 맞는다. 도막 손상은 손상 면적.
    (실제 두께는 상세 패널에 있다) · 수치의 뜻은 목록 맨 아래에 한 번 */
 function valueParts(r,layer){
-  if(layer==='defect')return {v:areaNum(r.defectArea),u:'m²'};
+  if(layer==='defect')return r.defect?{v:areaNum(r.defectArea),u:'m²'}:{v:'—',u:''};   // a 최우선 보수 zone without damage (coating + steel)
   return {v:num(lossRate(r,layer),1),u:'%'};   // 29.2% — no sign, as in the report
 }
 export const VALUE_NOTE={plate:'수치: 원두께 대비 감소율',dft:'수치: 설계 대비 감소율',defect:'수치: 손상 면적(m²)'};   // ? popover in the list header (main.js)

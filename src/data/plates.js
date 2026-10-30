@@ -14,8 +14,7 @@
    ========================================================= */
 import { clamp, XMIN, XMAX, NX, FS, FRMIN, FRMAX, G, KEEL_HALF, STRAKE_W, LETTERS, ZONES, stX, stSec, atGirth, zoneOf, strakeLower } from '../hull.js';
 import { LAYERS, OK, judge, isTop, gradeOf } from './criteria.js';
-import { STEEL_DENSITY } from './baseline.js';
-import { PLATE_ORIG } from './synth.js';
+import { STEEL_DENSITY, PLATE_ORIG } from './baseline.js';
 import { PLATE_FRAMES, groupZones } from './zones.js';
 import { stepOf } from './repairSteps.js';
 

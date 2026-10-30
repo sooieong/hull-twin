@@ -5,7 +5,7 @@ import { RobotSource } from './robotSource.js';
 import { createSynth } from './synth.js';
 import { photoFor } from './photos.js';
 import { FS, ZONES, zoneOf, strakeName } from '../hull.js';
-import { ROBOT } from './baseline.js';
+import { ROBOT, SEED } from './baseline.js';
 
 import { LAYERS, OK, judge } from './criteria.js';
 import { platesOf } from './plates.js';
@@ -37,10 +37,10 @@ const DONE_AGO_MS=60*60*1000;     // connect 때 보내는 직전 완료 결과�
 
 export class SimulatorSource extends RobotSource{
   /* photos = loadDefectPhotos() {below|above:{flaking|scratch:[url…]}}: 손상 레코드마다 흘수선 위·아래와 종류에 맞는 사진을 id로 고른다 */
-  constructor({photos=null,seed=2491}={}){
+  constructor({photos=null,seed=SEED}={}){
     super();
-    const values=createSynth(seed);
-    this.base=this.plan.samples.filter(sm=>!sm.blocked).map(sm=>{
+    const samples=this.plan.samples.filter(sm=>!sm.blocked),values=createSynth(samples,seed);
+    this.base=samples.map(sm=>{
       const {first,...v}=values(sm),photo=photoFor(photos,v.defect,sm.id,sm.Z);
       return {id:sm.id,X:sm.X,Y:sm.Y,Z:sm.Z,fr:sm.fr,strake:sm.strake,side:sm.side,zone:sm.zone,...v,photo,_at:sm.at,
         _first:{...first,photo:photoFor(photos,first.asFound.defect,sm.id,sm.Z,1)}};   // 1차 리도킹 값 (firstDockRecords), 2차 레코드에는 넣지 않는다

@@ -169,7 +169,7 @@ function page5(d){
     :'<p>지금 속도로는 다음 도킹까지 경고 기준을 넘을 곳이 없습니다.</p>';
   const crit=CRITERIA,dc=crit.dft,pc=crit.plate;
   // 최우선 보수 does not fit the 경고·주의·정상 columns: its rule sits between the box title and the table
-  const topRule=`<div class="rp-toprule"><b>${gradeIcon(TOP)}${gradeName(TOP)}</b><p>강판 두께·도막 두께: ${TOP_RULE.coat}<br>도막 손상: ${TOP_RULE.defect}</p></div>`;
+  const topRule=`<div class="rp-toprule"><b>${gradeIcon(TOP)}${gradeName(TOP)}</b><p>${TOP_RULE.coat}<br>또는 ${TOP_RULE.defect} (세 레이어 공통)</p></div>`;
   const ctab=table(['항목','경고','주의','정상'],[
     `<tr>${td('강판 감소율 (원두께 기준)')}${td(`${pctR(pc.crit)}% 이상`)}${td(`${pctR(pc.warn)}% 이상 ${pctR(pc.crit)}% 미만`)}${td(`${pctR(pc.warn)}% 미만`)}</tr>`,
     `<tr>${td('도막 감소율 (설계 기준)')}${td(`${pctR(dc.crit)}% 이상`)}${td(`${pctR(dc.warn)}% 이상 ${pctR(dc.crit)}% 미만`)}${td(`${pctR(dc.warn)}% 미만`)}</tr>`,
