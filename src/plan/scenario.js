@@ -17,18 +17,22 @@
      - 도료량 (L) = 도장 구역별 면적 × 설계 두께 ÷ 고형분 비율 × (1 + 손실률) (baseline.PAINT_SPEC, PAINT_LOSS)
      - 마찰 저항 (새 선체 대비 증가분, %) = Townsin 식 (FRICTION, 보고서 5장과 같은 식), 측정점마다 거칠기 AHR:
          지금 도막 상태 (ahrOf) → 다시 칠한 곳 (full 판 전체, local 판의 이상 지점)은 새 도막
-     - 다음 도킹 경고 (건) = 다음 도킹(5년 뒤)에 경고 이상이 될 판의 수. 측정점마다 5년 뒤를 예측한다:
+     - 다음 도킹 경고 (건) = 다음 도킹(5년 뒤)에 경고 이상이 될 곳을 보수 구역 단위로 센 수 (zones.pointZones: 이웃한 점을
+         판 크기로 나누고 작은 묶음을 합친다, 구역 평균 약 25 m²). 측정점마다 5년 뒤를 예측한다 (predictNext):
          강판·도막 감소율 ≥ 경고 기준 (criteria.reaches, 판정과 같은 비교) · 고치지 않은 도막 떨어짐.
-         보수하지 않은 판은 그 점의 지금 감소 속도 그대로. 보수한 판은 판의 모든 점을 다시 계산한다 (SPEC 13 #16):
+         감소 속도 = 직전 리도킹 정비 후(1차 afterRepair = 레코드의 …Prev) 대비 지금까지 줄어든 양 ÷ 5년.
+         보수하지 않은 판은 그 점의 감소 속도 그대로. 보수한 판은 판의 모든 점을 다시 계산한다 (SPEC 13 #16):
          강판 교체·보강 판 → 강판이 원두께에서, 재도장 판 → 도막이 설계 두께에서 다시 시작
          · 국부 보수·터치업 판 → 강판은 지금 두께 그대로, 도막은 설계 두께에서 다시 시작
          감소 속도는 보수한 쪽(강판·도막) 모두 같은 구역(선저·빌지 …) 측정점들의 평균 (zoneRates).
-   진단 보고서 5장과 보수 계획 화면이 이 계산을 같이 쓴다.
+     - 4단계가 넣는 판 (단계 5·6 중 다음 도킹 경고 예상 판): LEVEL4 — years년 뒤 경고가 예상되는 점이 판 측정점의 share 이상
+   진단 보고서 5장(종합 판정·보수 효과·다음 도킹 관찰 권고)과 보수 계획 화면이 이 계산을 같이 쓴다.
    ========================================================= */
 import { OK, WARN, CRIT, TOP, CRITERIA, LAYERS, judge, reaches } from '../data/criteria.js';
 import { GRID, DRAFT, DRAFT_LIGHT, WL_TOP, AHR, LBP, SERVICE_SPEED, SEA_NU, PAINT_SPEC, PAINT_LOSS } from '../data/baseline.js';
 import { DOCKING_CYCLE_YEARS } from '../data/docking.js';
 import { platesOf } from '../data/plates.js';
+import { pointZones } from '../data/zones.js';
 
 /* the five levels of the slider: name (권장 → " (권장)"), the lines under it, the steps it takes in,
    group: the name of its group in 최종 보수 목록 (the plates this level adds) · grade: that group's judgement icon (gradeUi) */
@@ -78,18 +82,20 @@ export function workOf(step){
 /* the drawing's category of a work: 강판 교체·보강 · 재도장 · 국부 보수·터치업 */
 export const kindOf=w=>w.steel?'steel':w.paint==='full'?'paint':'local';
 
-/* next docking per point: rates since the docking before (≥ 0), then YEARS_TO_NEXT more.
+/* next docking per point: rates since the docking before (≥ 0), then `years` more (YEARS_TO_NEXT).
    fix: {plate, coat} — what the plate's repair did to this point:
      plate 'new' = 강판 교체·보강 (from the original thickness) · 'zone' = 국부 보수 (from the thickness now) · null = not repaired
      coat true = 다시 칠함 (from the design thickness; no 도막 떨어짐 left)
-   a repaired side wears at the average rate of its zone (zoneRates), a side not repaired keeps the point's own rate */
+   a repaired side wears at the average rate of its zone (zoneRates), a side not repaired keeps the point's own rate
+   → {plate, dft: predicted 감소율 (0–1), flaking: a 도막 떨어짐 left as it is} */
 const prevPlate=r=>r.platePrev??r.plateOrig,prevDft=r=>r.dftPrev??r.dftDesign;
 const plateRate=r=>Math.max(0,(prevPlate(r)-r.plate)/YEARS_SINCE),dftRate=r=>Math.max(0,(prevDft(r)-r.dft)/YEARS_SINCE);
-function warnsNext(r,fix,rates){
+export function predictNext(r,fix,rates,years=YEARS_TO_NEXT){
   const z=rates[r.zone],pr=fix.plate?z.plate:plateRate(r),dr=fix.coat?z.dft:dftRate(r);
-  const plate=(fix.plate==='new'?r.plateOrig:r.plate)-pr*YEARS_TO_NEXT,dft=(fix.coat?r.dftDesign:r.dft)-dr*YEARS_TO_NEXT;
-  return reaches((r.plateOrig-plate)/r.plateOrig,CRITERIA.plate.crit)||reaches((r.dftDesign-dft)/r.dftDesign,CRITERIA.dft.crit)||(!fix.coat&&r.defect==='flaking');
+  const plate=(fix.plate==='new'?r.plateOrig:r.plate)-pr*years,dft=(fix.coat?r.dftDesign:r.dft)-dr*years;
+  return {plate:(r.plateOrig-plate)/r.plateOrig,dft:(r.dftDesign-dft)/r.dftDesign,flaking:!fix.coat&&r.defect==='flaking'};
 }
+export const warnsOf=x=>reaches(x.plate,CRITERIA.plate.crit)||reaches(x.dft,CRITERIA.dft.crit)||x.flaking;
 /* average wear per zone (선저, 빌지 …) over the docking's points: {plate mm/년, dft µm/년} — the rate of a repaired point.
    Once per data version */
 let rateCache=null;
@@ -103,15 +109,17 @@ export function zoneRates(store){
 const NO_FIX={plate:null,coat:false};
 /* the fix of a plate's work (null = not in the plan): the whole plate counts as repaired — 국부 보수·터치업 too */
 const fixOf=w=>w?{plate:w.steel?'new':w.spot?'zone':null,coat:w.paint==='full'||w.paint==='local'}:NO_FIX;
-/* does a plate's next docking bring a 경고 (any of its points), under work w (null = not in the plan) */
-export function plateWarnsNext(p,w,rates){
-  const fix=fixOf(w);
-  return p.records.some(r=>warnsNext(r,fix,rates));
+/* 4단계가 넣는 판: 고치지 않으면 years년 뒤 경고가 예상되는 점이 판 측정점의 share 이상 (share 0 = 한 점이라도) */
+export const LEVEL4={years:YEARS_TO_NEXT,share:0};
+/* does a plate left as it is reach 경고 within LEVEL4.years (LEVEL4.share of its points) — the plates level 4 takes in */
+export function plateWarnsNext(p,rates,rule=LEVEL4){
+  const n=p.records.filter(r=>warnsOf(predictNext(r,NO_FIX,rates,rule.years))).length;
+  return n>0&&n>=rule.share*p.records.length;
 }
 /* the first level that takes a plate in (보수 계획 최종 보수 목록 groups), null = 정상 · 측정 불가 */
 export function entryLevel(store,p){
   if(!p.measurable||p.step==null)return null;
-  const lv=LEVELS.find(l=>l.steps.includes(p.step)||l.nextDock&&(p.step===5||p.step===6)&&plateWarnsNext(p,null,zoneRates(store)));
+  const lv=LEVELS.find(l=>l.steps.includes(p.step)||l.nextDock&&(p.step===5||p.step===6)&&plateWarnsNext(p,zoneRates(store)));
   return lv?lv.level:null;
 }
 
@@ -120,17 +128,19 @@ export function planOf(store,level,fullBelow=false){
   const lv=levelOf(level),P=platesOf(store).plates.filter(p=>p.measurable),plan=new Map(),rates=zoneRates(store);
   for(const p of P){
     if(p.step!=null&&lv.steps.includes(p.step))plan.set(p.id,workOf(p.step));
-    else if(lv.nextDock&&(p.step===5||p.step===6)&&plateWarnsNext(p,null,rates))plan.set(p.id,workOf(p.step));
+    else if(lv.nextDock&&(p.step===5||p.step===6)&&plateWarnsNext(p,rates))plan.set(p.id,workOf(p.step));
   }
   if(fullBelow)for(const p of P)if(belowDwl(p)){const w=plan.get(p.id);plan.set(p.id,{steel:!!w&&w.steel,paint:'full',spot:!!w&&w.spot});}
   return plan;
 }
 
-/* → {repaint m², steel t, paint L, friction %, nextWarn 건, steelRows, paintRows, steelN}
+/* → {repaint m², steel t, paint L, friction %, nextWarn 건, nextZones, steelRows, paintRows, steelN}
+   nextZones: the places predicted to reach 경고 at the next docking, as repair zones (zones.pointZones) — items [{r, next}]
+     (next = predictNext); nextWarn = their number
    steelRows: [{p, w}] (단계 → 판 번호 순) · paintRows: [{key, zone, work, area, paint, litres}] (선저·선측 · 흘수선 · 건현 · 국부) */
 export function evaluate(store,plan){
   const {plates}=platesOf(store),P=plates.filter(p=>p.measurable);
-  const rates=zoneRates(store),steelRows=[],full={bottom:0,boot:0,top:0};let localA=0,localL=0,steel=0,nextWarn=0;
+  const rates=zoneRates(store),steelRows=[],full={bottom:0,boot:0,top:0},warns=[];let localA=0,localL=0,steel=0;
   for(const p of P){
     const w=plan.get(p.id);
     if(w){
@@ -138,15 +148,17 @@ export function evaluate(store,plan){
       if(w.paint==='full')full[paintZoneOf(p)]+=p.area;
       else if(w.paint==='local'){const a=w.area??localArea(p);localA+=a;localL+=litresOf(a,paintZoneOf(p));}   // area: 보수 이력 (the points repainted)
     }
-    if(plateWarnsNext(p,w,rates))nextWarn++;
+    const fix=fixOf(w);
+    for(const r of p.records){const next=predictNext(r,fix,rates);if(warnsOf(next))warns.push({r,next});}
   }
+  const nextZones=pointZones(warns),nextWarn=nextZones.length;
   steelRows.sort((a,b)=>(a.p.step??9)-(b.p.step??9)||a.p.si-b.p.si||a.p.bin-b.p.bin||a.p.id.localeCompare(b.p.id));
   const paintRows=Object.entries(full).filter(([,a])=>a>0).map(([k,a])=>({key:k,zone:PAINT_SPEC[k].zone,work:'재도장',area:a,paint:PAINT_SPEC[k].paint,litres:litresOf(a,k)}));
   if(localA>0)paintRows.push({key:'local',zone:'국부 보수·터치업',work:'국부 보수·터치업',area:localA,paint:'구역별 동일',litres:localL});
   // friction: repainted plates all new coat; on a local plate its abnormal points
   const R=P.flatMap(p=>{const w=plan.get(p.id);return p.records.map(r=>[r,w]);});
   const friction=R.length?R.reduce((s,[r,w])=>s+FRICTION.dCF(w&&(w.paint==='full'||(w.paint==='local'&&abnormal(r)))?AHR.newCoat:ahrOf(r)),0)/R.length/FRICTION.CF*100:0;
-  return {repaint:paintRows.reduce((s,x)=>s+x.area,0),steel,paint:paintRows.reduce((s,x)=>s+x.litres,0),friction,nextWarn,
+  return {repaint:paintRows.reduce((s,x)=>s+x.area,0),steel,paint:paintRows.reduce((s,x)=>s+x.litres,0),friction,nextWarn,nextZones,
     steelRows,paintRows,steelN:steelRows.length};
 }
 

@@ -130,13 +130,14 @@ function page4(d,imgs){
 }
 
 /* ---------- 5. repair plan ---------- */
-/* 다음 도킹 관찰 권고: the first WATCH_SHOW places (largest predicted loss first, no action — they are to be watched);
-   the current judgement of all of them goes in the sentence above the table (주의 391건·정상 6건) */
+/* 다음 도킹 관찰 권고: the first WATCH_SHOW zones (furthest past the 경고 limit first, no action — they are to be watched);
+   the current judgement of all of them goes in the sentence above the table (주의 39건·정상 6건) */
 const WATCH_SHOW=4;
-const watchRows=pr=>pr.slice(0,WATCH_SHOW).map(x=>`<tr>${td(ptLocH(x.r))}${td(pctNum(lossRate(x.r,'plate')),'n')}${td(ratioNum(x.pred),'n')}</tr>`);
+const WATCH_ITEM={plate:'강판',dft:'도막',defect:DEFECT_LABEL.flaking};
+const watchRows=pr=>pr.slice(0,WATCH_SHOW).map(x=>`<tr>${td(zoneLocH(x.z))}${td(WATCH_ITEM[x.layer])}`
+  +`${td(x.layer==='defect'?DASH:pctNum(lossRate(x.r,x.layer)),'n')}${td(x.pred==null?DASH:ratioNum(x.pred),'n')}</tr>`);
 function watchMix(pr){
-  const gr=x=>gradeOf(judge(x.r,'plate').level,isTop(x.r,'plate'));
-  return [...GRADES,OK].map(g=>[g,pr.filter(x=>gr(x)===g).length]).filter(([,n])=>n).map(([g,n])=>`${gradeName(g)} ${num(n)}건`).join('·');
+  return [...GRADES,OK].map(g=>[g,pr.filter(x=>Math.min(x.grade,TOP)===g).length]).filter(([,n])=>n).map(([g,n])=>`${gradeName(g)} ${num(n)}건`).join('·');
 }
 function page5(d){
   const C=REPORT_CONST,rp=d.repair,e=d.effect;
@@ -162,11 +163,11 @@ function page5(d){
   const qtyRow=(name,n,cls='')=>`<tr class="${cls}">${td(name)}${n.map(x=>td(num(x),'n')).join('')}</tr>`;
   const tot=ACTION_ORDER.map((_,i)=>rp.byZone.reduce((s,z)=>s+z.n[i],0));
   const list=table(['구역',...ACTION_ORDER.map(a=>`#${a}`)],[...rp.byZone.map(z=>qtyRow(z.zone,z.n)),qtyRow('합계',tot,'rp-sum')],'rp-qty-t');
-  // 다음 도킹 관찰 권고 (from 2장): places that cross the 경고 limit within the next interval at the current rate
+  // 다음 도킹 관찰 권고: zones still crossing the 경고 limit at the next docking after the 권장 보수 (= 보수 계획 3단계 "다음 도킹 경고 예상")
   const pr=d.plate.predicted;
-  const watch=pr.length?`<p>지금의 감소 속도가 이어지면 다음 도킹(${d.ship.next}, ${C.yearsToNext}년 후)에 <b>${num(pr.length)}건</b>(현재 ${watchMix(pr)})이 경고 기준(감소율 ${pctR(CRITERIA.plate.crit)}% 이상)을 넘을 것으로 예측됩니다.</p>
-      ${table(['위치','#현재 감소율 (%)','#예상 감소율 (%)'],watchRows(pr),'rp-watch-t')}`
-    :'<p>지금 속도로는 다음 도킹까지 경고 기준을 넘을 곳이 없습니다.</p>';
+  const watch=pr.length?`<p>권장 보수 후에도 지금의 감소 속도가 이어지면 다음 도킹(${d.ship.next}, ${C.yearsToNext}년 후)에 <b>${num(pr.length)}건</b>(현재 ${watchMix(pr)})이 경고 기준(강판 감소율 ${pctR(CRITERIA.plate.crit)}%·도막 감소율 ${pctR(CRITERIA.dft.crit)}% 이상)을 넘을 것으로 예측됩니다.</p>
+      ${table(['위치','항목','#현재 감소율 (%)','#예상 감소율 (%)'],watchRows(pr),'rp-watch-t')}`
+    :'<p>권장 보수 후에는 지금 속도로 다음 도킹까지 경고 기준을 넘을 곳이 없습니다.</p>';
   const crit=CRITERIA,dc=crit.dft,pc=crit.plate;
   // 최우선 보수 does not fit the 경고·주의·정상 columns: its rule sits between the box title and the table
   const topRule=`<div class="rp-toprule"><b>${gradeIcon(TOP)}${gradeName(TOP)}</b><p>${TOP_RULE.coat}<br>또는 ${TOP_RULE.defect} (세 레이어 공통)</p></div>`;

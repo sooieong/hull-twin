@@ -5,8 +5,10 @@
    - 도막 손상: 차수별 DAMAGE.events건. 앵커 주변 · 예인선 접촉점 · 펜더 라인에 스크래치, 그 3 m 안에 도막 떨어짐이 함께
      생긴다 (확률). 수선부·씨체스트에는 도막 떨어짐만. 손상끼리는 DAMAGE.gap 이상 떨어져 1건이 한 묶음이다.
    - 도막 두께: 대시보드 구역(COAT_ZONES)마다 측정점의 (부위 계수 × COAT.base) 비율이 이상(주의·경고)이 되도록
-     이상 패치(타원)를 놓는다. 패치는 서로 붙지 않고, 경고 패치는 COAT.warnShare 비율이다.
+     이상 패치(타원)를 놓는다. 패치는 서로 붙지 않고, 경고 패치는 COAT.warnShare 비율이다 (차수별).
    - 최우선 보수: 국부 공식 중 top인 곳에만 도막 두께 주의 패치를 겹친다. 나머지 국부 공식 주변에는 도막 이상·손상을 두지 않는다.
+   - 차수 순서: 1차 asFound(first) → 시뮬레이터가 권장 범위로 1차 정비(afterRepair) → 2차는 그 정비 후 값에서 5년 (current).
+     그래서 2차의 “1차 리도킹 대비”와 감소 속도는 1차 보수 이력과 같은 값에서 잰다.
    측정점 전체(계획의 측정점)를 보고 한 번에 만든다. 같은 seed면 항상 같은 값이 나온다.
    ========================================================= */
 import { FS, FRMIN, KEEL_HALF, STRAKE_W, KEEL_BLOCKS } from '../hull.js';
@@ -109,8 +111,8 @@ export function createSynth(samples,seed=SEED){
   }
 
   /* ---------- 도막 두께: abnormal patches per dashboard zone up to (coef × base) of its points ---------- */
-  function coating(rnd,base,topSpots){
-    const u=rr(rnd),lv=new Int8Array(N),loss=new Float64Array(N);   // lv: 0 정상, 1 주의, 2 경고
+  function coating(rnd,base,warnShare,topSpots,preset=null){   // preset {lv, loss}: abnormal points already there (count toward the targets)
+    const u=rr(rnd),lv=preset?Int8Array.from(preset.lv):new Int8Array(N),loss=preset?Float64Array.from(preset.loss):new Float64Array(N);   // lv: 0 정상, 1 주의, 2 경고
     let share=rnd();   // 경고 patches: every 1 / warnShare-th patch (exactly warnShare of them), from a random start
     const lossOf=l=>u(l===2?COAT.loss.crit:COAT.loss.warn);
     // patch: points inside the ellipse (semi-axes a along x, b along the girth); clip = only this zone's points
@@ -128,40 +130,50 @@ export function createSynth(samples,seed=SEED){
         // a patch keeps clear of the others (a gap of one grid step) and of the spots without coating abnormality
         const gap=tries<2000?GRID*1.2:0;
         if(pts.some(k=>noCoat[k])||(gap&&inside(c,a+gap,b+gap,null).some(k=>lv[k])))continue;
-        share+=COAT.warnShare;const l=share>=1?2:1;if(l===2)share-=1;put(pts,l);have=idx.filter(k=>lv[k]).length;
+        share+=warnShare;const l=share>=1?2:1;if(l===2)share-=1;put(pts,l);have=idx.filter(k=>lv[k]).length;
       }
     }
     return {lv,loss};
   }
 
   const D2=damage(mulberry32(seed+21),DAMAGE.events.current),D1=damage(mulberry32(seed+22),DAMAGE.events.first);
-  const C2=coating(mulberry32(seed+31),COAT.base.current,spots.filter(p=>p.top)),C1=coating(mulberry32(seed+32),COAT.base.first,[]);
+  const C1=coating(mulberry32(seed+32),COAT.base.first,COAT.warnShare.first,[]);
+  const hash=s=>Math.imul(s.id+1,2654435761);
+  // AI 손상 판별 신뢰도 (%) — 모델이 아직 없어 85–98% 예시값. 실제 모델 결과(JSON)의 값으로 이 필드만 바꾸면 된다
+  const ai=(d,rnd)=>d?Math.round(85+13*rnd()):null;
 
-  /* ---------- per point: 2차 values + first = 1차 리도킹 (asFound: 정비 전 측정 · afterRepair: 정비 후)
-     2차의 dftPrev·platePrev(“1차 리도킹 대비”, 상세 그림의 “1차” 치수선)는 afterRepair와 같은 값이다.
-     1차 리도킹 기록(보수 이력)의 afterRepair는 이 값이 아니라 권장 범위로 정비한 결과다 (simulator.repairedAt, SPEC 13 #11). */
-  const out=new Map();
+  /* ---------- 1차 리도킹 asFound (정비 전 측정) ---------- */
+  const first=new Map();
   S.forEach((s,k)=>{
-    const rnd=mulberry32((seed+7)^Math.imul(s.id+1,2654435761)),u=rr(rnd);
-    const design=DFT_DESIGN[s.zone],orig=PLATE_ORIG[s.zone];
-    const dftOf=(C,k)=>Math.round(design*Math.max(0.05,Math.min(1.1,1-(C.lv[k]?C.loss[k]:u(COAT.loss.normal)))));
-    // 강판: 2차 = 일반 감소와 국부 공식 중 큰 값, 1차 asFound = 일반 감소만 (경고 기준 이상이면 그때 교체 → afterRepair 원두께)
-    const loss=Math.min(0.4,Math.max(general[k].g,pit[k])),prevLoss=general[k].first,replaced=prevLoss>=CRITERIA.plate.crit;
-    const plateAsFound=r1(orig*(1-prevLoss)),plateAfter=replaced?orig:plateAsFound;
-    const dft=dftOf(C2,k),dft1=dftOf(C1,k);
-    // 도막 1차 afterRepair: 그때 다시 칠했다 → 설계 이상 (100–112%), 지금보다 얇을 수는 없다
-    const dftAfter=Math.round(Math.max(design*(1+0.12*rnd()),dft));
-    // AI 손상 판별 신뢰도 (%) — 모델이 아직 없어 85–98% 예시값. 실제 모델 결과(JSON)의 값으로 이 필드만 바꾸면 된다
-    const d2=D2.get(k),d1=D1.get(k),ai=d=>d?Math.round(85+13*rnd()):null;
-    out.set(s.id,{
-      dft,dftDesign:design,dftPrev:dftAfter,
-      plate:r1(orig*(1-loss)),plateOrig:orig,platePrev:plateAfter,
-      defect:d2?d2.defect:null,defectArea:d2?r2(d2.area):0,aiConfidence:ai(d2),
-      first:{
-        asFound:{dft:dft1,plate:plateAsFound,defect:d1?d1.defect:null,defectArea:d1?r2(d1.area):0,aiConfidence:ai(d1)},
-        afterRepair:{dft:dftAfter,plate:plateAfter,plateReplaced:replaced}
-      }
-    });
+    const rnd=mulberry32((seed+7)^hash(s)),design=DFT_DESIGN[s.zone],orig=PLATE_ORIG[s.zone],d1=D1.get(k);
+    first.set(s.id,{dft:Math.round(design*(1-(C1.lv[k]?C1.loss[k]:rr(rnd)(COAT.loss.normal)))),plate:r1(orig*(1-general[k].first)),
+      defect:d1?d1.defect:null,defectArea:d1?r2(d1.area):0,aiConfidence:ai(d1,rnd)});
   });
-  return sm=>out.get(sm.id);
+
+  /* ---------- 2차 (현재): 1차 정비 후(afterRepair) 값에서 5년 ----------
+     after: Map id → {dft, plate, plateReplaced} = 1차 리도킹 기록의 정비 후 값 (simulator: 권장 범위로 정비, SPEC 13 #11).
+     2차의 dftPrev·platePrev(“1차 리도킹 대비”, 상세 그림의 “1차” 치수선)는 이 값 그대로다.
+     - 도막: 1차에 고치지 않은 이상(감소율 주의 이상)은 그대로 남아 COAT.carry만큼 더 줄고, 구역 목표에 먼저 든다.
+       나머지 점은 정상 마모 COAT.wear (주의 기준 아래까지), 이상 패치는 그 위에 새로 생긴다. 1차 값보다 두꺼워지지 않는다.
+     - 강판: 1차 값에서 (2차 감소 − 1차 감소)만큼 더 준다 */
+  function current(after){
+    const prevRatio=S.map((s,k)=>after.get(s.id).dft/DFT_DESIGN[s.zone]);
+    const carry={lv:new Int8Array(N),loss:new Float64Array(N)},rc=mulberry32(seed+33),uc=rr(rc);
+    // a carried abnormality keeps its judgement (a 주의 area stays 주의: one zone, not a 경고 core cut out of it)
+    prevRatio.forEach((p,k)=>{const l0=1-p;if(l0<CRITERIA.dft.warn)return;const lv=l0>=CRITERIA.dft.crit?2:1;
+      carry.loss[k]=Math.min(l0+uc(COAT.carry),lv===2?COAT.loss.crit[1]:CRITERIA.dft.crit-0.01);carry.lv[k]=lv;});
+    const C2=coating(mulberry32(seed+31),COAT.base.current,COAT.warnShare.current,spots.filter(p=>p.top),carry),out=new Map();
+    S.forEach((s,k)=>{
+      const rnd=mulberry32((seed+8)^hash(s)),design=DFT_DESIGN[s.zone],orig=PLATE_ORIG[s.zone],a=after.get(s.id),d2=D2.get(k),p=prevRatio[k];
+      const ratio=C2.lv[k]?Math.min(p,1-C2.loss[k]):Math.min(p,Math.max(p-rr(rnd)(COAT.wear),1-COAT.loss.normalMax));
+      const loss=Math.min(0.4,Math.max(general[k].g,pit[k])),more=Math.max(0,loss-general[k].first);
+      out.set(s.id,{
+        dft:Math.round(design*Math.max(0.05,ratio)),dftDesign:design,dftPrev:a.dft,
+        plate:r1(a.plateReplaced?a.plate-orig*more:Math.min(orig*(1-loss),a.plate)),plateOrig:orig,platePrev:a.plate,
+        defect:d2?d2.defect:null,defectArea:d2?r2(d2.area):0,aiConfidence:ai(d2,rnd)
+      });
+    });
+    return sm=>out.get(sm.id);
+  }
+  return {first:sm=>first.get(sm.id),current};
 }

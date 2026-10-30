@@ -94,11 +94,17 @@ export function buildReportData(store,now=new Date()){
     const t=g(TOP),f=g(CRIT),s=g(WARN);
     return {zone:name,tN:t.length,tA:dmgArea(t),fN:f.length,fA:dmgArea(f),sN:s.length,sA:dmgArea(s)};}).filter(row=>row.tN+row.fN+row.sN>0);
 
-  /* --- plate loss rate and next-docking prediction (5장 다음 도킹 관찰 권고) --- */
-  const rate=r=>(prevPlate(r)-r.plate)/C.yearsSincePrev;
-  const predLoss=r=>(r.plateOrig-(r.plate-rate(r)*C.yearsToNext))/r.plateOrig;
-  const predicted=R.filter(r=>lv(r,'plate')<CRIT&&reaches(predLoss(r),CRITERIA.plate.crit)).sort((a,b)=>predLoss(b)-predLoss(a))
-    .map(r=>({r,rate:rate(r),loss:plateLoss(r),pred:predLoss(r)}));
+  /* --- 5장 다음 도킹 관찰 권고: places that still reach 경고 at the next docking after the 권장 보수 — the very zones of the
+     보수 계획 screen's "다음 도킹 경고 예상" at level 3 (scenario.evaluate nextZones, same count). Per zone: the point furthest
+     past its limit, the layer that brings it there (강판 · 도막, or a 도막 떨어짐 left), its 감소율 now and predicted,
+     and the zone's judgement now in that layer; largest first --- */
+  const over=x=>Math.max(x.plate/CRITERIA.plate.crit,x.dft/CRITERIA.dft.crit);
+  const predicted=rec.nextZones.map(z=>{
+    const a=z.items.reduce((m,b)=>over(b.next)>over(m.next)?b:m),x=a.next;
+    const layer=reaches(x.plate,CRITERIA.plate.crit)||reaches(x.dft,CRITERIA.dft.crit)?(x.plate/CRITERIA.plate.crit>=x.dft/CRITERIA.dft.crit?'plate':'dft'):'defect';
+    const grade=Math.max(...z.items.map(b=>gradeOf(judge(b.r,layer).level,isTop(b.r))));
+    return {z,r:a.r,layer,grade,pred:layer==='defect'?null:x[layer],over:over(x)};
+  }).sort((a,b)=>b.over-a.over);
 
   /* --- key findings (generated from the data; 건 = the dashboard's repair zones), one form for all three lines:
      "선저에 강판 감소 집중 (강판 두께 보수 98건 중 67.3%)" — the area with the most zones (areas tied at the top are named

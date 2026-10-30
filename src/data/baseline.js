@@ -98,8 +98,11 @@ export const coatZoneOf=Z=>COAT_ZONES.find(c=>Z>=c.z0);
    패치 하나는 area m² (가로:세로 aspect), 경고 패치 비율 warnShare. 감소율: 정상 / 주의 패치 / 경고 패치 (설계 대비, 0–1) */
 export const COAT={
   base:{current:0.142,first:0.142*0.35},
-  area:[32,64],aspect:[0.8,1.5],warnShare:0.33,
-  loss:{normal:[0,0.12],warn:[0.23,0.46],crit:[0.53,0.78]}
+  area:[32,64],aspect:[0.8,1.5],
+  warnShare:{current:0.4,first:0.3},    // 2차는 1차에서 넘어온 주의 패치가 있어 새 패치의 경고 비율을 조금 높게
+  loss:{normal:[0,0.12],normalMax:0.18,warn:[0.23,0.46],crit:[0.53,0.78]},
+  wear:[0.02,0.08],                     // 2차: 정상 점의 5년 마모 (1차 정비 후 값에서, 감소율 normalMax까지)
+  carry:[0.04,0.14]                     // 2차: 1차에 고치지 않은 이상 점이 5년 동안 더 줄어드는 양 (판정 단계는 그대로)
 };
 /* 강판 감소 (원두께 대비, 0–1)
    - 일반 감소: 2차 원두께의 1–2 %. 경하 흘수선 띠(z 5.3–6.2)와 빌지 상부가 가장 크고, 선수부 × bowFactor. 1차는 2차의 firstShare배 (거의 없음)

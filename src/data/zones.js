@@ -12,12 +12,12 @@
      측정점 1개짜리 구역은 거리와 상관없이 가장 가까운 구역에 넣는다 (판정이 다르면 합친 구역의 판정은 더 나쁜 쪽).
      최우선 보수 구역은 합치지 않는다.
    도막 손상 레이어: 손상은 서로 DAMAGE_LINK(3 m) 안에 있으면 1건이다 (스크래치·도막 떨어짐을 함께 묶고 판으로 나누지 않는다).
-     구역의 판정은 더 나쁜 쪽 (도막 떨어짐이 있으면 도막 떨어짐).
+     구역의 판정은 더 나쁜 쪽 (도막 떨어짐이 있으면 도막 떨어짐). 최우선 보수 구역은 손상이 있는 것만 든다.
    복합은 구역 안에 복합 점이 하나라도 있으면 복합이다.
    layer 'all': 세 레이어를 합친 기준 (보고서 5장 보수 계획). 점의 판정 = 세 레이어 중 가장 나쁜 판정, 순서는 우선순위 점수.
    ========================================================= */
 import { LETTERS, ZONES, FRMIN, recordU } from '../hull.js';
-import { OK, LAYERS, judge, isCompound, isTop, actionFor, scoreOf, dftLoss, plateLoss } from './criteria.js';
+import { OK, CRIT, LAYERS, judge, isCompound, isTop, actionFor, scoreOf, dftLoss, plateLoss } from './criteria.js';
 import { ACTION_ORDER } from './repairSteps.js';
 
 export const ZONE_LINK={dist:1.6};   // m: 측정 격자 1.1 m의 대각선(1.56 m)까지 이웃
@@ -106,23 +106,34 @@ export function groupZones(records,layer,top=topClusters(records)){
     return {r,level:j.level,degree:j.degree,compound,score,value:all?score:layerValue(r,layer),si:strakeIdx(r.strake),types:all?j.types:[layer],primary:all?j.primary:layer};};
   const zone=(items,isTopZone)=>{
     items.sort((a,b)=>b.level-a.level||b.value-a.value||b.score-a.score);   // the worst judgement first (merged or damage zones mix them)
-    const w=items[0],compound=items.some(a=>a.compound);
-    let frMin=1e9,frMax=-1e9,siMin=99,siMax=-99;const sides=new Set(),zc={},types=new Set();
-    for(const a of items){frMin=Math.min(frMin,a.r.fr);frMax=Math.max(frMax,a.r.fr);siMin=Math.min(siMin,a.si);siMax=Math.max(siMax,a.si);
-      sides.add(a.r.side);zc[a.r.zone]=(zc[a.r.zone]||0)+1;a.types.forEach(t=>types.add(t));}
+    const w=items[0],compound=items.some(a=>a.compound),types=new Set();
+    for(const a of items)a.types.forEach(t=>types.add(t));
     return {worst:w.r,items,count:items.length,level:w.level,degree:w.degree,compound,top:isTopZone,value:w.value,
       score:scoreOf(w.level,w.degree,compound),action:all?actionAll(items):actionFor(w.r,layer,w.level,isTopZone),
-      frMin,frMax,strakeMin:strakeOf(siMin),strakeMax:strakeOf(siMax),side:sides.size>1?'PS':[...sides][0],
-      // zone name: the one most points are in; a tie goes by the fixed ZONES order (not the layer's point order)
-      zone:Object.keys(zc).sort((a,b)=>zc[b]-zc[a]||ZONES.indexOf(a)-ZONES.indexOf(b))[0],ids:new Set(items.map(a=>a.r.id)),
-      types:LAYERS.filter(l=>types.has(l)),primary:w.primary};
+      ...extent(items),types:LAYERS.filter(l=>types.has(l)),primary:w.primary};
   };
   // grade group first (최우선 보수 → 경고 → 주의), then the layer value (the priority score for 'all'), then more points
   const order=(a,b)=>(b.top-a.top)||(b.level-a.level)||(b.value-a.value)||(b.count-a.count);
   const inTop=new Set(top.flatMap(c=>c.map(r=>r.id)));
   const rest=[];for(const r of records){if(inTop.has(r.id))continue;const a=item(r);if(a.level>OK)rest.push(a);}
   const others=layer==='defect'?cluster(rest,false,DAMAGE_LINK):mergeSmall(cluster(rest,true).flatMap(plates));
-  return [...top.flatMap(c=>plates(c.map(item))).map(items=>zone(items,true)),...others.map(items=>zone(items,false))].sort(order);
+  // 도막 손상: only the 최우선 보수 zones with damage in them (a coating + steel one has nothing to show in this list)
+  const tops=top.flatMap(c=>plates(c.map(item))).filter(items=>layer!=='defect'||items.some(a=>a.r.defect));
+  return [...tops.map(items=>zone(items,true)),...others.map(items=>zone(items,false))].sort(order);
+}
+/* where a zone is: frame and strake span, side, the zone name most of its points are in (a tie goes by the fixed ZONES order) */
+function extent(items){
+  let frMin=1e9,frMax=-1e9,siMin=99,siMax=-99;const sides=new Set(),zc={};
+  for(const a of items){frMin=Math.min(frMin,a.r.fr);frMax=Math.max(frMax,a.r.fr);siMin=Math.min(siMin,a.si);siMax=Math.max(siMax,a.si);
+    sides.add(a.r.side);zc[a.r.zone]=(zc[a.r.zone]||0)+1;}
+  return {frMin,frMax,strakeMin:strakeOf(siMin),strakeMax:strakeOf(siMax),side:sides.size>1?'PS':[...sides][0],
+    zone:Object.keys(zc).sort((a,b)=>zc[b]-zc[a]||ZONES.indexOf(a)-ZONES.indexOf(b))[0],ids:new Set(items.map(a=>a.r.id))};
+}
+/* points of one kind (items [{r, …}], e.g. the points predicted to reach 경고 at the next docking) → repair-zone sized groups,
+   by the same rules as the layer zones (neighbours, plate-sized pieces, small pieces merged): [{items, count, …extent}] */
+export function pointZones(points){
+  const items=points.map(a=>({...a,si:strakeIdx(a.r.strake),level:CRIT}));
+  return mergeSmall(cluster(items,false).flatMap(plates)).map(z=>({items:z,count:z.length,...extent(z)}));
 }
 
 /* a judgement group's action = the one most of its zones have (ties: the first zone's) — the 보수 목록 group title

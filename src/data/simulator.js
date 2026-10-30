@@ -5,7 +5,7 @@ import { RobotSource } from './robotSource.js';
 import { createSynth } from './synth.js';
 import { photoFor } from './photos.js';
 import { FS, ZONES, zoneOf, strakeName } from '../hull.js';
-import { ROBOT, SEED } from './baseline.js';
+import { ROBOT, SEED, DFT_DESIGN, PLATE_ORIG } from './baseline.js';
 
 import { LAYERS, OK, judge } from './criteria.js';
 import { platesOf } from './plates.js';
@@ -19,7 +19,7 @@ export const BASE_SPEED=3.6;      // ×1 재생 속도의 로봇 주행 속도 (
    - 국부 보수·터치업 판: 이상 지점(어느 레이어든 주의 이상)의 도막만 다시 칠함
    - 그 밖의 점: 정비 전 그대로
    보수 이력 화면(scenario.historyResult)은 정비 전·후 두께가 다른 판을 그대로 읽으므로, 그때 보수한 판 = 이 계획의 판이다.
-   2차 레코드의 dftPrev·platePrev(“1차 리도킹 대비”)는 synth.js의 값 그대로다 (2차 숫자는 바꾸지 않는다). */
+   2차 데이터는 이 정비 후 값에서 만든다 (synth.current): 2차 레코드의 dftPrev·platePrev(“1차 리도킹 대비”)가 이 값이다. */
 function repairedAt(R,plan,level){
   const tmp={records:R,plan,version:-1};   // a store of its own for the plate / plan caches (never the version of a real store)
   const works=planOf(tmp,level),{plates}=platesOf(tmp);
@@ -39,11 +39,15 @@ export class SimulatorSource extends RobotSource{
   /* photos = loadDefectPhotos() {below|above:{flaking|scratch:[url…]}}: 손상 레코드마다 흘수선 위·아래와 종류에 맞는 사진을 id로 고른다 */
   constructor({photos=null,seed=SEED}={}){
     super();
-    const samples=this.plan.samples.filter(sm=>!sm.blocked),values=createSynth(samples,seed);
+    const samples=this.plan.samples.filter(sm=>!sm.blocked),gen=createSynth(samples,seed);
+    // 1차 리도킹: 정비 전 측정(asFound) → 권장 범위로 정비(afterRepair) → 2차는 그 정비 후 값에서 5년 (synth.current)
+    const pos=sm=>({id:sm.id,X:sm.X,Y:sm.Y,Z:sm.Z,fr:sm.fr,strake:sm.strake,side:sm.side,zone:sm.zone});
+    const R1=samples.map(sm=>({...pos(sm),dftDesign:DFT_DESIGN[sm.zone],plateOrig:PLATE_ORIG[sm.zone],...gen.first(sm),dftPrev:null,platePrev:null}));
+    const after=new Map(repairedAt(R1,this.plan,DEFAULT_LEVEL).map(r=>[r.id,r.afterRepair])),values=gen.current(after);
     this.base=samples.map(sm=>{
-      const {first,...v}=values(sm),photo=photoFor(photos,v.defect,sm.id,sm.Z);
-      return {id:sm.id,X:sm.X,Y:sm.Y,Z:sm.Z,fr:sm.fr,strake:sm.strake,side:sm.side,zone:sm.zone,...v,photo,_at:sm.at,
-        _first:{...first,photo:photoFor(photos,first.asFound.defect,sm.id,sm.Z,1)}};   // 1차 리도킹 값 (firstDockRecords), 2차 레코드에는 넣지 않는다
+      const v=values(sm),asFound=gen.first(sm),photo=photoFor(photos,v.defect,sm.id,sm.Z);
+      return {...pos(sm),...v,photo,_at:sm.at,   // _first: 1차 리도킹 값 (firstDockRecords), 2차 레코드에는 넣지 않는다
+        _first:{asFound,afterRepair:after.get(sm.id),photo:photoFor(photos,asFound.defect,sm.id,sm.Z,1)}};
     });
     this.speed=1;this.timer=null;this.paused=false;this.s=0;this.next=0;this.k=0;this.last=0;
   }
@@ -53,10 +57,9 @@ export class SimulatorSource extends RobotSource{
      afterRepair (SPEC 13 #11): 1차 정비는 권장 범위(보수 범위 3단계)로 했다고 본다 — repairedAt */
   firstDockRecords(end=new Date(2021,9,15,17,0).getTime()){
     const P=this.plan;
-    const R=this.base.map(({_at,_first:{asFound,photo},id,X,Y,Z,fr,strake,side,zone,dftDesign,plateOrig})=>({
-      id,X,Y,Z,fr,strake,side,zone,dftDesign,plateOrig,...asFound,dftPrev:null,platePrev:null,photo,asFound,robot:ROBOT,
+    return this.base.map(({_at,_first:{asFound,afterRepair,photo},id,X,Y,Z,fr,strake,side,zone,dftDesign,plateOrig})=>({
+      id,X,Y,Z,fr,strake,side,zone,dftDesign,plateOrig,...asFound,dftPrev:null,platePrev:null,photo,asFound,afterRepair,robot:ROBOT,
       ts:Math.round(end-(P.total-_at)/BASE_SPEED*1000)}));
-    return repairedAt(R,P,DEFAULT_LEVEL);
   }
 
   connect(){
