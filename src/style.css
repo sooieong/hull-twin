@@ -273,7 +273,7 @@ button,select,input{font:inherit;color:inherit}
 .kc+.kc{border-left:1px solid var(--line)}
 .kc-h{display:flex;justify-content:center;align-items:center;min-height:24px;max-width:100%;font-size:var(--fs-body);color:var(--text-2)}
 /* icon + name as one group, centred in the cell; never wider than the cell (a long name wraps instead of pushing the icon out) */
-.kc-name{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0;line-height:1.2}
+.kc-name{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0;line-height:1.2;word-break:keep-all}   /* 줄바꿈은 단어 사이에서만 (스크래/치 X) */
 .kc-name .gi{width:24px;height:24px}
 .kc-n{display:flex;align-items:baseline;justify-content:center;gap:2px}
 .kc-n b{font-variant-numeric:tabular-nums;font-weight:600;font-size:var(--fs-num-l);line-height:1.05;color:var(--text)}   /* numbers L */
@@ -316,6 +316,143 @@ button,select,input{font:inherit;color:inherit}
 .statusbar .rb.idle{color:var(--text-2)}
 .statusbar .rb.idle i{background:var(--muted)}
 
+/* ---------- screens: 진단 | 보수 계획 (SPEC 12.2) ---------- */
+.view-tabs{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}
+.view-tabs button{padding:0 14px}
+.view-tabs button[aria-selected="true"],.view-tabs button[aria-selected="true"]:hover{background:var(--ho-orange);color:var(--k100);font-weight:600}
+.view-tabs button.is-disabled{opacity:.45;cursor:not-allowed}
+.view-tabs button.is-disabled:hover{background:none;color:var(--text-2)}
+body.view-plan .statusbar,body.view-plan #mapBtn{display:none}   /* the plan screen has no status bar; 재매핑 only from 진단 */
+/* header outputs by screen (SPEC 13.1, 13 #15): 진단 보고서 생성(PDF) | 자재 발주 목록(Excel) · 보수 도면(PDF) */
+body.view-plan #reportBtn,body:not(.view-plan) #planPdfBtn,body:not(.view-plan) #xlsxBtn{display:none}
+#planPdfBtn[aria-busy="true"],#xlsxBtn[aria-busy="true"]{opacity:.6;cursor:progress}
+
+/* ---------- 보수 계획 (SPEC 13): 보수 범위 설정 | 보수 물량 및 효과 · 보수 도면 | 보수 정보 — the right column one width.
+   Type: the 진단 rules (tokens.css) — pane titles fs-title 700; the rest 400–600: names / labels text-2, counts muted,
+   numbers 600 with the unit at --unit of their size. plan/layout.js sets the grid inline by what is folded ---------- */
+.plan{display:grid;grid-template-columns:minmax(0,1fr) clamp(440px,31%,600px);grid-template-rows:auto minmax(0,1fr);grid-template-areas:"range effect" "draw side";gap:8px;min-height:0}
+.plan.has-max{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);grid-template-areas:"draw"}
+.plan.has-max>.pane:not(.max){display:none}   /* 보수 도면 maximized: the whole plan screen */
+.pane-range{grid-area:range}
+.pane-effect{grid-area:effect}
+.pane-side .pane-ctl{margin-left:0}   /* after the right-aligned tabs */
+/* 보수 범위 설정: five points on one track. 선택 = 주황 큰 점 (the thumb, dragged) · 포함 = 흰 점 · 안 포함 = 회색;
+   the track up to the thumb in the judgement colours (최우선 → 경고 → 주의), the same stops whatever the length */
+.pane-range .pane-body{display:flex;flex-direction:column;gap:10px;padding:12px 14px}
+.rg{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-radius:8px;outline:none}
+.rg:focus-visible{box-shadow:0 0 0 2px var(--orange-a35)}
+.rg-track{position:absolute;left:10%;right:10%;top:12px;height:4px;border-radius:2px;background:var(--line-strong)}
+.rg-fill{position:absolute;inset:0;border-radius:2px;background:linear-gradient(90deg,var(--lv-top),var(--lv-crit) 25%,var(--ho-orange) 50%,var(--lv-warn) 75%);transition:clip-path .15s}   /* clip-path set by plan/view.js */
+.rg-thumb{position:absolute;z-index:1;top:3px;width:22px;height:22px;margin-left:-11px;border-radius:50%;background:var(--ho-orange);box-shadow:0 0 0 3px var(--orange-a35);cursor:grab;touch-action:none;transition:left .15s}   /* left set by plan/view.js */
+.rg.dragging .rg-thumb{cursor:grabbing;transition:none}
+.rg.dragging .rg-fill{transition:none}
+.rg-pt{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;padding:0 4px;text-align:center;cursor:pointer}
+.rg-dot{width:14px;height:14px;margin:7px 0 10px;border-radius:50%;background:var(--surface-3);border:1px solid var(--line-strong);flex:none}
+.rg-pt.on .rg-dot{background:var(--text);border-color:var(--text)}
+.rg-pt b{font-size:var(--fs-sub);font-weight:600;color:var(--text);white-space:nowrap}
+.rg-pt.sel b{color:var(--ho-orange)}
+.rg-pt small{font-size:var(--fs-meta);line-height:1.5;color:var(--text-2)}   /* 설명 */
+/* a level the range takes (.in, plan/view.js): its name and 설명 fade in as the thumb reaches it, out as it leaves */
+.rg-pt b,.rg-pt small{transition:opacity .2s,color .2s}
+.rg-pt:not(.in) b,.rg-pt:not(.in) small{opacity:.4}
+.rg-pt:hover:not(.sel) .rg-dot{border-color:var(--ho-coral)}
+/* on/off switch: the checkbox stays in the label (keyboard, screen readers), the track and knob are the <i> */
+.switch{position:relative;display:inline-flex;align-items:center;gap:10px;align-self:flex-start;cursor:pointer;color:var(--text-2);font-size:var(--fs-body)}
+.switch input{position:absolute;opacity:0;width:1px;height:1px;margin:0}
+.switch i{position:relative;width:34px;height:18px;flex:none;border-radius:9px;background:var(--line-strong);transition:background .15s}
+.switch i::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--text-2);transition:transform .15s}
+.switch input:checked+i{background:var(--ho-orange)}
+.switch input:checked+i::after{transform:translateX(16px);background:var(--k100)}
+.switch input:focus-visible+i{box-shadow:0 0 0 2px var(--orange-a35)}
+.switch:hover{color:var(--text)}
+.pane-draw{grid-area:draw}
+.pane-draw .pane-body{display:flex;flex-direction:column}
+.rd-stage{position:relative;flex:1;min-height:0}
+/* the popup of a plate that may be put in (회색 점선): beside the plate on the drawing (plan/view.js openPop) */
+.rd-pop{position:absolute;z-index:4;width:280px;display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:9px;background:var(--pop-bg);border:1px solid var(--line-strong);box-shadow:0 12px 30px var(--shadow)}
+.rd-pop .sp-h b{font-size:var(--fs-num-l)}
+.rd-pop .sp-kv{margin:0}
+.rd-pop-act{display:flex;justify-content:space-between;gap:12px;margin:0;padding-top:8px;border-top:1px solid var(--line);font-size:var(--fs-body);color:var(--text-2)}
+.rd-pop-act b{font-weight:600;color:var(--text)}
+.rd-legend{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;padding:8px 14px 10px;border-top:1px solid var(--line);font-size:var(--fs-meta);color:var(--text-2)}
+.rd-legend span{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.rd-legend i{width:12px;height:12px;flex:none;border-radius:2px}
+/* the plate colours (plan/drawing.js, tokens --plan-*): 보수 범위 = 회색 섞인 조치별 단색 · 추가한 판 = 주황 · 추가 가능 = 회색 점선.
+   Legend: "보수 범위" ■■■ ■추가한 판 "추가 가능" ⬚주의 판 — the group names muted (보수 이력: "보수한 판" ■■■) */
+.sw-steel{background:var(--plan-steel)}
+.sw-paint{background:var(--plan-paint)}
+.sw-local{background:var(--plan-local)}
+.sw-added{background:var(--ho-orange)}
+.sw-cand{background:var(--plan-cand-fill);border:1px dashed var(--plan-cand-line)}
+.rd-legend .lg-grp{color:var(--muted)}
+.rd-legend .lg-grp:not(:first-child),.rd-legend span:has(.sw-added){margin-left:8px}   /* a little more room between the groups */
+.pane-seg{background:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+
+/* 보수 물량 및 효과 (13.4): 2 × 2 — 강판 교체 · 재도장 / 마찰 저항 · 다음 도킹 경고 예상 (보수 이력 "보수 실적": the first row only).
+   Label, the number with its unit, then side text (· 180.4 t, (23% 감소)) in text-2 */
+.pane-effect .pane-body{padding:12px 16px}
+.ef{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 18px}
+.ef-c{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ef-c small{font-size:var(--fs-meta);color:var(--text-2)}
+.ef-c p{margin:0;display:flex;align-items:baseline;flex-wrap:wrap;column-gap:4px;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--text)}
+.ef-c b{font-size:var(--fs-num-xl);font-weight:600;line-height:1.05}   /* numbers XL */
+.ef-c i{font-style:normal;font-weight:600;font-size:max(var(--unit-min),calc(var(--fs-num-xl) * var(--unit)))}   /* the unit */
+.ef-sub,.ef-cmp{font-size:var(--fs-body);color:var(--text-2)}
+.ef-cmp{margin-left:4px}
+
+/* 보수 정보 (13.6): [판 정보] [최종 보수 목록 — 총 N건 at its top]; the exclude button at the bottom */
+.pane-side{grid-area:side}
+.pane-side .pane-body{overflow-y:auto;scrollbar-width:thin}
+.side-tabs{margin-left:auto}
+.side-foot{flex:none;padding:10px 14px 14px;border-top:1px solid var(--line)}
+.pane.collapsed .side-foot{display:none}
+.sp{display:flex;flex-direction:column;gap:14px;padding:16px 16px 18px}
+.sp-none{margin:16px;color:var(--muted)}
+.sp-h{display:flex;align-items:baseline;gap:10px;min-width:0}
+.sp-h b{font-size:var(--fs-num-xl);font-weight:600;font-variant-numeric:tabular-nums}
+.sp-h span{font-size:var(--fs-body);color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp-kv{display:grid;grid-template-columns:auto 1fr;gap:9px 12px;margin:4px 0 0;font-size:var(--fs-body)}
+.sp-kv dt{color:var(--text-2)}
+.sp-kv dd{margin:0;text-align:right;color:var(--text);font-variant-numeric:tabular-nums}
+.sp-box{padding:12px 14px;border-radius:8px;background:var(--surface-2);border:1px solid var(--line)}
+.sp-why b{display:block;margin-bottom:4px;font-size:var(--fs-body);font-weight:600;color:var(--text)}
+.sp-why p{margin:0;font-size:var(--fs-body);line-height:1.6;color:var(--text-2)}
+.sp-fixed{margin:0;font-size:var(--fs-meta);color:var(--muted)}   /* 보수 목록에 포함된 판: a plate of the range — it cannot be taken out */
+/* 보수 목록에 추가 / 보수 목록에서 제외: one orange button, the panel's (popup's) width */
+.sp-inc{width:100%;height:40px;border-radius:8px;border:0;background:var(--ho-orange);color:var(--k100);font-size:var(--fs-body);font-weight:600;cursor:pointer}
+.sp-inc:hover{background:var(--ho-coral)}
+.sp-inc:focus-visible{outline:2px solid var(--orange-a35);outline-offset:2px}
+/* 최종 보수 목록: plates in the plan only — 선택한 판 (NEW icon) first, then by the level that takes them in (judgement icon);
+   3 a group, then "더 보기 (+N건) ⌄" / "접기 ⌃" (.zg-more). Group heads and rows as the 진단 보수 목록 (.zg-head, .z .zl) */
+/* a plate put in since 최종 보수 목록 was last opened: a small orange dot on that tab · its row: 1.5 s of light orange when shown */
+.tab-dot{display:inline-block;width:6px;height:6px;margin-left:5px;vertical-align:top;border-radius:50%;background:var(--ho-orange)}
+.seg button[aria-pressed="true"] .tab-dot{background:var(--k100)}
+.tl li.flash{animation:tl-flash 1.5s ease-out}
+@keyframes tl-flash{0%,60%{background:var(--orange-a18)}100%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.tl li.flash{animation:none}}
+.tl section+section{border-top:1px solid var(--line)}
+.tl h4{display:flex;align-items:center;gap:6px;margin:0;padding:9px 14px 4px;background:var(--surface);font-size:var(--fs-body);font-weight:400;color:var(--text-2)}
+.tl h4 .gi{width:13px;height:13px}
+.tl h4 .gi.gi-new{width:18px;height:18px;margin:-2px 0}   /* 추가한 판: the NEW badge, about the title's height */
+.tl h4 .tl-sw{width:12px;height:12px;flex:none;border-radius:2px}   /* 보수 이력: the work's colour */
+.tl h4 b{font-weight:600;color:var(--text-2)}
+.tl h4>span{color:var(--muted)}   /* count: the number as .n */
+.tl ul{list-style:none;margin:0;padding:0 0 6px}
+.tl li.tl-row{display:flex;align-items:center;gap:10px;height:32px;padding:0 14px;cursor:pointer;font-size:var(--fs-body);color:var(--text-2);white-space:nowrap}
+.tl li.tl-row:hover{background:var(--surface-2)}
+.tl li.tl-row:focus-visible{outline:1px solid var(--line-strong);outline-offset:-1px}
+.tl li.sel{background:var(--orange-a10);box-shadow:inset 3px 0 0 var(--ho-orange)}
+.tl li.tl-row>b{flex:none;width:52px;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text)}
+.tl-loc{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.tl-loc b{font-variant-numeric:tabular-nums;font-weight:600;color:var(--text)}   /* the FR range */
+.tl-act{flex:none}
+/* 선택한 판 group only: the check right of the work — off takes the plate out */
+.tl li input{appearance:none;-webkit-appearance:none;width:14px;height:14px;margin:0;border:1.5px solid var(--line-strong);border-radius:3px;flex:none;cursor:pointer}
+.tl li input:checked{border-color:var(--ho-orange);
+  background:var(--ho-orange) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.6 7.3l2.3 2.2 4.6-4.8' fill='none' stroke='%23000' stroke-width='1.8'/%3E%3C/svg%3E") center/100% no-repeat}
+.tl li input:focus-visible{outline:2px solid var(--orange-a35);outline-offset:1px}
+.tl .zg-more{margin:0 8px}
+
 .toast{position:fixed;left:50%;bottom:56px;transform:translateX(-50%);z-index:20;background:var(--surface-3);border:1px solid var(--line-strong);color:var(--text);padding:9px 16px;border-radius:8px;font-size:var(--fs-body);box-shadow:0 10px 30px var(--shadow)}
 
 @media (max-width:1100px){
@@ -336,5 +473,12 @@ button,select,input{font:inherit;color:inherit}
   .pane-head .chip{display:none}
   .pane.collapsed{height:auto!important;min-height:0!important}
   .statusbar{height:auto;padding-block:6px;flex-wrap:wrap;gap:6px 16px}
+  .plan{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-template-areas:"range" "effect" "draw" "side"}
+  .rg-pt small{display:none}
+  .rg-pt b{white-space:normal;font-size:var(--fs-meta)}
+  .pane-draw{height:60vh;min-height:360px}
+  .pane-side{height:70vh;min-height:420px}
 }
 @media (prefers-reduced-motion:reduce){.map-state.on i,.es-dots i{animation:none}}
+/* 보수 범위 설정: no slide or fade (the drawing and 보수 물량 및 효과 check the same setting in plan/) */
+@media (prefers-reduced-motion:reduce){.rg-thumb,.rg-fill,.rg-pt b,.rg-pt small{transition:none}}

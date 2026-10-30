@@ -2,8 +2,9 @@
    판정 기준 · 보수 우선순위 (SPEC 3.3)
    기준값은 모두 예시값이며 이 파일의 상수만 바꾸면 전체 화면에 반영된다.
    ========================================================= */
-export const LAYERS=['dft','plate','defect'];
-export const LAYER_LABEL={dft:'도막 두께',plate:'강판 두께',defect:'도막 손상'};
+/* 레이어 순서 (버튼·보고서 장·요약 카드·주요 발견·판정 기준 표): 강판 두께 → 도막 두께 → 도막 손상 */
+export const LAYERS=['plate','dft','defect'];
+export const LAYER_LABEL={plate:'강판 두께',dft:'도막 두께',defect:'도막 손상'};
 
 export const OK=0, WARN=1, CRIT=2;
 export const LEVEL_LABEL=['정상','주의','경고'];   // 레이어별 판정 (통계용)
@@ -18,10 +19,10 @@ export const gradeName=(g,layer)=>(layer==='defect'?DEFECT_GRADE_LABEL:GRADE_LAB
 export function gradeOf(level,top){return top?TOP:level;}
 
 /* 최우선 보수 지점 — 레이어별 기준
-   도막 두께 · 강판 두께: 같은 곳의 도막과 강판 중 하나는 경고, 다른 하나는 주의 이상 (두 레이어가 같은 기준 → 같은 구역)
+   강판 두께 · 도막 두께: 같은 곳의 강판과 도막 중 하나는 경고, 다른 하나는 주의 이상 (두 레이어가 같은 기준 → 같은 구역)
    도막 손상: 손상(스크래치 또는 도막 떨어짐)이 있고 그 자리 강판이 주의 이상
    'all'(보고서 보수 계획): 둘 중 하나라도 해당 */
-export const TOP_RULE={coat:'도막·강판 중 하나는 경고, 다른 하나는 주의 이상',defect:'손상이 있고 그 자리 강판이 주의 이상'};
+export const TOP_RULE={coat:'강판·도막 중 하나는 경고, 다른 하나는 주의 이상',defect:'손상이 있고 그 자리 강판이 주의 이상'};
 export const topGroup=layer=>layer==='defect'||layer==='all'?layer:'coat';
 export function isTop(r,layer){
   const p=judge(r,'plate').level;if(p===OK)return false;
@@ -29,9 +30,11 @@ export function isTop(r,layer){
   return g==='defect'?!!r.defect:g==='all'?coat()||!!r.defect:coat();
 }
 
+/* 강판·도막 모두 감소율 (기준 두께 대비 줄어든 비율, 0–1), 같은 비교: warn 미만 정상, crit 미만 주의, 이상 경고 (reaches).
+   worst = 이상 정도 최대 */
 export const CRITERIA={
-  dft:{warn:0.8,crit:0.5,worst:0.2},       // 현재/설계 비율: warn 이상 정상, crit 이상 주의, 미만 경고. worst = 이상 정도 최대
-  plate:{warn:0.10,crit:0.20,worst:0.30},  // 감소율 (원두께 기준): warn 미만 정상, crit 미만 주의, 이상 경고
+  dft:{warn:0.20,crit:0.50,worst:0.80},    // 감소율 (설계 기준)
+  plate:{warn:0.10,crit:0.20,worst:0.30},  // 감소율 (원두께 기준)
   defect:{worstArea:1.5}                   // 판정은 종류만: 스크래치 = 주의, 도막 떨어짐 = 경고. worstArea(m²) = 히트맵 진하기의 최대 면적
 };
 
@@ -41,11 +44,10 @@ export const CRITERIA={
 export const PRIORITY={level:[0,1000,2000],compound:500,degree:100};
 
 /* 판정별 조치 (actionFor): 최우선 보수 → 강판 교체·보강 후 재도장 (모든 레이어)
-   도막 두께: 경고 → 재도장 / 주의 → 국부 보수 · 강판 두께: 경고 → 강판 교체·보강 / 주의 → 국부 보수
+   강판 두께: 경고 → 강판 교체·보강 / 주의 → 국부 보수 · 도막 두께: 경고 → 재도장 / 주의 → 국부 보수
    도막 손상: 경고(도막 떨어짐) → 재도장 / 주의(스크래치) → 터치업 */
 export const ACTION={repaint:'재도장',local:'국부 보수',steel:'강판 교체·보강',steelRepaint:'강판 교체·보강 후 재도장',touchUp:'터치업'};
-/* 무거운 조치 → 가벼운 조치: 한 위치가 여러 레이어에서 보수 대상이면 이 순서의 첫 조치 하나 (보고서 5장 구역별 보수 물량) */
-export const ACTION_ORDER=[ACTION.steelRepaint,ACTION.steel,ACTION.repaint,ACTION.local,ACTION.touchUp];
+/* 무거운 조치 → 가벼운 조치 (ACTION_ORDER)와 세 레이어 통합 보수 단계는 repairSteps.js */
 export const DEFECT_LABEL={flaking:'도막 떨어짐',scratch:'스크래치'};
 
 /* 이상 정도 0–1: 정상 경계 0, 경고 경계 0.5, worst 1 (x가 클수록 나쁨) */
@@ -55,16 +57,18 @@ function degreeOf(x,warn,crit,worst){
   return Math.min(1,0.5+0.5*(x-crit)/(worst-crit));
 }
 
-export function dftRatio(r){return r.dft/r.dftDesign;}
+/* 감소율 (0–1): 도막은 설계 대비, 강판은 원두께 대비 */
+export function dftLoss(r){return (r.dftDesign-r.dft)/r.dftDesign;}
 export function plateLoss(r){return (r.plateOrig-r.plate)/r.plateOrig;}
-/* 표시 형식(측정값 / 기준값, 비율 %)은 format.js */
+/* 표시 형식(측정값 / 기준값, 감소율 %)은 format.js */
+/* 감소율이 기준 이상인가 (판정 기준 문구의 "이상"). 정확히 기준인 값(16 → 14.4 mm = 10%)이 부동소수점 오차(0.0999…)로
+   미만이 되지 않도록 아주 작은 여유를 둔다 — 판정·보수 효과 예측·보고서 예측이 모두 이것으로 비교한다 */
+export const reaches=(loss,t)=>loss>=t-1e-9;
 
-/* 한 레코드의 레이어별 판정: {level, degree} */
+/* 한 레코드의 레이어별 판정: {level, degree} — 강판·도막 같은 비교 */
 export function judge(r,layer){
-  if(layer==='dft'){const c=CRITERIA.dft,ratio=dftRatio(r);
-    return {level:ratio>=c.warn?OK:ratio>=c.crit?WARN:CRIT,degree:degreeOf(1-ratio,1-c.warn,1-c.crit,1-c.worst)};}
-  if(layer==='plate'){const c=CRITERIA.plate,loss=plateLoss(r);
-    return {level:loss<c.warn?OK:loss<c.crit?WARN:CRIT,degree:degreeOf(loss,c.warn,c.crit,c.worst)};}
+  if(layer==='dft'||layer==='plate'){const c=CRITERIA[layer],loss=layer==='dft'?dftLoss(r):plateLoss(r);
+    return {level:reaches(loss,c.crit)?CRIT:reaches(loss,c.warn)?WARN:OK,degree:degreeOf(loss,c.warn,c.crit,c.worst)};}
   const c=CRITERIA.defect;
   if(!r.defect)return {level:OK,degree:0};
   const a=Math.min(1,r.defectArea/c.worstArea);   // the area only sets how strong the colour is within the band

@@ -40,14 +40,21 @@ function heatImage(records,layer,fr0,fr1,x0,y0,w,h){
 /* S.SHELL map: frames across, girth down (starboard on top, port below — as on the dashboard)
    smooth heat (heatImage) — measured normal shell light grey, abnormal in the layer's colours */
 export function sideShellMap(records,layer,W,H){
+  return shellMapSvg(W,H,`ssClip${layer}`,({m,py})=>{const out=[heatImage(records,layer,FRMIN,FRMAX,m.l,m.t,W-m.l-m.r,H-m.t-m.b)];
+    for(let k=0;k*STRAKE_W+KEEL_HALF<GMAX;k++){const g=KEEL_HALF+STRAKE_W*k;out.push(`<path d="M${m.l} ${py(g)}H${W-m.r}M${m.l} ${py(-g)}H${W-m.r}" stroke="${COLOR.rp.bg}" stroke-width="0.6"/>`);}
+    return out.join('');});
+}
+/* the white-page S.SHELL frame: shell fill, inner(geometry) clipped to the outline, design waterline, outline, keel line,
+   frame numbers, strake letters, 우현/좌현 — the report maps (sideShellMap) and the 보수 계획 보수 도면 PDF (plan/output.js).
+   geometry: {m, px(fr), py(u), W, H} */
+export function shellMapSvg(W,H,clipId,inner){
   frames();
   const m={l:22,r:30,t:8,b:22},px=fr=>m.l+(fr-FRMIN)/(FRMAX-FRMIN)*(W-m.l-m.r),py=u=>m.t+(u+GMAX)/(2*GMAX)*(H-m.t-m.b);
   const out=[];
   const outline=`M${F.map(f=>`${px(f.fr).toFixed(1)},${py(-f.g).toFixed(1)}`).join('L')}L${F.map(f=>`${px(f.fr).toFixed(1)},${py(f.g).toFixed(1)}`).reverse().join('L')}Z`;
   out.push(`<path d="${outline}" fill="${COLOR.rp.shellFill}"/>`);
-  out.push(`<clipPath id="ssClip${layer}"><path d="${outline}"/></clipPath><g clip-path="url(#ssClip${layer})">`);
-  out.push(heatImage(records,layer,FRMIN,FRMAX,m.l,m.t,W-m.l-m.r,H-m.t-m.b));
-  for(let k=0;k*STRAKE_W+KEEL_HALF<GMAX;k++){const g=KEEL_HALF+STRAKE_W*k;out.push(`<path d="M${m.l} ${py(g)}H${W-m.r}M${m.l} ${py(-g)}H${W-m.r}" stroke="${COLOR.rp.bg}" stroke-width="0.6"/>`);}
+  out.push(`<clipPath id="${clipId}"><path d="${outline}"/></clipPath><g clip-path="url(#${clipId})">`);
+  out.push(inner({m,px,py,W,H}));
   const curve=(key,sd)=>`M${F.map(f=>`${px(f.fr).toFixed(1)},${py(sd*Math.min(f[key],f.g)).toFixed(1)}`).join('L')}`;
   [-1,1].forEach(sd=>{out.push(`<path d="${curve('wl',sd)}" fill="none" stroke="${COLOR.rp.dwl}" stroke-width="1"/>`,
     `<path d="${curve('b1',sd)}" fill="none" stroke="${MUTED}" stroke-width="0.7" stroke-dasharray="3 2"/>`);});

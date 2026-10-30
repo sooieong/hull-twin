@@ -9,8 +9,8 @@
    - setSolo(true): 3D만 화면 전체 (신조 인도 보기) — 다른 패널은 숨기고 3D 최대화 버튼은 비활성. 저장 상태는 그대로 둔다.
    ========================================================= */
 export const CHEV='<svg class="ic chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg>';
-const ICON_MAX='<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg>';
-const ICON_RESTORE='<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2.5V6H2.5M13.5 6H10V2.5M10 13.5V10h3.5M2.5 10H6v3.5"/></svg>';
+export const ICON_MAX='<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg>';
+export const ICON_RESTORE='<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2.5V6H2.5M13.5 6H10V2.5M10 13.5V10h3.5M2.5 10H6v3.5"/></svg>';
 const COLS=[['pane3d'],['paneShell','paneDetail'],['paneKpi','paneList']];
 const AREAS=[['main','main'],['shell','detail'],['kpi','kpi']];   // grid areas per column: top row, bottom row
 const WEIGHT=[50,29,21];          // 레이아웃.png 비율 (style.css .main 과 같은 값)

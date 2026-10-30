@@ -12,7 +12,8 @@
    layer 'all': 세 레이어를 합친 기준 (보고서 5장 보수 계획). 점의 판정 = 세 레이어 중 가장 나쁜 판정, 순서는 우선순위 점수.
    ========================================================= */
 import { LETTERS, ZONES, FRMIN, recordU } from '../hull.js';
-import { OK, LAYERS, judge, isCompound, isTop, topGroup, actionFor, scoreOf, dftRatio, plateLoss, ACTION_ORDER } from './criteria.js';
+import { OK, LAYERS, judge, isCompound, isTop, topGroup, actionFor, scoreOf, dftLoss, plateLoss } from './criteria.js';
+import { ACTION_ORDER } from './repairSteps.js';
 
 export const ZONE_LINK={dist:1.6};   // m: 측정 격자 1.1 m의 대각선(1.56 m)까지 이웃
 export const PLATE_FRAMES=7;         // 보수 1건의 프레임 구간 (외판 1장 길이, 약 6–8프레임)
@@ -64,8 +65,8 @@ function plates(items){
   return out;
 }
 
-/* 목록 정렬 수치 = 목록 오른쪽에 보이는 값의 크기: 도막 설계 대비 감소, 강판 원두께 대비 감소, 손상 면적 */
-export function layerValue(r,layer){return layer==='dft'?1-dftRatio(r):layer==='plate'?plateLoss(r):r.defectArea;}
+/* 목록 정렬 수치 = 목록 오른쪽에 보이는 값의 크기: 도막·강판 감소율, 손상 면적 */
+export function layerValue(r,layer){return layer==='dft'?dftLoss(r):layer==='plate'?plateLoss(r):r.defectArea;}
 
 /* the 최우선 보수 point clusters for a layer's criterion, as record lists (layer-independent within a criterion group) */
 export function topClusters(records,layer){

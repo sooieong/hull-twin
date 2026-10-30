@@ -5,13 +5,13 @@
      측정점은 m 좌표로 저장하고 프레임은 표시할 때만 쓴다 (프레임 간격 0.8 m, AP = FR 0)
    - 원본 좌표: x 121.96 y +16.15 z 6.20 (m, 소수 둘째 자리, y는 좌현 +·우현 −로 부호를 항상 붙인다)
    - 두께: 도막 정수 µm (215 µm), 강판 소수 첫째 자리 mm (12.4 mm)
-   - 감소량: 부호 포함 (−253 µm, −2.2 mm) · 비율: 소수 첫째 자리 % (22.5%)
+   - 감소량: 부호 포함 (−253 µm, −2.2 mm) · 감소율: 강판·도막 모두 기준 두께 대비, 소수 첫째 자리 반올림 % (30.796 → 30.8%)
    - 면적: ≈ 18 m² (1 m² 미만은 소수 첫째 자리)
    - 숫자와 단위 사이는 한 칸, %만 붙여 쓴다. 천 단위 쉼표.
    - 날짜 2026.10.26 · 시각 14:05
    - 용어(판정·권장 조치·구역·손상 종류·레이어)는 정의된 곳의 값을 그대로 다시 내보낸다. 판정 이름은 gradeLabel(최우선 보수/경고/주의).
    ========================================================= */
-import { dftRatio, plateLoss, LEVEL_LABEL, GRADE_LABEL, gradeOf, gradeName, ACTION, DEFECT_LABEL, LAYER_LABEL } from './data/criteria.js';
+import { dftLoss, plateLoss, LEVEL_LABEL, GRADE_LABEL, gradeOf, gradeName, ACTION, DEFECT_LABEL, LAYER_LABEL } from './data/criteria.js';
 import { ZONES, FS } from './hull.js';
 
 export { LEVEL_LABEL, GRADE_LABEL, ACTION, DEFECT_LABEL, LAYER_LABEL, ZONES };
@@ -26,7 +26,7 @@ export function num(v,dp=0){const s=NF[dp].format(Math.abs(v));return v<0&&/[1-9
 /* always signed (−/+), zero unsigned */
 export function signed(v,dp=0){const s=NF[dp].format(Math.abs(v));return /[1-9]/.test(s)?(v<0?MINUS:'+')+s:s;}
 export const pct=(v,dp=1)=>`${num(v,dp)}%`;   // v already in percent
-const floor1=x=>Math.floor(x*10+1e-9)/10;
+const round1=x=>Math.round(x*10+1e-7)/10;     // half up (30.75 → 30.8 even when x*10 lands just under …5)
 
 /* ---------- location ---------- */
 export const SIDE_LABEL={S:'우현',P:'좌현',PS:'좌우현'};
@@ -52,17 +52,11 @@ export const thickNum=(v,layer)=>num(v,THICK[layer].dp);
 export const thick=(v,layer)=>`${thickNum(v,layer)} ${THICK[layer].unit}`;
 export const dropNum=(prev,cur,layer)=>signed(+(cur-prev).toFixed(THICK[layer].dp),THICK[layer].dp);
 export const drop=(prev,cur,layer)=>`${dropNum(prev,cur,layer)} ${THICK[layer].unit}`;
-/* ratios compared with the criteria are rounded down, so 79.96% never shows as "80.0%" next to a "below 80%" judgement */
-export const designRatio=r=>pct(floor1(dftRatio(r)*100));   // current / design
-export const lossRatio=r=>pct(floor1(plateLoss(r)*100));    // loss / original
-export const ratioNum=x=>num(floor1(x*100),1);               // any 0–1 ratio judged the same way, without % (a table cell)
-
-/* reduction against the original thickness (plate) or the design thickness (coating) as a signed %: −27.1%
-   (rounded the same way as the ratios above, so it always matches the judgement) */
-export function refDropPctNum(r,layer){return signed(-refDropRate(r,layer),1);}
-/* the same reduction as a plain rate in % (27.1 for −27.1%): the report's 감소율 columns show the dashboard list's number */
-export const refDropRate=(r,layer)=>layer==='plate'?floor1(plateLoss(r)*100):100-floor1(dftRatio(r)*100);
-export const refDropPct=(r,layer)=>`${refDropPctNum(r,layer)}%`;
+/* 감소율 in % against the original (plate) or design (coating) thickness, one decimal: 30.8 — the report's 감소율 columns,
+   the dashboard list, tooltips. lossPct = with % (30.8%) · ratioNum: any 0–1 감소율 (a prediction) the same way, no % */
+export const lossRate=(r,layer)=>round1((layer==='plate'?plateLoss(r):dftLoss(r))*100);
+export const lossPct=(r,layer)=>pct(lossRate(r,layer));
+export const ratioNum=x=>num(round1(x*100),1);
 
 /* a reduction (or the area in the same slot) as markup for the shared .num-drop style: the number in one mono face with
    tabular figures (− included), the unit smaller; µm / mm / m² spaced, % right on the number. color: optional CSS colour */
@@ -83,8 +77,7 @@ export const area=a=>`≈ ${areaNum(a)} m²`;
 
 /* ---------- measurement value / reference, per layer ---------- */
 export function value(r,layer){
-  if(layer==='dft')return `${thickNum(r.dft,'dft')} / ${thick(r.dftDesign,'dft')} (${designRatio(r)})`;
-  if(layer==='plate')return `${thickNum(r.plate,'plate')} / ${thick(r.plateOrig,'plate')} (감소 ${lossRatio(r)})`;
+  if(layer==='dft'||layer==='plate')return `${thickNum(r[layer],layer)} / ${thick(layer==='plate'?r.plateOrig:r.dftDesign,layer)} (감소율 ${lossPct(r,layer)})`;
   return r.defect?`${DEFECT_LABEL[r.defect]} ${area(r.defectArea)}`:'손상 없음';
 }
 

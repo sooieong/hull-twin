@@ -36,6 +36,9 @@ export const COLOR={
   draw:{shell:'#0E1628',outline:'#C9D3E3',dwl:'rgba(122,150,200,.5)',marker:'#FFFFFF',crosshair:'rgba(255,255,255,.35)',
     hatch:'rgba(255,255,255,.12)',heatEdge:'#FFFFFF',   // heatEdge: the 실선 look's contour around the heatmap
     material:{plate:'#3A4558',dft:'#4A3A1E'}},
+  /* 보수 도면 (보수 계획 S.SHELL 전개도 · 3D 선체 외판): 보수 범위의 판 = 회색이 많이 섞인 조치별 단색, 추가한 판 = orange,
+     추가할 수 있는 주의 판 = 아주 옅은 회색 채움 + 회색 점선 테두리 */
+  plan:{steel:'#6E4A50',paint:'#7A6050',local:'#8E847E',candFill:'rgba(201,211,227,.05)',candLine:'#4F5D76'},
   /* report (white page) */
   rp:{bg:'#FFFFFF',text:'#14181F',text2:'#3A4252',muted:'#6B7385',line:'#E1E5EB',line2:'#EBEEF2',line3:'#D5D9E0',lineStrong:'#C4CAD4',
     fill:'#F1F3F6',fill2:'#F7F8FA',fill3:'#E3E6EB',photo:'#D9DDE3',photoText:'#4A5262',tagLine:'#9AA2B1',
@@ -72,10 +75,13 @@ export const CSS_VARS={
   '--orange-a10':COLOR.orangeA[10],'--orange-a18':COLOR.orangeA[18],'--orange-a35':COLOR.orangeA[35],'--orange-a60':COLOR.orangeA[60],'--orange-a0':COLOR.orangeA[0],
   '--peach-a35':COLOR.peachA35,'--warn-bg':COLOR.warnBg,'--warn-line':COLOR.warnLine,'--crit-bg':COLOR.critBg,'--crit-line':COLOR.critLine,
   '--shadow':COLOR.shadow,'--backdrop':COLOR.backdrop,
+  '--plan-steel':COLOR.plan.steel,'--plan-paint':COLOR.plan.paint,'--plan-local':COLOR.plan.local,
+  '--plan-cand-fill':COLOR.plan.candFill,'--plan-cand-line':COLOR.plan.candLine,
   '--font':FONT,
   '--fs-title':px(FS.title),'--fs-sub':px(FS.sub),'--fs-body':px(FS.body),'--fs-meta':px(FS.meta),
   '--fs-num-s':px(FS.numS),'--fs-num-l':px(FS.numL),'--fs-num-xl':px(FS.numXL),'--fs-tick':px(FS.tick),
   '--unit':String(UNIT),'--unit-min':px(UNIT_MIN),'--ls-label':LS_LABEL,
+  '--k':'1',   // 상세 이미지 카드 배율: 최대화하면 detail.js가 카드 칸에 다시 정한다 (style.css var(--k,1))
   '--rp-bg':COLOR.rp.bg,'--rp-text':COLOR.rp.text,'--rp-text-2':COLOR.rp.text2,'--rp-muted':COLOR.rp.muted,
   '--rp-line':COLOR.rp.line,'--rp-line-2':COLOR.rp.line2,'--rp-line-3':COLOR.rp.line3,'--rp-line-strong':COLOR.rp.lineStrong,
   '--rp-fill':COLOR.rp.fill,'--rp-fill-2':COLOR.rp.fill2,'--rp-fill-3':COLOR.rp.fill3,'--rp-photo':COLOR.rp.photo,'--rp-photo-text':COLOR.rp.photoText,

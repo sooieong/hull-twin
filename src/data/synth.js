@@ -11,7 +11,7 @@ import { CRITERIA } from './criteria.js';
 
 /* 구역별 설계 도막 두께(µm), 원두께(mm): 선저, 빌지, 선측, 흘수선, 건현, 선수, 선미 */
 const DFT_DESIGN={'선저':350,'빌지':350,'선측':320,'흘수선':350,'건현':250,'선수':320,'선미':320};
-const PLATE_ORIG={'선저':19.5,'빌지':19.5,'선측':17.0,'흘수선':18.0,'건현':16.0,'선수':20.0,'선미':19.0};
+export const PLATE_ORIG={'선저':19.5,'빌지':19.5,'선측':17.0,'흘수선':18.0,'건현':16.0,'선수':20.0,'선미':19.0};
 
 export function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 
@@ -43,6 +43,7 @@ const r1=v=>Math.round(v*10)/10;
    - first.asFound    : 1차 입거 때 로봇이 측정한 값 (정비 전, 5년 운항 후). 2차와 같은 군집에 이상이 있되 더 적고 가볍다.
    - first.afterRepair: 1차 정비를 마친 뒤 값. 도막 = 재도장 두께, 강판 = 교체했으면 새 판(원두께), 아니면 asFound 그대로.
    2차의 dftPrev·platePrev(“1차 리도킹 대비”, 상세 그림의 “1차” 치수선)는 afterRepair와 같은 값이다.
+   1차 리도킹 기록(보수 이력)의 afterRepair는 이 값이 아니라 권장 범위로 정비한 결과다 (simulator.repairedAt, SPEC 13 #11).
    2차 값의 난수 순서는 그대로 두고 1차 asFound용 난수를 뒤에 덧붙인다 (2차 데이터가 바뀌지 않게) */
 export function createSynth(seed=2491){
   const cl=makeClusters(seed);

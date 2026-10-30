@@ -13,22 +13,21 @@ import { COLOR } from '../styles/tokens.js';
 import { buildReportData, dockContext } from './data.js';
 import { renderHullViews } from './render3d.js';
 import { pagesHtml } from './pages.js';
+import { pickHandle, saveBlob, shortError, ymd, ABORT } from '../saveFile.js';
 
 /* sizes = the picture cells' aspect (report.css .rp-3d2): 2·3장 side by side under the map, 4장 stacked beside the photos */
 const VIEW_JOBS=[{key:'all',view:'iso',w:700,h:400},
-  ...['dft','plate'].flatMap(key=>[{key,view:'iso',w:500,h:380},{key,view:'bottom',w:500,h:380}]),
+  ...['plate','dft'].flatMap(key=>[{key,view:'iso',w:500,h:380},{key,view:'bottom',w:500,h:380}]),
   {key:'defect',view:'iso',w:520,h:172},{key:'defect',view:'bottom',w:520,h:172}];
 const PAGE={w:1123,h:794,mmW:297,mmH:210};   // A4 가로
-const pad=n=>String(n).padStart(2,'0');
-const ymd=d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
-/* Dr.Dock_Report_H-2491_20261027.pdf — hull number, date made */
-export const reportFileName=(d,dockKey)=>`Dr.Dock_Report_${dockContext(dockKey).hull}_${ymd(d)}.pdf`;
+/* DR.DOCK_Report_H-2491_20261027.pdf — hull number, date made */
+export const reportFileName=(d,dockKey)=>`DR.DOCK_Report_${dockContext(dockKey).hull}_${ymd(d)}.pdf`;
 
 /* every <img> in the report decoded — judgement icons, logo, damage photos, 3D views, charts; one that fails is named in the console */
 async function imagesReady(root){
   const bad=(await Promise.all([...root.querySelectorAll('img')].map(img=>
     img.decode?img.decode().then(()=>null,()=>(img.currentSrc||img.src).slice(0,80)):null))).filter(Boolean);
-  if(bad.length)console.warn('[Dr.Dock] 보고서 이미지를 불러오지 못했습니다',bad);
+  if(bad.length)console.warn('[DR.DOCK] 보고서 이미지를 불러오지 못했습니다',bad);
 }
 
 /* the 5 report pages as one element (images decoded, ready to show or to rasterise) */
@@ -42,7 +41,7 @@ export async function buildReportPages(store,now=new Date()){
 export async function showPreview(store){
   document.body.classList.add('rp-preview');
   const pv=document.createElement('div');pv.className='rp-pv';
-  pv.innerHTML=`<div class="rp-pv-bar"><b>Dr.Dock</b> 진단 보고서 미리보기<span>A4 가로 5장·1123 × 794 px·전체 측정 데이터 기준</span><a href="${location.pathname}">대시보드로 돌아가기</a></div><div class="rp-pv-wait">보고서를 만드는 중…</div>`;
+  pv.innerHTML=`<div class="rp-pv-bar"><b>DR.DOCK</b> 진단 보고서 미리보기<span>A4 가로 5장·1123 × 794 px·전체 측정 데이터 기준</span><a href="${location.pathname}">대시보드로 돌아가기</a></div><div class="rp-pv-wait">보고서를 만드는 중…</div>`;
   document.body.appendChild(pv);
   if(document.fonts&&document.fonts.ready)await document.fonts.ready;
   const root=await buildReportPages(store);
@@ -62,9 +61,15 @@ function svgsToImages(root){
 
 /* 5 pages → one html2canvas pass (scale 2, dashboard left out of the clone) → sliced into A4 landscape pages → jsPDF */
 export async function makeReportPdf(store,now=new Date()){
-  const [{default:html2canvas},{jsPDF}]=await Promise.all([import('html2canvas'),import('jspdf')]);
   if(document.fonts&&document.fonts.ready)await document.fonts.ready;
   const root=await buildReportPages(store,now);
+  const dc=dockContext(store.dockKey);
+  return pagesToPdf(root,`DR.DOCK Hull Report ${dc.hull} ${dc.dockInfo.date} ${ymd(now)}`);
+}
+/* .rp-page sections in root (A4 landscape, 1123 × 794 px) → a PDF blob — the report and the 보수 계획 보수 도면 PDF */
+export async function pagesToPdf(root,title){
+  const [{default:html2canvas},{jsPDF}]=await Promise.all([import('html2canvas'),import('jspdf')]);
+  if(document.fonts&&document.fonts.ready)await document.fonts.ready;
   svgsToImages(root);
   const host=document.createElement('div');host.className='rp-offscreen';host.setAttribute('aria-hidden','true');
   host.appendChild(root);document.body.appendChild(host);
@@ -81,45 +86,34 @@ export async function makeReportPdf(store,now=new Date()){
       if(i)pdf.addPage();
       pdf.addImage(page.toDataURL('image/jpeg',0.92),'JPEG',0,0,PAGE.mmW,PAGE.mmH);
     });
-    const dc=dockContext(store.dockKey);pdf.setProperties({title:`Dr.Dock Hull Report ${dc.hull} ${dc.dockInfo.date} ${ymd(now)}`,creator:'Dr.Dock'});
+    pdf.setProperties({title,creator:'DR.DOCK'});
     return pdf.output('blob');
   }finally{host.remove();}
 }
 
-function download(blob,name){
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;
-  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),10000);
-}
-const shortError=e=>{const n=(e&&e.name)||'Error',m=e&&e.message?String(e.message).split('\n')[0]:'';return m&&m!==n?`${n}: ${m.length>60?m.slice(0,60)+'…':m}`:n;};
-
+export const PDF_TYPE={description:'PDF 문서',accept:{'application/pdf':['.pdf']}};
 /* header button: disabled while a run is going or paused, and while a report is being made */
 export function setupReportButton(button,store,toast){
   const label=button.textContent;let busy=false;
   const mapping=()=>store.mapState==='mapping'||store.mapState==='paused';
   const sync=()=>{const off=busy||mapping();
     button.setAttribute('aria-disabled',String(off));button.classList.toggle('is-disabled',off);button.setAttribute('aria-busy',String(busy));
-    button.title=busy?'보고서 생성 중…':mapping()?'매핑이 끝난 뒤 생성할 수 있습니다':'진단 보고서 저장 (PDF 5장)';};
+    button.title=busy?'진단 보고서 생성 중…':mapping()?'매핑이 끝난 뒤 생성할 수 있습니다':'진단 보고서 저장 (PDF 5장)';};
   button.addEventListener('click',async()=>{
     if(busy)return;
     if(mapping()){toast('매핑이 끝난 뒤 생성할 수 있습니다');return;}
     const now=new Date(),name=reportFileName(now,store.dockKey);
     // 1) file handle first, while the click still counts as a user gesture
-    let handle=null;
-    if(typeof window.showSaveFilePicker==='function'){
-      try{handle=await window.showSaveFilePicker({suggestedName:name,types:[{description:'PDF 문서',accept:{'application/pdf':['.pdf']}}]});}
-      catch(e){if(e&&e.name==='AbortError')return;                      // cancelled: end quietly
-        console.warn('[Dr.Dock] 저장 창을 쓸 수 없어 일반 다운로드로 저장합니다',e);handle=null;}   // e.g. inside an iframe
-    }
-    busy=true;button.textContent='보고서 생성 중…';sync();
+    const handle=await pickHandle(name,PDF_TYPE);if(handle===ABORT)return;
+    busy=true;button.textContent='진단 보고서 생성 중…';sync();
     let stage='make';
     try{
       // 2) make the report, 3) write it
       const blob=await makeReportPdf(store,now);
       stage='save';
-      if(handle){const w=await handle.createWritable();await w.write(blob);await w.close();toast(`보고서를 저장했습니다·${handle.name}`,4000);}
-      else{download(blob,name);toast(`보고서를 저장했습니다·다운로드 폴더·${name}`,4000);}
+      toast(`보고서를 저장했습니다·${await saveBlob(handle,blob,name)}`,4000);
     }catch(e){
-      console.error(`[Dr.Dock] 보고서 ${stage==='make'?'생성':'저장'} 실패`,e);
+      console.error(`[DR.DOCK] 보고서 ${stage==='make'?'생성':'저장'} 실패`,e);
       toast(`보고서를 ${stage==='make'?'만들지':'저장하지'} 못했습니다·${shortError(e)}`,8000);
     }finally{busy=false;button.textContent=label;sync();}
   });

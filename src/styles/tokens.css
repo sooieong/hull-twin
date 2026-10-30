@@ -9,6 +9,7 @@
    text           --text (제목·숫자·FR) · --text-2 (판정 이름·항목 제목·위치·설명·버튼) · --muted (건수·순위·축 라벨·태그)
    judgement      --lv-ok --lv-warn --lv-crit --lv-top
    3D hull        --zone-label --zone-label-bg --hull-below --hull-above
+   보수 도면      --plan-steel --plan-paint --plan-local (보수 범위의 판, 조치별) · --plan-cand-fill --plan-cand-line (추가할 수 있는 주의 판)
    translucent    --orange-a10 --orange-a18 --orange-a35 --orange-a60 --orange-a0 --peach-a35
                   --warn-bg --warn-line --crit-bg --crit-line --shadow --backdrop
    font           --font (Pretendard — words and numbers; numbers add tabular-nums)

@@ -1,13 +1,14 @@
 /* =========================================================
    진단 보고서 5장 (SPEC 6.2) — A4 가로 1123 × 794 px, 흰 바탕, 장마다 주제 하나
-   1 표지·종합 진단 · 2 도막 두께 · 3 강판 두께 · 4 도막 손상 · 5 보수 계획
+   1 표지·종합 진단 · 2 강판 두께 · 3 도막 두께 · 4 도막 손상 · 5 보수 계획 (레이어 순서 = criteria.LAYERS)
    판정 순서는 어디서나 최우선 보수 → 경고 → 주의 (→ 정상).
    2·3·4장 위쪽은 2 × 2 격자: 왼쪽 위 큰 전개도 · 오른쪽 위 단면 비교(4장은 구역별 표) — 아래 경계가 같다,
    왼쪽 아래 작은 3D 2개 · 오른쪽 아래 구역별 표(4장은 사진) — 위·아래 경계가 같다.
    ========================================================= */
-import { CRITERIA, OK, WARN, CRIT, TOP, TOP_RULE, ACTION, ACTION_ORDER, judge, isTop, gradeOf, gradeName } from '../data/criteria.js';
+import { LAYERS, CRITERIA, OK, WARN, CRIT, TOP, TOP_RULE, ACTION, judge, isTop, gradeOf, gradeName } from '../data/criteria.js';
+import { ACTION_ORDER } from '../data/repairSteps.js';
 import { LAYER_LABEL, gradeLabel, DEFECT_LABEL, recLoc, zoneLoc, thick, thickNum, drop, dropNum, ratioNum,
-  refDropRate, THICK, pct, num, area, areaNum, dateTime, numHtml } from '../format.js';
+  lossRate, THICK, pct, num, area, areaNum, dateTime, numHtml } from '../format.js';
 import { REPORT_CONST, prevOf, thickOf } from './data.js';
 import { COLOR } from '../styles/tokens.js';
 import { gradeIcon } from '../gradeUi.js';
@@ -28,9 +29,9 @@ const GRADES=[TOP,CRIT,WARN];   // 최우선 보수 → 경고 → 주의
 function page(n,title,body,d){
   const S=d.ship,now=d.now;
   return `<section class="rp-page" data-page="${n}">
-    <header class="rp-head"><div class="rp-brand"><img src="${logoReport}" alt="Dr.DOCK"></div>
+    <header class="rp-head"><div class="rp-brand"><img src="${logoReport}" alt="DR.DOCK"></div>
       <div class="rp-doc"><b>선체 외판 진단 보고서</b><span>${S.name}</span></div>
-      <div class="rp-ch"><i>${n}</i><b>${title}</b></div></header>
+      <div class="rp-ch"><i>${n}</i><b>${title}</b>${d.chNote&&d.chNote[n]?`<small>${d.chNote[n]}</small>`:''}</div></header>
     <div class="rp-body">${body}</div>
     <footer class="rp-foot"><span>${S.docking}${S.dock?`·${S.dock}`:''}</span><span>생성 ${dateTime(now)}</span><b>${n} / 5</b></footer>
   </section>`;
@@ -51,7 +52,7 @@ const pctNum=x=>num(x,1);              // a % value in a table cell (the unit is
 /* ---------- 1. cover · overall ---------- */
 function page1(d,imgs){
   // the dashboard's KPI counts per layer (repair zones): 최우선 보수 · 경고 · 주의 (도막 손상: 최우선 보수 · 도막 떨어짐 · 스크래치)
-  const cards=['dft','plate','defect'].map(l=>{const L=d.layers[l],c=L.counts;
+  const cards=LAYERS.map(l=>{const L=d.layers[l],c=L.counts;
     return `<div class="rp-card"><h3>${LAYER_LABEL[l]}<small>보수 대상 ${num(L.total)}건</small></h3>
       <div class="rp-cnt">${GRADES.map(g=>`<span class="g${g}"><small>${gradeIcon(g)}${gradeName(g,l)}</small><b>${num(c[g])}<i>건</i></b></span>`).join('')}</div>
       <p class="rp-worst">${L.worst.label} <b>${L.worst.value}</b><small>${esc(L.worst.where)}</small></p></div>`;}).join('');
@@ -60,7 +61,7 @@ function page1(d,imgs){
   return `<div class="rp-cover"><div><h1>선체 외판 진단 보고서</h1><p>${S.name}</p></div>
       <dl><dt>도킹</dt><dd>${S.docking}</dd>${S.dock?`<dt>도크</dt><dd>${S.dock}</dd>`:''}<dt>측정 로봇</dt><dd>${S.robot}</dd>
         <dt>${S.prevDock.name}</dt><dd>${S.prevDock.date}</dd><dt>작성 일시</dt><dd>${dateTime(d.now)}</dd></dl></div>
-    <div class="rp-verdict"><small>종합 판정</small><b>최우선 보수 ${d.headline.top}건·강판 교체·보강 ${d.headline.steel}건·재도장 ${area(d.headline.repaint)}</b></div>
+    <div class="rp-verdict"><small>종합 판정</small><b>최우선 보수 ${d.headline.top}건·강판 교체·보강 ${num(d.headline.steel)}판·재도장 ${area(d.headline.repaint)}</b></div>
     <div class="rp-p1">
       <div class="rp-cards">${cards}</div>
       <figure class="rp-big3d"><img src="${imgs.all_iso}" alt="">
@@ -74,11 +75,11 @@ function page1(d,imgs){
     </div>`;
 }
 
-/* ---------- 2. coating thickness · 3. plate thickness (same layout) ---------- */
-/* 감소율 상위 3곳: one section per place — the 1차 (or 신조) value → now, the reduction against the reference */
+/* ---------- 2. plate thickness · 3. coating thickness (same layout) ---------- */
+/* 감소율 상위 3건: one section per place — the 1차 (or 신조) value → now, the reduction against the reference */
 function sections(d,layer){
   return d[layer].top3.map((r,i)=>{const l=judge(r,layer).level,prev=prevOf(r,layer),cur=thickOf(r,layer);
-    return `<figure class="rp-sec">${sectionSvg(thickness(r,layer),l,150,SEC_H,THEME.light,1,{minK:0.8,dims:['cur']})}<figcaption><b>${i+1}</b> ${ptLocH(r)}<br>${thick(prev,layer)} → ${thick(cur,layer)} (${drop(prev,cur,layer)})<br>감소율 ${pct(refDropRate(r,layer))} ${chip(l,isTop(r,layer))}</figcaption></figure>`;}).join('');
+    return `<figure class="rp-sec">${sectionSvg(thickness(r,layer),l,150,SEC_H,THEME.light,1,{minK:0.8,dims:['cur']})}<figcaption><b>${i+1}</b> ${ptLocH(r)}<br>${thick(prev,layer)} → ${thick(cur,layer)} (${drop(prev,cur,layer)})<br>감소율 ${pct(lossRate(r,layer))} ${chip(l,isTop(r,layer))}</figcaption></figure>`;}).join('');
 }
 /* 구역별: fixed rows (선저 … 선미), counts = the dashboard's repair zones in that area */
 function areaTable(d,layer){
@@ -86,13 +87,14 @@ function areaTable(d,layer){
   return table(['구역','#평균 감소율 (%)','#최대 감소율 (%)',...GRADES.map(g=>`#${gradeName(g)} (건)`)],
     d[layer].zones.map(z=>`<tr>${td(z.zone)}${td(z.n?pctNum(z.avg):dash,'n')}${td(z.n?pctNum(z.max):dash,'n')}${td(z.n?num(z.top):dash,'n')}${td(z.n?num(z.crit):dash,'n')}${td(z.n?num(z.warn):dash,'n')}</tr>`),'rp-area');
 }
-/* 감소율 상위 5곳: repair zones by 설계(도막) / 원두께(강판) 대비 감소율, largest first — no judgement or action columns */
+/* 감소율 상위 5건: repair zones by 설계(도막) / 원두께(강판) 대비 감소율, largest first — no judgement or action columns.
+   강판·도막 the same columns and names (only the unit differs; which 기준 is in the box title) */
 function topDropTable(d,layer){
   const T=THICK[layer],since=d.ship.prevDock.key==='newbuild'?d.ship.prevDock.name:'직전 리도킹';
   const rows=d[layer].top5.map(({z,r,prev,cur,rate},i)=>`<tr>${td(i+1,'n')}${td(zoneLocH(z))}
-    ${td(`${thickNum(cur,layer)} / ${thickNum(layer==='plate'?r.plateOrig:r.dftDesign,layer)}`,'n')}${td(pctNum(refDropRate(r,layer)),'n')}
+    ${td(`${thickNum(cur,layer)} / ${thickNum(layer==='plate'?r.plateOrig:r.dftDesign,layer)}`,'n')}${td(pctNum(lossRate(r,layer)),'n')}
     ${td(dropNum(prev,cur,layer),'n')}${td(num(rate,layer==='plate'?2:0),'n')}</tr>`);
-  return table(['#순위','위치',`#현재 / ${T.ref} (${T.unit})`,'#감소율 (%)',`#${since} 대비 (${T.unit})`,`#연간 감소 속도 (${T.unit}/년)`],rows,'rp-prio');
+  return table(['#순위','위치',`#현재 / 기준 (${T.unit})`,'#감소율 (%)',`#${since} 대비 (${T.unit})`,`#연간 감소 속도 (${T.unit}/년)`],rows,'rp-prio');
 }
 function thicknessPage(d,imgs,layer){
   const ref=layer==='plate'?'원두께 기준':'설계 기준';
@@ -100,11 +102,11 @@ function thicknessPage(d,imgs,layer){
   const lg=[[LV_FILL[CRIT],gradeName(CRIT)],[LV_FILL[WARN],gradeName(WARN)],[COLOR.rp.normalFill,gradeName(OK)]];
   return `<div class="rp-dist">
       ${box(`위치 분포${sub(ref)}`,sideShellMap(d.records,layer,MAP_W,MAP_H)+legend(lg))}
-      ${box('감소율 상위 3곳 단면 비교',`<div class="rp-secs">${sections(d,layer)}</div>`)}
+      ${box('감소율 상위 3건 단면 비교',`<div class="rp-secs">${sections(d,layer)}</div>`)}
       ${views(imgs,layer)}
       ${box('구역별',areaTable(d,layer))}
     </div>
-    ${box(`감소율 상위 5곳${sub(ref)}`,topDropTable(d,layer))}`;
+    ${box(`감소율 상위 5건${sub(ref)}`,topDropTable(d,layer))}`;
 }
 
 /* ---------- 4. coating damage ---------- */
@@ -131,7 +133,7 @@ function page4(d,imgs){
 /* 다음 도킹 관찰 권고: the first WATCH_SHOW places (largest predicted loss first, no action — they are to be watched);
    the current judgement of all of them goes in the sentence above the table (주의 391건·정상 6건) */
 const WATCH_SHOW=4;
-const watchRows=pr=>pr.slice(0,WATCH_SHOW).map(x=>`<tr>${td(ptLocH(x.r))}${td(pctNum(refDropRate(x.r,'plate')),'n')}${td(ratioNum(x.pred),'n')}</tr>`);
+const watchRows=pr=>pr.slice(0,WATCH_SHOW).map(x=>`<tr>${td(ptLocH(x.r))}${td(pctNum(lossRate(x.r,'plate')),'n')}${td(ratioNum(x.pred),'n')}</tr>`);
 function watchMix(pr){
   const gr=x=>gradeOf(judge(x.r,'plate').level,isTop(x.r,'plate'));
   return [...GRADES,OK].map(g=>[g,pr.filter(x=>gr(x)===g).length]).filter(([,n])=>n).map(([g,n])=>`${gradeName(g)} ${num(n)}건`).join('·');
@@ -139,7 +141,7 @@ function watchMix(pr){
 function page5(d){
   const C=REPORT_CONST,rp=d.repair,e=d.effect;
   /* KPI 카드 두 줄 (줄 이름 위, 안내 줄 아래):
-     보수 효과 (estimates, private/보수효과_시안_v3.png) — 제목과 현재 → 보수 후 두 숫자, 보수 후는 초록 (마찰 저항 = 전체 방오 재도장)
+     보수 효과 (estimates, private/보수효과_시안_v3.png) — 제목과 현재 → 보수 후 두 숫자, 보수 후는 초록 (보수 후 = 권장 보수, 보수 범위 3단계)
      보수 물량 — 제목과 필요한 양 하나 (굵게, 초록 없음) · 두 줄 모두 같은 3칸 */
   const big=(n,u)=>`${n}<i>${u}</i>`;
   const kpi=(title,now,after,note='')=>`<div class="rp-eff-c"><small>${title}</small>
@@ -149,7 +151,7 @@ function page5(d){
       <p class="rp-kpi-h">보수 효과</p>
       ${kpi('외판 두께 잔존율',pct(e.remain.now),big(num(e.remain.after,1),'%'))}
       ${kpi('허용 마모 초과 면적',area(e.worn.now),e.worn.after?`≈ ${big(areaNum(e.worn.after),'m²')}`:big('0','m²'))}
-      ${kpi('마찰 저항',pct(e.friction.now),big(num(e.friction.after,1),'%'),'새 선체 대비 증가분·전체 방오 재도장 기준')}
+      ${kpi('마찰 저항',pct(e.friction.now),big(num(e.friction.after,1),'%'),'새 선체 대비 증가분')}
       <p class="rp-kpi-h">보수 물량</p>
       ${qty('재도장 면적',`≈ ${big(areaNum(rp.repaintArea),'m²')}`)}
       ${qty('도료 예상 물량',big(num(rp.paintL),'L'))}
@@ -160,17 +162,17 @@ function page5(d){
   const qtyRow=(name,n,cls='')=>`<tr class="${cls}">${td(name)}${n.map(x=>td(num(x),'n')).join('')}</tr>`;
   const tot=ACTION_ORDER.map((_,i)=>rp.byZone.reduce((s,z)=>s+z.n[i],0));
   const list=table(['구역',...ACTION_ORDER.map(a=>`#${a}`)],[...rp.byZone.map(z=>qtyRow(z.zone,z.n)),qtyRow('합계',tot,'rp-sum')],'rp-qty-t');
-  // 다음 도킹 관찰 권고 (from 3장): places that cross the 경고 limit within the next interval at the current rate
+  // 다음 도킹 관찰 권고 (from 2장): places that cross the 경고 limit within the next interval at the current rate
   const pr=d.plate.predicted;
   const watch=pr.length?`<p>지금의 감소 속도가 이어지면 다음 도킹(${d.ship.next}, ${C.yearsToNext}년 후)에 <b>${num(pr.length)}건</b>(현재 ${watchMix(pr)})이 경고 기준(감소율 ${pctR(CRITERIA.plate.crit)}% 이상)을 넘을 것으로 예측됩니다.</p>
       ${table(['위치','#현재 감소율 (%)','#예상 감소율 (%)'],watchRows(pr),'rp-watch-t')}`
     :'<p>지금 속도로는 다음 도킹까지 경고 기준을 넘을 곳이 없습니다.</p>';
   const crit=CRITERIA,dc=crit.dft,pc=crit.plate;
   // 최우선 보수 does not fit the 경고·주의·정상 columns: its rule sits between the box title and the table
-  const topRule=`<div class="rp-toprule"><b>${gradeIcon(TOP)}${gradeName(TOP)}</b><p>도막 두께·강판 두께: ${TOP_RULE.coat}<br>도막 손상: ${TOP_RULE.defect}</p></div>`;
+  const topRule=`<div class="rp-toprule"><b>${gradeIcon(TOP)}${gradeName(TOP)}</b><p>강판 두께·도막 두께: ${TOP_RULE.coat}<br>도막 손상: ${TOP_RULE.defect}</p></div>`;
   const ctab=table(['항목','경고','주의','정상'],[
-    `<tr>${td('도막 두께 (현재 / 설계)')}${td(`${pctR(dc.crit)}% 미만`)}${td(`${pctR(dc.crit)}% 이상 ${pctR(dc.warn)}% 미만`)}${td(`${pctR(dc.warn)}% 이상`)}</tr>`,
     `<tr>${td('강판 감소율 (원두께 기준)')}${td(`${pctR(pc.crit)}% 이상`)}${td(`${pctR(pc.warn)}% 이상 ${pctR(pc.crit)}% 미만`)}${td(`${pctR(pc.warn)}% 미만`)}</tr>`,
+    `<tr>${td('도막 감소율 (설계 기준)')}${td(`${pctR(dc.crit)}% 이상`)}${td(`${pctR(dc.warn)}% 이상 ${pctR(dc.crit)}% 미만`)}${td(`${pctR(dc.warn)}% 미만`)}</tr>`,
     `<tr>${td('도막 손상')}${td(`${DEFECT_LABEL.flaking} → ${ACTION.repaint}`)}${td(`${DEFECT_LABEL.scratch} → ${ACTION.touchUp}`)}${td('없음')}</tr>`],'rp-crit');
   return `${kpis}
     ${box('구역별 보수 물량 (건)',list)}
@@ -178,7 +180,10 @@ function page5(d){
       ${box('판정 기준',`${topRule}${ctab}<p class="rp-disclaim">판정 기준은 표준 가정값이며, 보수 효과 지표는 추정값입니다. 실제 구조 강도는 선급 계산이 필요합니다.</p>`)}</div>`;
 }
 
+/* 5장 is fixed to 권장 보수 (range level 3, SPEC 12.8) — not linked to the 보수 계획 screen */
+const CH_NOTE={5:'기준: 권장 보수'};
 export function pagesHtml(d,imgs){
-  return [page(1,'표지·종합 진단',page1(d,imgs),d),page(2,'도막 두께',thicknessPage(d,imgs,'dft'),d),page(3,'강판 두께',thicknessPage(d,imgs,'plate'),d),
+  d={...d,chNote:CH_NOTE};
+  return [page(1,'표지·종합 진단',page1(d,imgs),d),page(2,'강판 두께',thicknessPage(d,imgs,'plate'),d),page(3,'도막 두께',thicknessPage(d,imgs,'dft'),d),
     page(4,'도막 손상',page4(d,imgs),d),page(5,'보수 계획',page5(d),d)].join('');
 }

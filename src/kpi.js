@@ -15,7 +15,7 @@
    레이어 전환·매핑 진행에 따라 갱신되고, 항목을 누르면 구역에서 가장 나쁜 점이 선택된다.
    ========================================================= */
 import { CRIT, WARN, TOP, gradeName, gradeOf } from './data/criteria.js';
-import { refDropPctNum, dropHtml, areaNum, zoneLoc, num } from './format.js';
+import { lossRate, dropHtml, areaNum, zoneLoc, num } from './format.js';
 import { zonesOf, groupAction } from './data/zones.js';
 import { gradeIcon } from './gradeUi.js';
 import { emptyState, mappingState } from './emptyState.js';
@@ -29,9 +29,9 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
    (실제 두께는 상세 패널에 있다) · 수치의 뜻은 목록 맨 아래에 한 번 */
 function valueParts(r,layer){
   if(layer==='defect')return {v:areaNum(r.defectArea),u:'m²'};
-  return {v:refDropPctNum(r,layer),u:'%'};
+  return {v:num(lossRate(r,layer),1),u:'%'};   // 29.2% — no sign, as in the report
 }
-export const VALUE_NOTE={dft:'수치: 설계 대비 감소율',plate:'수치: 원두께 대비 감소율',defect:'수치: 손상 면적(m²)'};   // ? popover in the list header (main.js)
+export const VALUE_NOTE={plate:'수치: 원두께 대비 감소율',dft:'수치: 설계 대비 감소율',defect:'수치: 손상 면적(m²)'};   // ? popover in the list header (main.js)
 
 /* tilesRoot: KPI 핵심 지표 패널 본문 · listRoot: 보수 대상 패널 본문 · countEl: 보수 대상 패널 헤더의 "총 N건" */
 export function createKpiPanel(tilesRoot,listRoot,countEl,store,ui){

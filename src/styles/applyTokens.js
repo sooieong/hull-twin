@@ -13,5 +13,5 @@ if(import.meta.env.DEV)queueMicrotask(()=>{
     for(const r of rules)for(const m of r.cssText.matchAll(/var\((--[\w-]+)/g))used.add(m[1]);
   }
   const missing=[...used].filter(n=>!(n in CSS_VARS));
-  if(missing.length)console.warn('[Dr.Dock] tokens.js에 없는 CSS 변수:',missing.join(', '));
+  if(missing.length)console.warn('[DR.DOCK] tokens.js에 없는 CSS 변수:',missing.join(', '));
 });

@@ -18,4 +18,5 @@ const dataUri={name:'datauri',enforce:'pre',
     return `export default ${JSON.stringify(`data:${MIME[extname(file).toLowerCase()]};base64,${readFileSync(file).toString('base64')}`)};`;
   }};
 
-export default defineConfig({plugins:[dataUri]});
+/* chunkSizeWarningLimit (kB): the app bundle (~630 kB) and ExcelJS (~940 kB, loaded only on the Excel button) are expected sizes */
+export default defineConfig({plugins:[dataUri],build:{chunkSizeWarningLimit:1000}});

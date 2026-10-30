@@ -12,6 +12,7 @@
 .rp-ch{margin-left:auto;display:flex;align-items:center;gap:8px}
 .rp-ch i{font-style:normal;display:grid;place-items:center;width:26px;height:26px;border-radius:4px;background:var(--ho-orange);color:var(--k100);font-weight:600;font-size:16px}
 .rp-ch b{font-size:16px}
+.rp-ch small{font-size:11px;color:var(--rp-muted)}   /* 5장: 기준: 권장 보수 */
 .rp-body{flex:1;min-height:0;padding:12px 32px 8px;display:flex;flex-direction:column;gap:10px}
 .rp-foot{display:flex;gap:22px;align-items:center;height:26px;padding:0 32px;border-top:1px solid var(--rp-fill-3);font-size:10px;color:var(--rp-muted);flex:none}
 .rp-foot b{margin-left:auto;color:var(--rp-text);font-weight:600}
@@ -139,6 +140,21 @@
 .rp-disclaim{margin:4px 0 0;font-size:10px;color:var(--rp-muted)}
 
 /* offscreen pages being rasterised for the PDF */
+/* 보수 도면 PDF (plan/output.js): 1장 범위 한 줄 + 보수 물량 및 효과 (화면과 같은 칸, 열 수는 inline) + 큰 도면 · 2장 강판 목록 | 도료 목록·도료 사양 */
+.rp-plan-range{margin:0;font-size:13px;color:var(--rp-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+.rp-plan-range b{font-weight:700}
+.rp-plan-sum{display:grid;border:1px solid var(--rp-line);border-top:3px solid var(--ho-orange);border-radius:6px;flex:none}
+.rp-plan-sum .rp-ef-sub,.rp-plan-sum .rp-ef-cmp{margin-left:5px;font-size:11px;font-weight:400;color:var(--rp-text-2)}
+.rp-legend .rp-lg-grp{color:var(--rp-muted)}
+.rp-plan-sum>div{display:flex;flex-direction:column;gap:1px;padding:6px 12px;border-left:1px solid var(--rp-line);min-width:0}
+.rp-plan-sum>div:first-child{border-left:0}
+.rp-plan-sum small{font-size:10px;color:var(--rp-muted)}
+.rp-plan-sum b{font-size:18px;font-weight:700;line-height:1.2;white-space:nowrap}
+.rp-plan-sum b i{font-style:normal;font-size:max(var(--unit-min),calc(var(--unit) * 1em));margin-left:2px;font-weight:600}
+.rp-plan-map{flex:none}
+.rp-plan-lists{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:12px;flex:1;min-height:0;align-items:start}
+.rp-plan-lists .rp-tbl th,.rp-plan-lists .rp-tbl td{font-size:10px;padding:2px 5px}
+.rp-steel-cols{display:flex;gap:10px;align-items:flex-start}
 .rp-offscreen{position:fixed;left:-20000px;top:0;pointer-events:none}
 .rp-offscreen .rp-page{box-shadow:none}
 

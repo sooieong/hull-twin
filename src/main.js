@@ -23,6 +23,7 @@ import { createStore, createRecordStore, createDockStore } from './data/store.js
 import { dockOf, dockLabel } from './data/docking.js';
 import { loadDefectPhotos } from './data/photos.js';
 import { logDataSummary } from './data/report.js';
+import { setupScreens } from './plan/index.js';
 
 /* 장면 전용 색 — 3D 장식(배경·안개·조명·도크·그리드·선체 재질·선)으로 2D 화면에 같은 뜻이 없는 색.
    2D와 뜻이 이어진 색(히트맵 판정색, 한화 오렌지 계열, 로봇, 선택 마커, 마우스 올린 선, 설계 흘수선)은 styles/tokens.js의 COLOR를 쓴다. */
@@ -364,7 +365,7 @@ hooks.onHover.push((X,src)=>{
    IDW of the judgement for 도막 두께·강판 두께, fixed damage colours for 도막 손상 (the same painter as the S.SHELL and the report) */
 const N3=new Float32Array(nV*3);
 const paintS={a:new Float32Array(nV),rgb:N3.slice(),cov:new Float32Array(nV)},paintP={a:new Float32Array(nV),rgb:N3.slice(),cov:new Float32Array(nV)};
-let store=null,paint=createPaint('dft'),heatIx=paint.ix,heatT=null,heatArr=null,heatLen=0;
+let store=null,paint=createPaint('plate'),heatIx=paint.ix,heatT=null,heatArr=null,heatLen=0;
 const hw={w:0};
 function vertexPaint(P,k,X,u){paint.at(X,u,hw);P.a[k]=hw.a;P.cov[k]=coverage(hw.w);if(hw.rgb){const o=k*3;P.rgb[o]=hw.rgb[0];P.rgb[o+1]=hw.rgb[1];P.rgb[o+2]=hw.rgb[2];}}
 function heatVertex(k,X,g){vertexPaint(paintS,k,X,-g);vertexPaint(paintP,k,X,g);}
@@ -417,8 +418,8 @@ function paintHull(){
 }
 /* ? legend: the current layer only — name · 최우선 보수 · 경고 · 주의 (the list's chips + criteria) · 정상 / 측정 불가 */
 const LEGEND={
-  dft:{w:`${CRITERIA.dft.warn*100}% 미만`,c:`${CRITERIA.dft.crit*100}% 미만`},
   plate:{w:`감소율 ${CRITERIA.plate.warn*100}% 이상`,c:`감소율 ${CRITERIA.plate.crit*100}% 이상`},
+  dft:{w:`감소율 ${CRITERIA.dft.warn*100}% 이상`,c:`감소율 ${CRITERIA.dft.crit*100}% 이상`},
   defect:{w:`→ ${ACTION.touchUp}`,c:`→ ${ACTION.repaint}`}   // the chips already name the damage; the line gives its repair
 };
 function syncLayer(){const l=ui.layer,row=(g,t)=>`${gradeChip(g,l)}<span>${t}</span>`;
@@ -565,6 +566,7 @@ storeReady.then(s=>{store=s;buildPath(s.plan);setSpeed(10);
   import('./report/index.js').then(rep=>{rep.setupReportButton($('#reportBtn'),s,toast);
     if(new URLSearchParams(location.search).get('report')==='preview')rep.showPreview(s);});createSideShell($('#paneShell .pane-body'),s,ui);
   createDetailPanel($('#paneDetail .pane-body'),s,ui);
+  setupScreens(s,toast);   // 진단 | 보수 계획 tabs (SPEC 12.2)
   s.subscribe(k=>{
     if(k.has('records')){scheduleHeat();placeMarker(ui.selId!=null?s.get(ui.selId):null);}
     if(k.has('state')||k.has('records'))syncMap();
@@ -707,7 +709,8 @@ const cvs=renderer.domElement;
 cvs.addEventListener('pointermove',e=>{pendingMove=e;});
 cvs.addEventListener('pointerleave',()=>{pendingMove=null;tip.hidden=true;hoverDot.visible=false;lastHit=null;if(state.hoverSrc==='3d')setHover(null,'3d');});
 cvs.addEventListener('pointerdown',e=>{downAt={x:e.clientX,y:e.clientY};tip.hidden=true;});
-cvs.addEventListener('pointerup',e=>{if(downAt&&Math.hypot(e.clientX-downAt.x,e.clientY-downAt.y)<4){pick(e);if(lastHit){if(lastHit.rec)ui.select(lastHit.rec.id);else selectFR(lastHit.fr);}}downAt=null;});
+cvs.addEventListener('pointerup',e=>{if(downAt&&Math.hypot(e.clientX-downAt.x,e.clientY-downAt.y)<4){pick(e);
+  if(lastHit){if(lastHit.rec)ui.select(lastHit.rec.id);else selectFR(lastHit.fr);}}downAt=null;});
 
 /* gizmo */
 const gz=$('#gizmo'),gctx=gz.getContext('2d');
@@ -756,7 +759,7 @@ function loop(now){
   let lx=null,ly=null;   // frame numbers every 10 frames; one too close to the last shown is skipped
   frLabels.forEach(l=>{if(l.el.hidden)return;place(l.el,l.p);if(l.el.style.display==='none')return;
     const x=parseFloat(l.el.style.left),y=parseFloat(l.el.style.top);if(lx!==null&&Math.hypot(x-lx,y-ly)<38){l.el.style.display='none';return;}lx=x;ly=y;});place(selLabel,selLabelPos);
-  renderer.render(scene,camera);drawGizmo();
+  if(host.clientWidth){renderer.render(scene,camera);drawGizmo();}   // not while the 보수 계획 screen hides the dashboard
   requestAnimationFrame(loop);
 }
 syncLayer();paintHull();selectFR(state.selFR);

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Dr.Dock 선체 진단</title>
+<title>DR.DOCK</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/src/assets/favicon.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/src/assets/favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/src/assets/apple-touch-icon.png">
@@ -11,7 +11,12 @@
 <body>
 <div class="app">
   <header class="topbar">
-    <div class="brand"><img class="brand-logo" src="/src/assets/logo.png" alt="Dr.DOCK"></div>
+    <div class="brand"><img class="brand-logo" src="/src/assets/logo.png" alt="DR.DOCK"></div>
+    <!-- screens (SPEC 12.2): 진단 = the dashboard · 보수 계획 = plan/view.js -->
+    <div class="seg view-tabs" role="tablist" aria-label="화면">
+      <button role="tab" id="tabDiag" data-screen="diag" aria-selected="true" aria-controls="diagView">진단</button>
+      <button role="tab" id="tabPlan" data-screen="plan" aria-selected="false" aria-controls="planView" aria-disabled="true" class="is-disabled" tabindex="-1">보수</button>
+    </div>
     <div class="top-right">
       <!-- ship + docking: one bundle, a thin divider between -->
       <div class="field ship-dock"><span class="ship" aria-label="선박"><b>H-2491</b></span><i class="vsep" aria-hidden="true"></i>
@@ -26,11 +31,14 @@
         <span class="map-state" id="mapState" role="status"><i></i><svg class="ic ok" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-6.5"/></svg><span id="mapStateTxt">매핑 완료</span><span class="map-prog" aria-hidden="true"><i></i></span></span>
         <button class="btn-primary secondary" id="mapBtn">재매핑</button>
       </div>
-      <button class="btn-ghost" id="reportBtn">보고서 생성</button>
+      <!-- outputs by screen (SPEC 13.1): 진단 = 진단 보고서 (5장) · 보수 계획 = 자재 발주 목록 Excel + 보수 도면 (2장, plan/view.js) -->
+      <button class="btn-ghost" id="reportBtn">진단 보고서(PDF)</button>
+      <button class="btn-ghost" id="xlsxBtn">자재 발주 목록(Excel)</button>
+      <button class="btn-ghost" id="planPdfBtn">보수 도면(PDF)</button>
     </div>
   </header>
 
-  <div class="main">
+  <div class="main" id="diagView">
     <section class="pane pane-3d" id="pane3d" aria-label="3D 선체 외판">
       <div class="pane-head">
         <span class="pane-title">3D 선체 외판</span>
@@ -50,8 +58,8 @@
         <div class="ov-tools">
           <div class="seg" role="group" aria-label="측정 레이어">
             <span class="lbl">레이어</span>
-            <button data-layer="dft" aria-pressed="true">도막 두께</button>
-            <button data-layer="plate" aria-pressed="false">강판 두께</button>
+            <button data-layer="plate" aria-pressed="true">강판 두께</button>
+            <button data-layer="dft" aria-pressed="false">도막 두께</button>
             <button data-layer="defect" aria-pressed="false">도막 손상</button>
           </div>
           <div class="seg" role="group" aria-label="시점">
@@ -140,6 +148,41 @@
         <div class="pane-body"></div>
       </section>
     </div>
+  </div>
+
+  <!-- 보수 계획 (SPEC 13): top 보수 범위 설정 | 보수 물량 및 효과 · bottom 보수 도면 | 보수 정보 — the right column one width.
+       보수 도면 maximizes only, the others fold only — the grid follows the folding (plan/layout.js).
+       보수 이력 (a past docking): no 보수 범위 설정, 보수 물량 및 효과 takes the whole top row -->
+  <div class="plan" id="planView" role="tabpanel" aria-labelledby="tabPlan" hidden>
+    <section class="pane pane-range" id="paneRange" aria-label="보수 범위 설정">
+      <div class="pane-head"><span class="pane-title">보수 범위 설정</span></div>
+      <div class="pane-body">
+        <div class="rg" id="rgSlider" role="slider" tabindex="0" aria-label="보수 범위" aria-valuemin="1" aria-valuemax="5"></div>
+        <label class="switch"><input type="checkbox" id="rgFullBelow"><i aria-hidden="true"></i>수면 아래 전체 재도장</label>
+      </div>
+    </section>
+    <section class="pane pane-draw" id="paneDraw" aria-label="보수 도면">
+      <div class="pane-head">
+        <span class="pane-title">보수 도면</span><span class="pane-count" id="drawSub"></span>
+      </div>
+      <div class="pane-body"></div>
+    </section>
+    <section class="pane pane-effect" id="paneEffect" aria-label="보수 물량 및 효과">
+      <div class="pane-head"><span class="pane-title">보수 물량 및 효과</span></div>
+      <div class="pane-body"></div>
+    </section>
+    <!-- 보수 정보 (SPEC 13.6): 총 N건 (최종 보수 목록 탭일 때만) · [판 정보] [최종 보수 목록]; the exclude button at the bottom -->
+    <section class="pane pane-side" id="paneSide" aria-label="보수 정보">
+      <div class="pane-head">
+        <span class="pane-title">보수 정보</span><span class="pane-count" id="sideCount" hidden></span>
+        <div class="seg pane-seg side-tabs" role="group" aria-label="보수 정보 보기">
+          <button data-side="plate" aria-pressed="true">판 정보</button>
+          <button data-side="list" aria-pressed="false">최종 보수 목록</button>
+        </div>
+      </div>
+      <div class="pane-body"></div>
+      <div class="side-foot" hidden></div>
+    </section>
   </div>
 
   <footer class="statusbar">

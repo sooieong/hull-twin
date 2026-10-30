@@ -31,34 +31,64 @@ for(let fr=FRMIN;fr<=FRMAX;fr++){const X=fr*FS,s=section(X),m=[];let open=null;
   for(let g=0;g<=s.gs[G-1]+1e-6;g+=M_STEP){const p=atGirth(s,Math.min(g,s.gs[G-1])),in_=!!p&&!!unmeasurable(X,p.Z);
     if(in_){if(open)open[1]=g;else m.push(open=[g,g]);}else open=null;}
   F.push({fr,g:s.gs[G-1],wl:girthAtZ(s,T),m});}
-const Fr=fr=>F[Math.max(0,Math.min(F.length-1,Math.round(fr)-FRMIN))];
-const G_MAX=Math.max(...F.map(f=>f.g));
+export const Fr=fr=>F[Math.max(0,Math.min(F.length-1,Math.round(fr)-FRMIN))];
+export const G_MAX=Math.max(...F.map(f=>f.g));
 let nStrakes=0;while(nStrakes<LETTERS.length&&KEEL_HALF+STRAKE_W*nStrakes<G_MAX)nStrakes++;
+
+/* ---------- the S.SHELL frame, shared with the 보수 계획 보수 도면 (plan/drawing.js) ----------
+   shellBox(w, h): the plot box (CSS px) — the largest ASPECT box that fits inside the canvas less the label margins, centred.
+   Everything — outline, heat, markers, ticks, labels — is placed from this box, so nothing stretches with the panel.
+   → {bx, by, bw, bh, px(fr), py(u), frOf(x), uOf(y)} */
+export function shellBox(w,h){
+  const aw=Math.max(1,w-M.l-M.r),ah=Math.max(1,h-M.t-M.b);let bw,bh;
+  if(aw/ah>ASPECT){bh=ah;bw=ah*ASPECT;}else{bw=aw;bh=aw/ASPECT;}
+  const bx=(w-bw-M.l-M.r)/2+M.l,by=(h-bh-M.t-M.b)/2+M.t;
+  return {bx,by,bw,bh,px:fr=>bx+(fr-FRMIN)/(FRMAX-FRMIN)*bw,py:u=>by+(u+G_MAX)/(2*G_MAX)*bh,
+    frOf:x=>FRMIN+(x-bx)/bw*(FRMAX-FRMIN),uOf:y=>(y-by)/bh*2*G_MAX-G_MAX};
+}
+/* the shell outline (deck edge to deck edge) as a path */
+export function shellOutline({px,py}){
+  const p=new Path2D();
+  F.forEach((f,i)=>i?p.lineTo(px(f.fr),py(-f.g)):p.moveTo(px(f.fr),py(-f.g)));
+  for(let i=F.length-1;i>=0;i--)p.lineTo(px(F[i].fr),py(F[i].g));p.closePath();
+  return p;
+}
+/* over the content: design waterline, keel line, outline, strake letters, 우현/좌현, frame ticks and numbers */
+export function drawShellLines(c,{bx,by,bw,bh,px,py},shellPath){
+  c.save();c.clip(shellPath);c.strokeStyle=C.dwl;c.lineWidth=1;c.setLineDash([2,3]);
+  [-1,1].forEach(sd=>{c.beginPath();F.forEach((f,i)=>{const y=py(sd*Math.min(f.wl,f.g));i?c.lineTo(px(f.fr),y):c.moveTo(px(f.fr),y);});c.stroke();});
+  c.restore();c.setLineDash([]);
+  c.strokeStyle=C.keel;c.lineWidth=1;c.beginPath();c.moveTo(bx-4,py(0));c.lineTo(bx+bw+4,py(0));c.stroke();   // K: a little thinner than the outline
+  c.strokeStyle=C.outline;c.lineWidth=1.3;c.stroke(shellPath);
+  c.textBaseline='middle';
+  // strake letters on the left: K, then every third strake (C, F, J, …)
+  c.textAlign='right';c.font=LABEL;c.fillStyle=C.keel;c.fillText('K',bx-6,py(0));
+  c.font=LETTER;c.fillStyle=C.text;
+  for(let k=2;k<nStrakes;k+=3){const g=KEEL_HALF+STRAKE_W*(k+0.5);[-1,1].forEach(sd=>c.fillText(LETTERS[k],bx-6,py(sd*g)));}
+  c.textAlign='left';c.font=LABEL;c.fillStyle=C.text;
+  c.fillText('우현',bx+bw+4,py(-G_MAX/2));c.fillText('좌현',bx+bw+4,py(G_MAX/2));
+  // frame ticks every 5 frames (longer every 10), numbers every 10 frames — or every 50 / 100 when the pane is too narrow for them
+  c.strokeStyle=C.tick;c.lineWidth=1;c.beginPath();
+  for(let fr=Math.ceil(FRMIN/5)*5;fr<=FRMAX;fr+=5){c.moveTo(px(fr),by+bh);c.lineTo(px(fr),by+bh+(fr%10?2:4));}c.stroke();
+  const step=[10,50,100].find(n=>px(n)-px(0)>=26)||100;
+  c.textAlign='center';c.textBaseline='top';c.font=TICK;c.fillStyle=C.frLabel;
+  for(let fr=0;fr<=FRMAX;fr+=step)c.fillText(String(fr),px(fr),by+bh+5);
+}
+export const SHELL_FONTS=[LABEL,LETTER,TICK];
 
 export function createSideShell(body,store,ui){
   body.innerHTML='<canvas class="ss-cv" aria-label="S.SHELL 전개도: 가로 프레임 번호, 세로 외판열. 위 우현, 아래 좌현. 이상 지점을 누르면 선택합니다."></canvas>';
   const cv=body.querySelector('canvas'),ctx=cv.getContext('2d');
   // static layers: under the heat (background, shell fill, keel blocks) and over it (lines, labels)
   const under=document.createElement('canvas'),over=document.createElement('canvas'),heat=document.createElement('canvas');
-  let w=0,h=0,dpr=1,dots=[],allIx=buildIndex([]),paint=createPaint('dft'),shellPath=null,heatClip=null,robot=null,raf=0,timer=null;
-  /* plot box (CSS px): the largest ASPECT box that fits inside the canvas less the label margins, centred.
-     Everything — outline, heat, markers, ticks, labels — is placed from this box, so nothing stretches with the panel */
-  let bx=0,by=0,bw=1,bh=1;
-  function layout(){
-    const aw=Math.max(1,w-M.l-M.r),ah=Math.max(1,h-M.t-M.b);
-    if(aw/ah>ASPECT){bh=ah;bw=ah*ASPECT;}else{bw=aw;bh=aw/ASPECT;}
-    bx=(w-bw-M.l-M.r)/2+M.l;by=(h-bh-M.t-M.b)/2+M.t;
-  }
+  let w=0,h=0,dpr=1,dots=[],allIx=buildIndex([]),paint=createPaint('plate'),shellPath=null,heatClip=null,robot=null,raf=0,timer=null;
+  let box=shellBox(1,1),bx=0,by=0,bw=1,bh=1;
+  function layout(){box=shellBox(w,h);({bx,by,bw,bh}=box);}
 
-  const px=fr=>bx+(fr-FRMIN)/(FRMAX-FRMIN)*bw;
-  const py=u=>by+(u+G_MAX)/(2*G_MAX)*bh;
-  const frOf=x=>FRMIN+(x-bx)/bw*(FRMAX-FRMIN);
-  const uOf=y=>(y-by)/bh*2*G_MAX-G_MAX;
+  const px=fr=>box.px(fr),py=u=>box.py(u),frOf=x=>box.frOf(x),uOf=y=>box.uOf(y);
 
   function drawBase(){
-    shellPath=new Path2D();
-    F.forEach((f,i)=>i?shellPath.lineTo(px(f.fr),py(-f.g)):shellPath.moveTo(px(f.fr),py(-f.g)));
-    for(let i=F.length-1;i>=0;i--)shellPath.lineTo(px(F[i].fr),py(F[i].g));shellPath.closePath();
+    shellPath=shellOutline(box);
     // areas that cannot be measured (keel block contact, 수동 측정): not drawn — only the heat leaves them out (heatClip)
     heatClip=new Path2D();heatClip.rect(0,0,w,h);
     KEEL_BLOCKS.forEach(b=>{const hx=(BLOCK_SIZE.dx/2+ROBOT_MARGIN)/FS,hy=BLOCK_SIZE.dy/2+ROBOT_MARGIN,fr=b.X/FS;
@@ -73,24 +103,7 @@ export function createSideShell(body,store,ui){
     c.fillStyle=C.bg;c.fillRect(0,0,w,h);c.fillStyle=C.shell;c.fill(shellPath);
     // over: design waterline, keel line, outline, labels
     c=over.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);
-    c.save();c.clip(shellPath);c.strokeStyle=C.dwl;c.lineWidth=1;c.setLineDash([2,3]);
-    [-1,1].forEach(sd=>{c.beginPath();F.forEach((f,i)=>{const y=py(sd*Math.min(f.wl,f.g));i?c.lineTo(px(f.fr),y):c.moveTo(px(f.fr),y);});c.stroke();});
-    c.restore();c.setLineDash([]);
-    c.strokeStyle=C.keel;c.lineWidth=1;c.beginPath();c.moveTo(bx-4,py(0));c.lineTo(bx+bw+4,py(0));c.stroke();   // K: a little thinner than the outline
-    c.strokeStyle=C.outline;c.lineWidth=1.3;c.stroke(shellPath);
-    c.textBaseline='middle';
-    // strake letters on the left: K, then every third strake (C, F, J, …)
-    c.textAlign='right';c.font=LABEL;c.fillStyle=C.keel;c.fillText('K',bx-6,py(0));
-    c.font=LETTER;c.fillStyle=C.text;
-    for(let k=2;k<nStrakes;k+=3){const g=KEEL_HALF+STRAKE_W*(k+0.5);[-1,1].forEach(sd=>c.fillText(LETTERS[k],bx-6,py(sd*g)));}
-    c.textAlign='left';c.font=LABEL;c.fillStyle=C.text;
-    c.fillText('우현',bx+bw+4,py(-G_MAX/2));c.fillText('좌현',bx+bw+4,py(G_MAX/2));
-    // frame ticks every 5 frames (longer every 10), numbers every 10 frames — or every 50 / 100 when the pane is too narrow for them
-    c.strokeStyle=C.tick;c.lineWidth=1;c.beginPath();
-    for(let fr=Math.ceil(FRMIN/5)*5;fr<=FRMAX;fr+=5){c.moveTo(px(fr),by+bh);c.lineTo(px(fr),by+bh+(fr%10?2:4));}c.stroke();
-    const step=[10,50,100].find(n=>px(n)-px(0)>=26)||100;
-    c.textAlign='center';c.textBaseline='top';c.font=TICK;c.fillStyle=C.frLabel;
-    for(let fr=0;fr<=FRMAX;fr+=step)c.fillText(String(fr),px(fr),by+bh+5);
+    drawShellLines(c,box,shellPath);
   }
 
   /* heat field: the current layer's paint (heatmap.createPaint, as in 3D) at every grid cell inside the shell, abnormal only */
@@ -146,7 +159,7 @@ export function createSideShell(body,store,ui){
   new ResizeObserver(resize).observe(cv);
   // the drawing caches its text: draw again once the web font is in (a canvas does not repaint by itself)
   if(document.fonts){document.fonts.ready.then(resize);document.fonts.addEventListener('loadingdone',resize);
-    Promise.all([LABEL,LETTER,TICK].map(f=>document.fonts.load(f))).then(resize,()=>{});}
+    Promise.all(SHELL_FONTS.map(f=>document.fonts.load(f))).then(resize,()=>{});}
 
   /* click selection (anomaly point first, else nearest measurement within 3 m); no hover readout — the cursor only marks a point */
   function hit(e){

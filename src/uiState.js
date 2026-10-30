@@ -6,7 +6,8 @@
    이미 선택된 지점을 다시 고르면 'fly'만 알린다. 구독 함수: fn(kind, opts)
    ========================================================= */
 export function createUiState(){
-  let layer='dft',selId=null;const subs=new Set();
+  // 강판 두께 first (SPEC 12.1)
+  let layer='plate',selId=null;const subs=new Set();
   const notify=(k,o={})=>subs.forEach(fn=>fn(k,o));
   return {
     subscribe(fn){subs.add(fn);return ()=>subs.delete(fn);},

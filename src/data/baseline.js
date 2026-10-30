@@ -83,3 +83,13 @@ export const AHR={normal:150,coatAbnormal:300,flaking:500,newCoat:100};
 export const SERVICE_SPEED=14;          // 운항 속도 (노트)
 export const SEA_NU=1.1883e-6;          // 해수 동점성계수 (m²/s, 15 °C, ITTC)
 export const STEEL_DENSITY=7.85;        // 강재 밀도 (t/m³): 보고서 5장 강판 교체 중량 = 면적 × 원두께 × 밀도
+
+/* 도료 사양 (보수 계획 자재 목록, 예시값 — SPEC 12.9): 필요량 (L) = 면적 × 설계 두께 ÷ 고형분 비율 × (1 + 손실률)
+   도장 구역은 판 가운데 높이로 정한다: 경하 흘수(DRAFT_LIGHT) 아래 선저·선측 · 수선부 상한(WL_TOP)까지 흘수선 · 그 위 건현.
+   dft = 도장 사양의 건조 도막 두께 합계 (µm) · solids = 부피 고형분 비율 */
+export const PAINT_LOSS=0.25;           // 손실률 (분무·잔량)
+export const PAINT_SPEC={
+  bottom:{zone:'선저·선측',paint:'방식+방오',dft:350,solids:0.6},
+  boot:{zone:'흘수선',paint:'방식+방오',dft:350,solids:0.6},
+  top:{zone:'건현',paint:'상부 도료',dft:250,solids:0.55}
+};
