@@ -186,7 +186,7 @@ function page2(snap){
   const steel=rows.length?`<div class="rp-steel-cols">${cols.map((c,i)=>table(head,c,i===cols.length-1?sum:'','rp-steel')).join('')}</div>${more}`
     :'<p class="rp-none">이 계획에는 강판 교체·보강 판이 없습니다.</p>';
   const paint=r.paintRows.length?table(['도장 구역','작업','#면적 (m²)','도료','#필요량 (L)'],
-      r.paintRows.map(x=>`<tr><td><b>${x.zone}</b></td><td>${x.work}</td><td class="n">${num(x.area)}</td><td>${x.paint}</td><td class="n">${num(x.litres)}</td></tr>`),
+      r.paintRows.map(x=>`<tr><td>${x.zone}</td><td>${x.work}</td><td class="n">${num(x.area)}</td><td>${x.paint}</td><td class="n">${num(x.litres)}</td></tr>`),
       `<tr class="rp-sum"><td>합계</td><td></td><td class="n">${num(r.repaint)}</td><td></td><td class="n">${num(r.paint)}</td></tr>`)
     :'<p class="rp-none">이 계획에는 도장 작업이 없습니다.</p>';
   const spec=table(['도장 구역','도료','#설계 두께 (µm)','#고형분 비율'],Object.values(PAINT_SPEC).map(s=>`<tr><td>${s.zone}</td><td>${s.paint}</td><td class="n">${num(s.dft)}</td><td class="n">${num(s.solids,2)}</td></tr>`),'');

@@ -16,7 +16,7 @@
    ========================================================= */
 import { CRIT, WARN, TOP, gradeName, gradeOf } from './data/criteria.js';
 import { lossRate, dropHtml, areaNum, zoneLoc, num } from './format.js';
-import { zonesOf, groupAction } from './data/zones.js';
+import { zonesOf, topCount, groupAction } from './data/zones.js';
 import { gradeIcon } from './gradeUi.js';
 import { emptyState, mappingState } from './emptyState.js';
 import { CHEV } from './panels.js';
@@ -47,7 +47,7 @@ export function createKpiPanel(tilesRoot,listRoot,countEl,store,ui){
     zones=zonesOf(store,layer);
     tilesRoot.querySelectorAll('[data-g]').forEach(el=>{el.textContent=gradeName(+el.dataset.g,layer);});   // 도막 손상: 최우선 보수 / 도막 떨어짐 / 스크래치   // 최우선 보수 → 경고 → 주의, 각 안에서 수치 큰 순 (zones.js)
     const grades=zones.map(z=>gradeOf(z.level,z.top));
-    $k('top').textContent=zones.filter(z=>z.top).length;
+    $k('top').textContent=topCount(store);   // 종합 건수 — the list shows only the ones abnormal in this layer
     $k('crit').textContent=grades.filter(g=>g===CRIT).length;
     $k('warn').textContent=grades.filter(g=>g===WARN).length;
     countEl.innerHTML=`총 <span class="n">${num(zones.length)}</span>건`;

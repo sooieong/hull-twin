@@ -18,12 +18,16 @@ export const DEFECT_GRADE_LABEL=['정상','스크래치','도막 떨어짐','최
 export const gradeName=(g,layer)=>(layer==='defect'?DEFECT_GRADE_LABEL:GRADE_LABEL)[g];
 export function gradeOf(level,top){return top?TOP:level;}
 
-/* 최우선 보수 지점 — 세 레이어 공통 기준 하나 (레이어마다 따로 세지 않는다: 어느 레이어 화면·보고서에서든 같은 구역, 같은 건수)
+/* 최우선 보수 지점 — 세 레이어 공통 기준 하나 (종합 건수는 레이어마다 따로 세지 않는다: KPI·보고서 1장·보수 탭이 같은 건수)
    다음 둘 중 하나: 같은 곳의 강판과 도막 두께 중 하나는 경고, 다른 하나는 주의 이상
-   · 손상(스크래치 또는 도막 떨어짐)이 있고 그 자리 강판이 주의 이상 */
+   · 손상(스크래치 또는 도막 떨어짐)이 있고 그 자리 강판이 주의 이상
+   한 줄 설명 TOP_SUMMARY: 슬라이더 1단계 · ? 범례 · 보고서 판정 기준표.
+   layer를 주면 그 레이어 값도 이상(주의 이상 · 손상 있음)인 지점만 — 레이어 목록·히트맵·판정 칩은 그 레이어에서 이상한 최우선 보수만 보인다 */
 export const TOP_RULE={coat:'강판·도막 중 하나는 경고, 다른 하나는 주의 이상',defect:'손상이 있고 그 자리 강판이 주의 이상'};
-export function isTop(r){
+export const TOP_SUMMARY='강판 이상이 도막 이상·손상과 겹친 곳';
+export function isTop(r,layer){
   const p=judge(r,'plate').level;if(p===OK)return false;
+  if(layer&&judge(r,layer).level===OK)return false;
   const d=judge(r,'dft').level;
   return d>OK&&(d===CRIT||p===CRIT)||!!r.defect;
 }

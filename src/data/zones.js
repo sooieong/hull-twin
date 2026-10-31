@@ -2,14 +2,15 @@
    보수 구역 (SPEC v6 14.0): 보수 구역 1건 = 판 1장 (프레임 구간 PLATE_FRAMES개, 약 5.6 m × 외판열 1개, 약 25 m² —
    plates.js의 판과 같은 구간. K는 좌우현에 걸친 한 판).
    1) 최우선 보수 구역 (criteria.isTop): 최우선 보수 지점이 있는 판마다 1건.
-      세 레이어가 같은 기준이라 묶음을 한 번만 계산해서 함께 쓴다 (zonesOf) — 어느 레이어든 최우선 보수의 개수·항목이 같다.
+      세 레이어가 같은 기준이라 묶음을 한 번만 계산해서 함께 쓴다 (zonesOf). 종합 건수(KPI·보고서 1장·보수 탭)는 이 묶음 수 (topCount).
+      레이어 목록에는 그 레이어 값이 이상한 최우선 보수 구역만 든다 (강판·도막: 주의 이상, 도막 손상: 손상이 있는 것).
    2) 강판 두께 · 도막 두께 (와 'all'): 판 1장 = 그 판에서 가장 나쁜 판정 1건. 한 판 안의 이상 지점은 판정이 달라도 한 구역이고
       (경고와 주의를 따로 세지 않는다), 최우선 보수 판의 나머지 이상 지점은 그 최우선 보수 구역에 든다. 옆 판과는 합치지 않는다.
    목록 순서 (레이어 화면): 최우선 보수 → 경고 → 주의로 묶고, 각 묶음 안에서는 현재 레이어 수치(layerValue)가 큰 순.
      구역의 대표 지점(목록 수치·선택 지점)은 판정이 가장 나쁜 점 중 그 레이어 수치가 가장 큰 지점이다. 레이어마다 1위가 다를 수 있다.
    도막 손상 레이어 (v3 11.6): 손상은 서로 DAMAGE_LINK(3 m) 안에 있으면 1건이다 (외판 위 거리 x, 부호 있는 거스 u —
      스크래치·도막 떨어짐을 함께 묶고 판으로 나누지 않는다).
-     구역의 판정은 더 나쁜 쪽 (도막 떨어짐이 있으면 도막 떨어짐). 최우선 보수 구역은 손상이 있는 것만 든다.
+     구역의 판정은 더 나쁜 쪽 (도막 떨어짐이 있으면 도막 떨어짐).
    복합은 구역 안에 복합 점이 하나라도 있으면 복합이다.
    layer 'all': 세 레이어를 합친 기준 (보고서 5장 보수 계획). 점의 판정 = 세 레이어 중 가장 나쁜 판정, 순서는 우선순위 점수.
    ========================================================= */
@@ -92,15 +93,15 @@ export function groupZones(records,layer,top=topClusters(records)){
   const inTop=new Set(top.flatMap(c=>c.map(r=>r.id)));
   const rest=[];for(const r of records){if(inTop.has(r.id))continue;const a=item(r);if(a.level>OK)rest.push(a);}
   let tops=top.map(c=>c.map(item)),others;
-  if(layer==='defect'){
-    others=cluster(rest,DAMAGE_LINK);
-    tops=tops.filter(items=>items.some(a=>a.r.defect));   // only the 최우선 보수 zones with damage in them (a coating + steel one has nothing to show here)
-  }else{
+  if(layer==='defect')others=cluster(rest,DAMAGE_LINK);
+  else{
     // one zone per plate: the other abnormal points of a 최우선 보수 plate go into its zone
     const P=byPlate(rest);
     for(const items of tops){const k=plateKey(items[0]),more=P.get(k);if(more){items.push(...more);P.delete(k);}}
     others=[...P.values()];
   }
+  // a layer lists only the 최우선 보수 zones whose value in that layer is abnormal (e.g. no damage → not in 도막 손상)
+  if(!all)tops=tops.filter(items=>items.some(a=>judge(a.r,layer).level>OK));
   return [...tops.map(items=>zone(items,true)),...others.map(items=>zone(items,false))].sort(order);
 }
 /* where a zone is: frame and strake span, side, the zone name most of its points are in (a tie goes by the fixed ZONES order) */
@@ -126,10 +127,12 @@ export function groupAction(zones){
 }
 
 /* the store's zones for a layer, once per data version. The 최우선 보수 clusters (one criterion for every layer) are cached
-   once, so every layer uses the very same clusters (same count, same items) */
+   once, so every layer uses the very same clusters (same items; a layer leaves out the ones normal in it) */
 const zoneCache=new Map();let topCache=null;
+const topsOf=store=>{const v=store.version;if(!topCache||topCache.v!==v)topCache={v,clusters:topClusters(store.records)};return topCache.clusters;};
 export function zonesOf(store,layer){
   const v=store.version,c=zoneCache.get(layer);if(c&&c.v===v)return c.zones;
-  if(!topCache||topCache.v!==v)topCache={v,clusters:topClusters(store.records)};
-  const zones=groupZones(store.records,layer,topCache.clusters);zoneCache.set(layer,{v,zones});return zones;
+  const zones=groupZones(store.records,layer,topsOf(store));zoneCache.set(layer,{v,zones});return zones;
 }
+/* 최우선 보수 종합 건수 (KPI · 보고서 1장 · 보수 탭 1단계와 같은 수): every 최우선 보수 zone, whatever the layer */
+export const topCount=store=>topsOf(store).length;

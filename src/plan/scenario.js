@@ -28,7 +28,7 @@
      - 4단계가 넣는 판 (단계 5·6 중 다음 도킹 경고 예상 판): LEVEL4 — years년 뒤 경고가 예상되는 점이 판 측정점의 share 이상
    진단 보고서 5장(종합 판정·보수 효과·다음 도킹 관찰 권고)과 보수 계획 화면이 이 계산을 같이 쓴다.
    ========================================================= */
-import { OK, WARN, CRIT, TOP, CRITERIA, LAYERS, judge, reaches } from '../data/criteria.js';
+import { OK, WARN, CRIT, TOP, TOP_SUMMARY, CRITERIA, LAYERS, judge, reaches } from '../data/criteria.js';
 import { GRID, DRAFT, DRAFT_LIGHT, WL_TOP, AHR, LBP, SERVICE_SPEED, SEA_NU, PAINT_SPEC, PAINT_LOSS } from '../data/baseline.js';
 import { DOCKING_CYCLE_YEARS } from '../data/docking.js';
 import { platesOf } from '../data/plates.js';
@@ -37,7 +37,7 @@ import { pointZones } from '../data/zones.js';
 /* the five levels of the slider: name (권장 → " (권장)"), the lines under it, the steps it takes in,
    group: the name of its group in 최종 보수 목록 (the plates this level adds) · grade: that group's judgement icon (gradeUi) */
 export const LEVELS=[
-  {level:1,name:'최우선 보수',sub:['강판·도막 모두 이상'],steps:[1],group:'최우선 보수',grade:TOP},
+  {level:1,name:'최우선 보수',sub:[TOP_SUMMARY],steps:[1],group:'최우선 보수',grade:TOP},
   {level:2,name:'+ 강판 두께 경고',sub:[`원두께 대비 ${Math.round(CRITERIA.plate.crit*100)}% 이상 감소`],steps:[1,2],group:'강판 두께 경고',grade:CRIT},
   {level:3,name:'+ 도막 두께 경고·손상',sub:[`설계 대비 ${Math.round(CRITERIA.dft.crit*100)}% 이상 감소 및`,'도막 떨어짐, 스크래치'],steps:[1,2,3,4,7],rec:true,group:'도막 두께 경고·손상',grade:CRIT},
   {level:4,name:'+ 다음 도킹 경고 예상',sub:[`${DOCKING_CYCLE_YEARS}년 안에 경고가 예상됨`],steps:[1,2,3,4,7],nextDock:true,group:'다음 도킹 경고 예상',grade:WARN},   // + 단계 5·6 중 다음 도킹에 경고가 예상되는 판

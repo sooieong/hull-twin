@@ -10,7 +10,7 @@ import { XMIN, XMAX, NX, G, stSec, ZONES } from '../hull.js';
 import { LAYERS, LAYER_LABEL, WARN, CRIT, TOP, CRITERIA, judge, reaches, dftLoss, plateLoss, isTop, gradeOf } from '../data/criteria.js';
 import { ACTION_ORDER } from '../data/repairSteps.js';
 import { DEFECT_LABEL, recLoc, lossPct, area, lossRate, pct as pctText } from '../format.js';
-import { groupZones, zonesOf } from '../data/zones.js';
+import { groupZones, zonesOf, topCount } from '../data/zones.js';
 import { SHIP as BASE, ROBOT } from '../data/baseline.js';
 import { FRICTION, CELL_AREA, DEFAULT_LEVEL, rangeResult, noRepair } from '../plan/scenario.js';
 import { platesOf } from '../data/plates.js';
@@ -59,7 +59,8 @@ export function buildReportData(store,now=new Date()){
 
   /* --- layer summaries (1장 cards): the dashboard KPI counts --- */
   const layers={};
-  for(const l of LAYERS)layers[l]={counts:gradeCount(zonesBy[l]),total:zonesBy[l].length};
+  for(const l of LAYERS){const counts=gradeCount(zonesBy[l]);counts[TOP]=topCount(store);   // 최우선 보수: 종합 건수 (KPI와 같다)
+    layers[l]={counts,total:zonesBy[l].length};}
   // 강판·도막 카드: the largest 감소율 of the layer, the same label
   const lossOf=(r,l)=>l==='plate'?plateLoss(r):dftLoss(r),most=l=>R.reduce((a,r)=>!a||lossOf(r,l)>lossOf(a,l)?r:a,null);
   // 도막 손상 (화면 목록과 같은 기준): 최우선 보수 → 도막 떨어짐 → 스크래치, 각 안에서 면적 큰 순
@@ -102,7 +103,7 @@ export function buildReportData(store,now=new Date()){
   const predicted=rec.nextZones.map(z=>{
     const a=z.items.reduce((m,b)=>over(b.next)>over(m.next)?b:m),x=a.next;
     const layer=reaches(x.plate,CRITERIA.plate.crit)||reaches(x.dft,CRITERIA.dft.crit)?(x.plate/CRITERIA.plate.crit>=x.dft/CRITERIA.dft.crit?'plate':'dft'):'defect';
-    const grade=Math.max(...z.items.map(b=>gradeOf(judge(b.r,layer).level,isTop(b.r))));
+    const grade=Math.max(...z.items.map(b=>gradeOf(judge(b.r,layer).level,isTop(b.r,layer))));
     return {z,r:a.r,layer,grade,pred:layer==='defect'?null:x[layer],over:over(x)};
   }).sort((a,b)=>b.over-a.over);
 

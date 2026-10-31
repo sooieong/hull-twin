@@ -5,7 +5,7 @@
    2·3·4장 위쪽은 2 × 2 격자: 왼쪽 위 큰 전개도 · 오른쪽 위 단면 비교(4장은 구역별 표) — 아래 경계가 같다,
    왼쪽 아래 작은 3D 2개 · 오른쪽 아래 구역별 표(4장은 사진) — 위·아래 경계가 같다.
    ========================================================= */
-import { LAYERS, CRITERIA, OK, WARN, CRIT, TOP, TOP_RULE, ACTION, judge, isTop, gradeOf, gradeName } from '../data/criteria.js';
+import { LAYERS, CRITERIA, OK, WARN, CRIT, TOP, TOP_RULE, TOP_SUMMARY, ACTION, judge, isTop, gradeOf, gradeName } from '../data/criteria.js';
 import { ACTION_ORDER } from '../data/repairSteps.js';
 import { LAYER_LABEL, gradeLabel, DEFECT_LABEL, recLoc, zoneLoc, thick, thickNum, drop, dropNum, ratioNum,
   lossRate, THICK, pct, num, area, areaNum, dateTime, numHtml } from '../format.js';
@@ -170,7 +170,7 @@ function page5(d){
     :'<p>권장 보수 후에는 지금 속도로 다음 도킹까지 경고 기준을 넘을 곳이 없습니다.</p>';
   const crit=CRITERIA,dc=crit.dft,pc=crit.plate;
   // 최우선 보수 does not fit the 경고·주의·정상 columns: its rule sits between the box title and the table
-  const topRule=`<div class="rp-toprule"><b>${gradeIcon(TOP)}${gradeName(TOP)}</b><p>${TOP_RULE.coat}<br>또는 ${TOP_RULE.defect} (세 레이어 공통)</p></div>`;
+  const topRule=`<div class="rp-toprule"><b>${gradeIcon(TOP)}${gradeName(TOP)}</b><p>${TOP_SUMMARY} (세 레이어 공통)<br>${TOP_RULE.coat}, 또는 ${TOP_RULE.defect}</p></div>`;
   const ctab=table(['항목','경고','주의','정상'],[
     `<tr>${td('강판 감소율 (원두께 기준)')}${td(`${pctR(pc.crit)}% 이상`)}${td(`${pctR(pc.warn)}% 이상 ${pctR(pc.crit)}% 미만`)}${td(`${pctR(pc.warn)}% 미만`)}</tr>`,
     `<tr>${td('도막 감소율 (설계 기준)')}${td(`${pctR(dc.crit)}% 이상`)}${td(`${pctR(dc.warn)}% 이상 ${pctR(dc.crit)}% 미만`)}${td(`${pctR(dc.warn)}% 미만`)}</tr>`,
