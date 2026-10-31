@@ -85,7 +85,7 @@ export const DFT_DESIGN={'선저':350,'빌지':350,'선측':320,'흘수선':350,
 export const PLATE_ORIG={'선저':19.5,'빌지':19.5,'선측':17.0,'흘수선':18.0,'건현':16.0,'선수':20.0,'선미':19.0};
 
 /* 대시보드 구역 (SPEC 11.4): 높이로 나눈다. 선저 z < 0.5 (평판부) · 선측+빌지 0.5–5.6 · 흘수선 5.6–9.4 · 건현 9.4 이상
-   coef = 부위 계수 (도막 손상이 생기는 정도). 도막 이상 면적 비율 = 계수 × COAT.base → 9.2 / 17.8 / 19.5 / 11.5 % (명세 9 / 18 / 19 / 11 %) */
+   coef = 부위 계수 (도막 손상이 생기는 정도, 명세 9 / 18 / 19 / 11 %의 근거). 도막 이상 판은 COAT.blobs에 구역마다 나눠 정한다 */
 export const COAT_ZONES=[
   {key:'top',name:'건현',z0:WL_TOP,coef:0.65},
   {key:'boot',name:'흘수선',z0:DRAFT_LIGHT,coef:1.25},
@@ -94,47 +94,77 @@ export const COAT_ZONES=[
 ];
 export const coatZoneOf=Z=>COAT_ZONES.find(c=>Z>=c.z0);
 
-/* 도막 두께 이상: 구역마다 (계수 × base) 비율의 측정점에 이상 패치(타원)를 놓는다. 1차는 같은 비율로 2차의 35%.
-   패치 하나는 area m² (가로:세로 aspect), 경고 패치 비율 warnShare. 감소율: 정상 / 주의 패치 / 경고 패치 (설계 대비, 0–1) */
+/* 도막 두께 이상 (SPEC v6 14.1): 판 모양 패치 — 판 하나의 측정점을 모두 같은 판정으로 채운다 (판 경계를 넘지 않는다).
+   blobs: 덩어리마다 위치 (판 가운데 프레임 fr 범위, 현측 side, 도장 높이 구역 zone = 판 측정점이 가장 많은 COAT_ZONES key),
+     판 수 n, 그중 가운데(첫 판에서 가까운 순) 경고 판 crit. first = 1차 리도킹에 이미 이상이던 판 {crit, warn}: 같은 자리에서
+     더 작게 — 1차 경고는 2차 경고 판 중 가운데부터, 1차 주의는 그 다음 판부터. 판 수는 구역별 이상 면적(명세 9 / 18 / 19 / 11 %)에 맞춘
+     값이다 (판 1장 ≈ 측정점 20개 ≈ 24 m²). 덩어리는 서로 붙지 않는다 (옆 판이 다른 덩어리면 건너뛴다)
+   minPts: 덩어리 판의 최소 측정점 수 (끝이 잘린 판은 넣지 않는다)
+   loss: 감소율 범위 (설계 대비, 0–1) — 정상 · 1차 주의 · 2차 새 주의 fast (5년 뒤 경고 예상) · 얕은 새 주의 shallow (5년 뒤에도 주의) · 경고
+   carry: 1차 주의 판(1차 정비 범위 밖)이 2차까지 더 줄어든 양 — 느려서 5년 뒤에도 경고가 안 된다
+   slowShare: 2차 주의 판 중 느린 판의 비율. 1차 주의에서 넘어온 판 먼저, 모자라면 얕은 새 주의 (1차에 보수한 판은 뺀다) */
 export const COAT={
-  base:{current:0.142,first:0.142*0.35},
-  area:[32,64],aspect:[0.8,1.5],
-  warnShare:{current:0.4,first:0.3},    // 2차는 1차에서 넘어온 주의 패치가 있어 새 패치의 경고 비율을 조금 높게
-  loss:{normal:[0,0.12],normalMax:0.18,warn:[0.23,0.46],crit:[0.53,0.78]},
+  blobs:[
+    {zone:['boot'],side:'S',fr:[20,110],n:5,crit:2,first:{crit:1,warn:1}},     // 흘수선 띠
+    {zone:['boot'],side:'P',fr:[110,170],n:4,crit:1,first:{crit:0,warn:1}},
+    {zone:['boot'],side:'S',fr:[140,225],n:5,crit:1,first:{crit:0,warn:1}},
+    {zone:['side'],side:'P',fr:[60,120],n:5,crit:2,first:{crit:1,warn:2}},     // 빌지·선측 (선측 수선 아래는 외판열 1줄이라 덩어리가 길쭉하다)
+    {zone:['side'],side:'S',fr:[175,200],n:4,crit:1,first:{crit:1,warn:1}},
+    {zone:['side'],side:'S',fr:[120,140],n:3,crit:1,first:{crit:0,warn:0}},
+    {zone:['side','boot'],side:'P',fr:[200,235],n:7,crit:2,first:{crit:1,warn:1}},   // 선수부
+    {zone:['bottom'],side:null,fr:[160,195],n:6,crit:2,first:{crit:0,warn:2}},   // 선저 블록 주변
+    {zone:['bottom'],side:null,fr:[30,60],n:5,crit:2,first:{crit:1,warn:2}},
+    {zone:['bottom'],side:'S',fr:[95,140],n:5,crit:1,first:{crit:0,warn:1}},
+    {zone:['top'],side:'P',fr:[50,110],n:8,crit:3,first:{crit:1,warn:2}},      // 건현
+    {zone:['top'],side:'S',fr:[140,200],n:8,crit:2,first:{crit:1,warn:1}}
+  ],
+  minPts:15,
+  loss:{normal:[0,0.12],normalMax:0.18,first:[0.22,0.32],fast:[0.32,0.46],shallow:[0.21,0.24],crit:[0.53,0.78]},
   wear:[0.02,0.08],                     // 2차: 정상 점의 5년 마모 (1차 정비 후 값에서, 감소율 normalMax까지)
-  carry:[0.04,0.14]                     // 2차: 1차에 고치지 않은 이상 점이 5년 동안 더 줄어드는 양 (판정 단계는 그대로)
+  carry:[0.02,0.06],
+  slowShare:0.48
 };
 /* 강판 감소 (원두께 대비, 0–1)
    - 일반 감소: 2차 원두께의 1–2 %. 경하 흘수선 띠(z 5.3–6.2)와 빌지 상부가 가장 크고, 선수부 × bowFactor. 1차는 2차의 firstShare배 (거의 없음)
-   - 국부 공식: 점 형태의 깊은 감소 (중심 감소율 peak, 반경 r m, 가우스). 강판 경고·주의의 주 원인. 1차에는 없다.
-     sites: 블록 접촉부 주변 선저 · FR 10–25 선저 · 경하 흘수선 띠. top = 그 자리에 도막 두께 이상(주의 패치)이 함께 있는 곳 → 최우선 보수 */
+   - 국부 공식 (SPEC v6 14.1): 곳마다 판 몇 장 — 최우선 보수 top · 경고 crit · 주의 warn, 첫 판에서 가까운 판 순 (가운데가 깊고 둘레가 얕다).
+     판마다 그 곳 조건(where)에 맞는 측정점 중 가운데 점이 가장 깊고(peak), 반경 R m까지 edge로 얕아진다. 1차에는 없다.
+     where: fr = 판 가운데 프레임 범위 · side · bottom = 선저 평판부 (z < 0.5) · z = 높이 범위. keel: 첫 판 = 킬 판 (블록 접촉부 주변).
+     곳끼리 apart m 이상 떨어진다. 국부 공식 판에는 도막 이상·손상을 두지 않는다 — 최우선 보수 판만 도막 경고(판 전체)와 도막 떨어짐 1건 (topFlake) */
 export const PLATE_LOSS={
   general:[0.010,0.016],band:{z0:5.3,z1:6.2,add:0.004},bilgeTop:{z0:1.5,z1:3.5,add:0.002},bowFactor:1.2,firstShare:[0.2,0.4]
 };
 export const PITTING={
-  peak:[0.22,0.32],r:[2.0,2.6],
+  peak:{top:[0.26,0.30],crit:[0.215,0.25],warn:[0.12,0.15]},edge:0.11,R:2.6,apart:15,minPts:4,
+  topFlake:{area:[0.3,0.8]},
   sites:[
-    {kind:'block'},                        // 킬 블록 접촉부 옆 선저
-    {kind:'block'},
-    {kind:'stern',fr:[10,25]},             // 선미·프로펠러 주변 선저
-    {kind:'lightWL',top:true},             // 경하 흘수선 띠 (도막 이상과 겹침 → 최우선 보수)
-    {kind:'lightWL',top:true,bow:true}     // 경하 흘수선 띠, 선수부
+    {name:'①',where:{z:[0,3],fr:[10,25]},top:1,crit:2,warn:2},                 // FR 10–25 선저 (선미는 바닥이 올라가 평판부가 킬 판뿐 — z 3 m까지)
+    {name:'②',where:{bottom:true,fr:[60,150]},keel:true,top:1,crit:1,warn:2},  // 선저 블록 접촉부 주변
+    {name:'③',where:{z:[5.3,6.2],fr:[40,200],side:'S'},crit:1},                // 경하 흘수선 띠, 서로 떨어진 3곳
+    {name:'③',where:{z:[5.3,6.2],fr:[40,200],side:'P'},warn:1},
+    {name:'③',where:{z:[5.3,6.2],fr:[40,200],side:'S'},warn:1},
+    {name:'④',where:{z:[3,9.4],fr:[225,250],side:'S'},crit:1,warn:2},          // 선수부
+    {name:'빌지 상부',where:{z:[1.5,3.5],fr:[90,150],side:'P'},warn:2}          // 빌지 상부 깎임 집중
   ]
 };
 /* 도막 손상 (스크래치·도막 떨어짐): 손상 1건 = 한 곳의 손상 묶음 (3 m 안). events = 차수별 건수, sites = 위치별 비율
    - anchor: 선수 FR 225–250 앵커 주변 · tug: 양현 예인선 접촉점 (FR, z 범위) · fender: 펜더 라인 (z 범위)
-   - waterline · seaChest: 도막 떨어짐만 (수선부, 씨체스트 2곳 — 선미 쪽 선측 하부, 가정)
-   스크래치는 len개 점 (선수미 방향으로 이어짐), 도막 떨어짐은 flakeNear.p 확률로 스크래치 3 m 안에 1–2점 함께 생긴다 */
+   - waterline · seaChest: 도막 떨어짐만 (수선부, 씨체스트 2곳 — 선미 쪽 선측 하부, 가정). 수선부 떨어짐은 도막 경고 판에 먼저 둔다
+     (도막이 이미 약한 곳 — 자리가 없으면 수선부 어디든)
+   스크래치는 len개 점 (선수미 방향으로 이어짐). flaking = 2차 도막 떨어짐(경고) 건수: 떨어짐만 있는 곳을 빼고 남은 만큼
+   스크래치 건에 고르게 떨어짐 1–2점을 3 m(flakeNear.r) 안에 함께 둔다.
+   1차 (first): 2차 손상 자리 중 일부에서 더 작게 (면적 × shrink) — 떨어짐 flaking건, 스크래치 scratch건. 1차 도막 이상 판을 피하고
+   1건 = 판 1장 (서로 다른 판) */
 export const DAMAGE={
   events:{current:30,first:15},
+  flaking:{current:12,area:[0.15,1.3]},  // 도막 두께 판정은 도막 두께 패치로만 (도막 떨어짐은 도막 손상 레이어에서 센다)
+  first:{flaking:5,scratch:10,shrink:[0.4,0.7]},
   sites:{anchor:0.2,tug:0.34,fender:0.3,waterline:0.1,seaChest:0.06},
   anchor:{fr:[225,250],z:[3,16]},
   tug:{fr:[40,90,160,210],dx:4,z:[6,11]},  // 접촉점 FR ± dx m
   fender:{x:[20,185],z:[8,12]},
   seaChest:[{x:28,z:2.4,side:'S'},{x:28,z:2.4,side:'P'}],
   scratch:{len:[1,3],area:[0.03,0.38]},
-  flaking:{area:[0.15,1.3]},             // 도막 두께 판정은 도막 두께 패치로만 (도막 떨어짐은 도막 손상 레이어에서 센다)
-  flakeNear:{p:0.6,r:3},
+  flakeNear:{r:3},
   gap:3.6                                  // 서로 다른 손상 사이의 최소 거리 (m): 3 m 묶음에서 합쳐지지 않게
 };
 
