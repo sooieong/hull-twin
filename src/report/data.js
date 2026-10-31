@@ -11,7 +11,7 @@ import { LAYERS, LAYER_LABEL, WARN, CRIT, TOP, CRITERIA, judge, reaches, dftLoss
 import { ACTION_ORDER } from '../data/repairSteps.js';
 import { DEFECT_LABEL, recLoc, lossPct, area, lossRate, pct as pctText } from '../format.js';
 import { groupZones, zonesOf, topCount } from '../data/zones.js';
-import { SHIP as BASE, ROBOT } from '../data/baseline.js';
+import { SHIP as BASE, FLEET_DETAIL } from '../data/baseline.js';
 import { FRICTION, CELL_AREA, DEFAULT_LEVEL, rangeResult, noRepair } from '../plan/scenario.js';
 import { platesOf } from '../data/plates.js';
 import { DOCKING_CYCLE_YEARS, dockOf, prevDockOf, dockLabel } from '../data/docking.js';
@@ -23,7 +23,7 @@ export const REPORT_CONST={
   yearsSincePrev:DOCKING_CYCLE_YEARS,   // 이전 도킹 → 이 도킹 (1차 리도킹 → 2차 리도킹, 신조 인도 → 1차 리도킹)
   yearsToNext:DOCKING_CYCLE_YEARS       // 다음 도킹(2031.10)까지
 };
-export const SHIP={name:BASE.name,hull:BASE.hull,robot:ROBOT};   // name: 머리말·표지 · hull: 파일명
+export const SHIP={name:BASE.name,hull:BASE.hull,robot:FLEET_DETAIL};   // name: 머리말·표지 · hull: 파일명 · robot: 1장 측정 로봇 (6대)
 /* the docking the report is about = the one picked in the header (store.dockKey): 현재(2차 리도킹) or the 1차 리도킹 record.
    prev = the docking before it — loss rates run from its value (a record without …Prev: 신조 인도 = the original thickness) */
 export function dockContext(key){

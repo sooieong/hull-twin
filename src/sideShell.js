@@ -1,10 +1,10 @@
 /* =========================================================
    보조 시각화 1: S.SHELL 전개도 (SPEC 5.1)
    가로 = 프레임 번호(선미 → 선수), 세로 = 킬 중심선에서의 거스. 위 절반 우현, 가운데 킬 중심선, 아래 절반 좌현.
-   로봇 경로(우현 갑판 → 킬 → 좌현 갑판)가 위에서 아래로 진행한다.
+   로봇 6대: 위 절반은 우현 S1–S3, 아래 절반은 좌현 P1–P3이 선미 → 선수 세 구간을 나눠 맡는다 (baseline.ROBOTS).
    표시(단순화): 선체 외곽선, 가운데 K 선 하나(주황, 왼쪽 K 글자가 라벨), 오른쪽 "우현 / 좌현", 아래 프레임 눈금(100 단위),
          왼쪽 외판열 문자(K부터 세 칸마다), 설계 흘수선(옅은 점선), 킬 블록 측정 불가 구역,
-         현재 레이어 히트맵, 선택 지점, 매핑 중 로봇 위치. 지점을 누르면 메인과 똑같이 선택된다.
+         현재 레이어 히트맵, 선택 지점, 매핑 중 로봇 6대의 위치. 지점을 누르면 메인과 똑같이 선택된다.
    히트맵: 3D와 같은 칠하기(heatmap.createPaint — 도막 두께·강판 두께는 IDW 보간, 도막 손상은 판정 색 고정)를
          저해상도 격자에서 계산해 부드럽게 확대해 칠한다. 선체 외곽선 안, 이상 구역만. 매핑 중에는 0.5초마다 다시 계산한다.
    ========================================================= */
@@ -81,7 +81,7 @@ export function createSideShell(body,store,ui){
   const cv=body.querySelector('canvas'),ctx=cv.getContext('2d');
   // static layers: under the heat (background, shell fill, keel blocks) and over it (lines, labels)
   const under=document.createElement('canvas'),over=document.createElement('canvas'),heat=document.createElement('canvas');
-  let w=0,h=0,dpr=1,dots=[],allIx=buildIndex([]),paint=createPaint('plate'),shellPath=null,heatClip=null,robot=null,raf=0,timer=null;
+  let w=0,h=0,dpr=1,dots=[],allIx=buildIndex([]),paint=createPaint('plate'),shellPath=null,heatClip=null,robots=null,raf=0,timer=null;
   let box=shellBox(1,1),bx=0,by=0,bw=1,bh=1;
   function layout(){box=shellBox(w,h);({bx,by,bw,bh}=box);}
 
@@ -145,11 +145,12 @@ export function createSideShell(body,store,ui){
       ctx.strokeStyle=COLOR.draw.crosshair;ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.beginPath();
       ctx.moveTo(x,by);ctx.lineTo(x,by+bh);ctx.moveTo(bx,y);ctx.lineTo(bx+bw,y);ctx.stroke();ctx.setLineDash([]);
       [[7.5,COLOR.draw.marker],[5.5,COLOR.k100],[2.2,COLOR.draw.marker]].forEach(([rad,col])=>{ctx.fillStyle=col;ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);ctx.fill();});}
-    if(robot){const x=px(robot.X/FS),y=py(robot.u),ph=(performance.now()/1000)%1.4/1.4;
-      ctx.strokeStyle=COLOR.draw.marker;ctx.globalAlpha=0.7*(1-ph);ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,y,6+ph*9,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
-      ctx.fillStyle=COLOR.k100;ctx.fillRect(x-4.5,y-4.5,9,9);ctx.strokeStyle=COLOR.draw.marker;ctx.lineWidth=1.5;ctx.strokeRect(x-4.5,y-4.5,9,9);}
+    if(robots){const ph=(performance.now()/1000)%1.4/1.4;
+      for(const rb of robots){const x=px(rb.X/FS),y=py(rb.u);
+        ctx.strokeStyle=COLOR.draw.marker;ctx.globalAlpha=0.7*(1-ph);ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,y,6+ph*9,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
+        ctx.fillStyle=COLOR.k100;ctx.fillRect(x-4.5,y-4.5,9,9);ctx.strokeStyle=COLOR.draw.marker;ctx.lineWidth=1.5;ctx.strokeRect(x-4.5,y-4.5,9,9);}}
   }
-  function animate(){draw();raf=robot?requestAnimationFrame(animate):0;}
+  function animate(){draw();raf=robots?requestAnimationFrame(animate):0;}
 
   function resize(){
     const r=cv.getBoundingClientRect();dpr=Math.min(window.devicePixelRatio||1,2);
@@ -182,8 +183,8 @@ export function createSideShell(body,store,ui){
     else if(k.has('records')&&!timer)timer=setTimeout(()=>{timer=null;refresh();},HEAT_MS);
     if(k.has('pose')||k.has('state')){
       const p=store.mapState==='mapping'||store.mapState==='paused'?store.pose:null;
-      robot=p?{X:p.X,u:signedGirth(p.X,p.Y,p.Z,p.side)}:null;
-      if(robot&&!raf)raf=requestAnimationFrame(animate);else if(!robot)draw();
+      robots=p&&p.robots?p.robots.map(r=>({X:r.X,u:signedGirth(r.X,r.Y,r.Z,r.side)})):null;   // all six (baseline.ROBOTS)
+      if(robots&&!raf)raf=requestAnimationFrame(animate);else if(!robots)draw();
     }
   });
   ui.subscribe(k=>{if(k==='layer')refresh();if(k==='select')draw();});

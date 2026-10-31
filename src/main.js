@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { clamp, smooth, L, B, D, T, R, FS, XMIN, XMAX, XC, FRMIN, FRMAX, NX, NB, G, KEEL_HALF, STRAKE_W, LETTERS, WLS, SX, SY, SZ,
   deckZ, keelZ, HB, section, atGirth, strakeLower, recordU, strakeName, ZONES, zoneOf, regionOf, stX, stSec, stIndex, KEEL_BLOCKS, BLOCK_SIZE , unmeasurable } from './hull.js';
-import { DRAFT_LIGHT, WL_TOP, BOW_FR, STERN_FR, ROBOT } from './data/baseline.js';
+import { DRAFT_LIGHT, WL_TOP, BOW_FR, STERN_FR, ROBOTS, FLEET, FLEET_DETAIL } from './data/baseline.js';
 import { CRITERIA, TOP_RULE, TOP_SUMMARY, TOP, CRIT, WARN, judge, isTop, gradeOf } from './data/criteria.js';
 import { gradeChip } from './gradeUi.js';
 import { LAYER_LABEL, DEFECT_LABEL, ACTION, value, ptLoc, coords, metres, num, numHtml, progress, dateTime } from './format.js';
@@ -282,50 +282,57 @@ KEEL_BLOCKS.forEach(k=>{const top=keelZ(k.X),b=new THREE.Mesh(blkG,blkMat),c=new
   b.scale.y=(top-0.3-FLOOR)/1.5;b.position.set(k.X-XC,FLOOR+(top-0.3-FLOOR)/2,-k.Y);c.position.set(k.X-XC,top-0.15,-k.Y);dockGroup.add(b,c);});
 scene.add(dockGroup);
 
-/* robot (SPEC 4.2, 4.4): K100 body, bright outline and pulse ring, 1.5x the former size. Shown only while mapping.
+/* robots (SPEC 4.2, 4.4): six MAGNI (baseline.ROBOTS), one per stretch of each side, all alike — K100 body, bright outline and
+   pulse ring, 1.5x the former size — with a small name label (P1 …) over each. Shown only while mapping.
    Local axes: x = heading, y = across, z = shell normal. */
 const RB=1.5;
-const robotGroup=new THREE.Group();
-{const bodyG=new THREE.BoxGeometry(1.9*RB,1.2*RB,0.6*RB);
+const robotWrap=new THREE.Group();robotWrap.visible=false;scene.add(robotWrap);
+const ringOnShell=(r0,r1,opacity)=>new THREE.Mesh(new THREE.RingGeometry(r0,r1,48),new THREE.MeshBasicMaterial({color:COLOR.draw.marker,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false}));
+const robotTemplate=(()=>{const g=new THREE.Group(),bodyG=new THREE.BoxGeometry(1.9*RB,1.2*RB,0.6*RB);
   const body=new THREE.Mesh(bodyG,new THREE.MeshStandardMaterial({color:COLOR.robot.body,roughness:0.5,metalness:0.3}));body.position.z=0.3*RB;
   const edge=new THREE.LineSegments(new THREE.EdgesGeometry(bodyG),new THREE.LineBasicMaterial({color:COLOR.draw.marker}));edge.position.copy(body.position);
   const top=new THREE.Mesh(new THREE.BoxGeometry(1.1*RB,0.7*RB,0.25*RB),new THREE.MeshStandardMaterial({color:COLOR.robot.top,roughness:0.6}));top.position.z=0.72*RB;
   const eye=new THREE.Mesh(new THREE.SphereGeometry(0.16*RB,12,8),new THREE.MeshBasicMaterial({color:COLOR.draw.marker}));eye.position.set(0.95*RB,0,0.4*RB);
   const wheelG=new THREE.CylinderGeometry(0.26*RB,0.26*RB,0.2*RB,14),wheelM=new THREE.MeshStandardMaterial({color:COLOR.robot.wheel,roughness:0.8});
-  [[-0.7,0.65],[0.7,0.65],[-0.7,-0.65],[0.7,-0.65]].forEach(([x,y])=>{const w=new THREE.Mesh(wheelG,wheelM);w.position.set(x*RB,y*RB,0.26*RB);robotGroup.add(w);});
-  robotGroup.add(body,edge,top,eye);}
-// locator rings lying on the shell; scaled with distance so the robot stays findable on the whole-ship view
-const rbLocator=new THREE.Group();
-const ringOnShell=(r0,r1,opacity)=>new THREE.Mesh(new THREE.RingGeometry(r0,r1,48),new THREE.MeshBasicMaterial({color:COLOR.draw.marker,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false}));
-const rbHalo=ringOnShell(2.1*RB,2.35*RB,0.95),rbPulse=ringOnShell(2.35*RB,2.6*RB,0.6);
-rbHalo.position.z=rbPulse.position.z=0.05;rbLocator.add(rbHalo,rbPulse);robotGroup.add(rbLocator);
-const robotWrap=new THREE.Group();robotWrap.add(robotGroup);robotWrap.visible=false;scene.add(robotWrap);
-const rbTarget={p:new V3(),q:new THREE.Quaternion()},rbBasis=new THREE.Matrix4();
-function setRobotTarget(pose,snap){
-  const n=shellNormal(pose.X,pose.Y,pose.Z),h=new V3(pose.heading.X,pose.heading.Z,-pose.heading.Y);
-  toThree(pose.X,pose.Y,pose.Z,rbTarget.p);
+  [[-0.7,0.65],[0.7,0.65],[-0.7,-0.65],[0.7,-0.65]].forEach(([x,y])=>{const w=new THREE.Mesh(wheelG,wheelM);w.position.set(x*RB,y*RB,0.26*RB);g.add(w);});
+  g.add(body,edge,top,eye);return g;})();
+const robots=ROBOTS.map(rb=>{
+  const group=robotTemplate.clone();   // shares the geometry and materials (same look)
+  // locator rings lying on the shell; scaled with distance so the robot stays findable on the whole-ship view
+  const locator=new THREE.Group(),halo=ringOnShell(2.1*RB,2.35*RB,0.95),pulse=ringOnShell(2.35*RB,2.6*RB,0.6);
+  halo.position.z=pulse.position.z=0.05;locator.add(halo,pulse);group.add(locator);robotWrap.add(group);
+  const el=document.createElement('div');el.className='lbl3d rbl';el.textContent=rb.id;el.hidden=true;$('#labels').appendChild(el);
+  return {rb,group,locator,pulse,el,target:{p:new V3(),q:new THREE.Quaternion()},seen:false,labelAt:new V3()};
+});
+const rbBasis=new THREE.Matrix4();
+function setRobotTarget(R,pose,snap){
+  const n=shellNormal(pose.X,pose.Y,pose.Z),h=new V3(pose.heading.X,pose.heading.Z,-pose.heading.Y),T=R.target;
+  toThree(pose.X,pose.Y,pose.Z,T.p);
   h.addScaledVector(n,-h.dot(n));
-  if(h.lengthSq()>1e-8){h.normalize();rbBasis.makeBasis(h,new V3().crossVectors(n,h),n);rbTarget.q.setFromRotationMatrix(rbBasis);}
-  if(snap){robotGroup.position.copy(rbTarget.p);robotGroup.quaternion.copy(rbTarget.q);}
+  if(h.lengthSq()>1e-8){h.normalize();rbBasis.makeBasis(h,new V3().crossVectors(n,h),n);T.q.setFromRotationMatrix(rbBasis);}
+  if(snap){R.group.position.copy(T.p);R.group.quaternion.copy(T.q);}
 }
 
-/* scan path: travelled (faint, current strake solid) and the next part — rest of the current strake + the next strake (dashed) */
+/* scan paths, one per robot: travelled (faint, current strake solid) and the next part — rest of the current strake + the next strake (dashed) */
 const pathGroup=new THREE.Group();pathGroup.visible=false;scene.add(pathGroup);
-let plan=null,trailLine=null,rowLine=null,nextLine=null,lyRobotOn=true;
+let paths=[],lyRobotOn=true;
 function buildPath(P){
-  plan=P;const arr=new Float32Array(P.points.length*3),v=new V3(),n=new V3();
-  P.points.forEach((p,i)=>{shellNormal(p.X,p.Y,p.Z,n);toThree(p.X,p.Y,p.Z,v).addScaledVector(n,0.15).toArray(arr,i*3);});
-  const geo=()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(arr,3));g.setDrawRange(0,0);return g;};
-  trailLine=new THREE.Line(geo(),new THREE.LineBasicMaterial({color:COLOR.robot.path,transparent:true,opacity:0.18}));
-  rowLine=new THREE.Line(geo(),new THREE.LineBasicMaterial({color:COLOR.k100}));
-  nextLine=new THREE.Line(geo(),new THREE.LineDashedMaterial({color:COLOR.robot.path,dashSize:1.2,gapSize:0.9}));nextLine.computeLineDistances();
-  pathGroup.add(trailLine,rowLine,nextLine);
+  paths=P.robots.map(route=>{
+    const arr=new Float32Array(route.points.length*3),v=new V3(),n=new V3();
+    route.points.forEach((p,i)=>{shellNormal(p.X,p.Y,p.Z,n);toThree(p.X,p.Y,p.Z,v).addScaledVector(n,0.15).toArray(arr,i*3);});
+    const geo=()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(arr,3));g.setDrawRange(0,0);return g;};
+    const trail=new THREE.Line(geo(),new THREE.LineBasicMaterial({color:COLOR.robot.path,transparent:true,opacity:0.18}));
+    const row=new THREE.Line(geo(),new THREE.LineBasicMaterial({color:COLOR.k100}));
+    const next=new THREE.Line(geo(),new THREE.LineDashedMaterial({color:COLOR.robot.path,dashSize:1.2,gapSize:0.9}));next.computeLineDistances();
+    pathGroup.add(trail,row,next);
+    return {route,trail,row,next};
+  });
 }
-function showPathAt(k){
-  if(!plan)return;const pts=plan.points;let r=-1;
-  for(let i=k;i<pts.length&&r<0;i++)r=pts[i].row;
-  const end=r<0?pts.length-1:plan.rows[Math.min(r+1,plan.rows.length-1)].end,start=r<0?k:Math.min(k,plan.rows[r].start);
-  trailLine.geometry.setDrawRange(0,k+1);rowLine.geometry.setDrawRange(start,k-start+1);nextLine.geometry.setDrawRange(k,Math.max(0,end-k+1));
+function showPathAt(i,k){
+  const p=paths[i];if(!p)return;const {route}=p,pts=route.points;let r=-1;
+  for(let j=k;j<pts.length&&r<0;j++)r=pts[j].row;
+  const end=r<0?pts.length-1:route.rows[Math.min(r+1,route.rows.length-1)].end,start=r<0?k:Math.min(k,route.rows[r].start);
+  p.trail.geometry.setDrawRange(0,k+1);p.row.geometry.setDrawRange(start,k-start+1);p.next.geometry.setDrawRange(k,Math.max(0,end-k+1));
 }
 
 /* selection ring, hover ring, labels */
@@ -483,9 +490,11 @@ function syncProgress(p){
   const ms=$('#mapState'),done=store.mapState==='done';
   ms.querySelector('.map-prog i').style.width=done?'0':progress(p);ms.title=done?'':`측정 진행률 ${progress(p)}`;
 }
-const poseText=p=>ptLoc(p.X,p.side,p.Z);   // FR152+0.36 m·좌현·z 6.20 m
-let mapMode=null,robotSeen=false;
-$('#stRobotWrap').title=`측정 로봇 ${ROBOT}`;$('#followBtn').title=`매핑 중 ${ROBOT}가 있는 면으로 카메라를 다시 돌립니다`;   // tooltips name the robot (baseline.ROBOT)
+/* status bar: MAGNI 6대 · 측정점 N개, while mapping or paused + each robot's progress (P1 82% · P2 76% …) */
+const fleetText=()=>`${FLEET} · 측정점 ${num(store.records.length)}개`;
+const robotsText=p=>p&&p.robots?p.robots.map(r=>`${r.id} ${progress(r.progress)}`).join(' · '):'';
+let mapMode=null;
+$('#stRobotWrap').title=`측정 로봇 ${FLEET_DETAIL}`;$('#followBtn').title='매핑 중 측정 중인 로봇이 있는 면으로 카메라를 다시 돌립니다';   // tooltips name the robots (baseline.ROBOTS)
 function syncMap(){
   const st=store.mapState,active=st==='mapping'||st==='paused';
   const ms=$('#mapState');ms.classList.toggle('on',st==='mapping');ms.classList.toggle('paused',st==='paused');ms.classList.toggle('done',st==='done');
@@ -495,12 +504,12 @@ function syncMap(){
   $('#stRobotWrap').classList.toggle('idle',st!=='mapping');
   const dk=store.dockKey;
   if(st==='done')$('#stRobot').innerHTML=numHtml(dk==='newbuild'?`${dockLabel(dockOf(dk))}·측정 데이터 없음`
-    :`${dk==='first'?`${dockLabel(dockOf(dk))} 기록·`:''}매핑 완료·측정점 ${num(store.records.length)}개·마지막 측정 ${store.lastTs?dateTime(store.lastTs):'—'}`);
+    :`${dk==='first'?`${dockLabel(dockOf(dk))} 기록 · `:''}매핑 완료 · ${fleetText()} · 마지막 측정 ${store.lastTs?dateTime(store.lastTs):'—'}`);
   // 단면 절단: only once mapping is over (a run started with it on turns it off)
   const cut=$('#cutTog');cut.disabled=active;cut.closest('label').title=active?'매핑이 끝난 뒤 사용할 수 있습니다':'';
   if(active&&cut.checked){cut.checked=false;cut.dispatchEvent(new Event('change'));}
-  if(st==='paused')$('#stRobot').innerHTML=numHtml(store.pose?`매핑 중지·${poseText(store.pose)}`:'매핑 중지');
-  if(!active||!store.pose){robotWrap.visible=false;robotSeen=false;}
+  if(st==='paused')$('#stRobot').innerHTML=numHtml(`매핑 중지 · ${fleetText()}${store.pose?` · ${robotsText(store.pose)}`:''}`);
+  if(!active||!store.pose){robotWrap.visible=false;robots.forEach(R=>{R.seen=false;R.el.hidden=true;});}
   pathGroup.visible=active&&lyRobotOn;
   if(st!==mapMode){
     const prev=mapMode;mapMode=st;
@@ -511,10 +520,13 @@ function syncMap(){
     else if(st==='done'&&(prev==='mapping'||prev==='paused'))goView('iso');
     paintHull();syncFollowBtn();}
 }
+/* every robot to its pose; the camera follows the first robot still going (port P1 → P3, then starboard) */
 function onPose(p){
-  follow.raw=followAngle(p);
-  setRobotTarget(p,!robotSeen);robotSeen=true;robotWrap.visible=true;showPathAt(p.k);
-  $('#stRobot').innerHTML=numHtml(`${ROBOT} 매핑 중·${poseText(p)}`);syncProgress(p.progress);
+  const lead=p.robots.find(r=>!r.done)||p.robots[0];
+  follow.raw=followAngle(lead);
+  p.robots.forEach((rp,i)=>{const R=robots[i];setRobotTarget(R,rp,!R.seen);R.seen=true;R.el.hidden=false;showPathAt(i,rp.k);});
+  robotWrap.visible=true;
+  $('#stRobot').innerHTML=numHtml(`${fleetText()} · ${robotsText(p)}`);syncProgress(p.progress);
 }
 $('#mapBtn').addEventListener('click',()=>{if(!store)return;const st=store.mapState;
   if(st==='mapping')store.pause();else if(st==='paused')store.resume();else store.start();});   // done: 재매핑 = fresh run
@@ -544,9 +556,9 @@ function setLook(l){
   sheerMat.color.set(bp?COLOR.peach:SCENE.sheer);sheerMat.opacity=bp?0.7:0.7;
   dwlMat.color.set(bp?COLOR.dwlBp:COLOR.dwl);
   zoneMat.color.set(bp?SCENE.zoneBp:SCENE.zone);
-  // scan path keeps its contrast on the navy hull
-  if(trailLine){trailLine.material.color.set(bp?COLOR.peach:COLOR.robot.path);trailLine.material.opacity=bp?0.3:0.18;
-    rowLine.material.color.set(bp?COLOR.draw.marker:COLOR.k100);nextLine.material.color.set(bp?COLOR.robot.pathNextBp:COLOR.robot.path);}
+  // scan paths keep their contrast on the navy hull
+  for(const p of paths){p.trail.material.color.set(bp?COLOR.peach:COLOR.robot.path);p.trail.material.opacity=bp?0.3:0.18;
+    p.row.material.color.set(bp?COLOR.draw.marker:COLOR.k100);p.next.material.color.set(bp?COLOR.robot.pathNextBp:COLOR.robot.path);}
   paintHull();
 }
 document.querySelectorAll('[data-look]').forEach(b=>b.addEventListener('click',()=>setLook(b.dataset.look)));
@@ -699,7 +711,8 @@ function pick(e){
   if(rec){const lv=judge(rec,ui.layer).level;
     const cx=isTop(rec,ui.layer);val=`<div class="tv"><b>${value(rec,ui.layer)}</b>${gradeChip(gradeOf(lv,cx),ui.layer)}</div>`;}
   const [frTxt,...rest]=ptLoc(X,side,Z).split('·');   // FR152+0.36 m bold, the rest of the same line lighter
-  tip.innerHTML=`<div class="t1">${frTxt}<em>·${numHtml(rest.join('·'))}</em></div><div class="t2">${LAYER_LABEL[ui.layer]}</div>${val}<div class="t3">${coords(X,Y,Z)}</div>`;
+  tip.innerHTML=`<div class="t1">${frTxt}<em>·${numHtml(rest.join('·'))}</em></div><div class="t2">${LAYER_LABEL[ui.layer]}</div>${val}<div class="t3">${coords(X,Y,Z)}</div>`
+    +(rec&&rec.robot?`<div class="t3">측정 로봇 ${rec.robot}</div>`:'');
   tip.hidden=false;const pw=r.width;tip.style.left=(e.clientX-r.left)+'px';tip.style.top=(e.clientY-r.top)+'px';
   tip.style.transform=(e.clientX-r.left)>pw-260?'translate(calc(-100% - 14px),14px)':'translate(14px,14px)';
   hoverDot.position.copy(p);hoverDot.visible=true;
@@ -746,9 +759,12 @@ function loop(now){
     if(k>=1){const done=tween.onDone;tween=null;if(done)done();}}
   stepFollow(dt);
   controls.update();
-  if(robotWrap.visible){const e=1-Math.exp(-dt*14);robotGroup.position.lerp(rbTarget.p,e);robotGroup.quaternion.slerp(rbTarget.q,e);
-    rbLocator.scale.setScalar(clamp(camera.position.distanceTo(robotGroup.position)/120,1,3.5));
-    if(!reduce){const ph=(now/1000)%1.4/1.4;rbPulse.scale.setScalar(1+ph*0.8);rbPulse.material.opacity=0.6*(1-ph);}}
+  if(robotWrap.visible){const e=1-Math.exp(-dt*14),ph=(now/1000)%1.4/1.4;
+    for(const R of robots){const g=R.group;g.position.lerp(R.target.p,e);g.quaternion.slerp(R.target.q,e);
+      const s=clamp(camera.position.distanceTo(g.position)/120,1,3.5);R.locator.scale.setScalar(s);
+      if(!reduce){R.pulse.scale.setScalar(1+ph*0.8);R.pulse.material.opacity=0.6*(1-ph);}
+      // name label: just off the shell over the robot (outward normal, past the locator ring)
+      R.labelAt.set(0,0,2.2*RB*s).applyQuaternion(g.quaternion).add(g.position);place(R.el,R.labelAt);}}
   if(pendingMove){pick(pendingMove);pendingMove=null;}
   if(selMarker.visible)selMarker.scale.setScalar(clamp(camera.position.distanceTo(selMarker.position)/110,0.45,4));
   // close-up after a fly-to: the whole-frame section ring would cover the point, so it steps aside

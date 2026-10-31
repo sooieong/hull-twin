@@ -209,6 +209,7 @@ button,select,input{font:inherit;color:inherit}
 
 .lbl3d{position:absolute;z-index:2;pointer-events:none;font-variant-numeric:tabular-nums;font-weight:600;font-size:var(--fs-meta);color:var(--ho-peach);transform:translate(-50%,-100%);white-space:nowrap;opacity:.8}
 .lbl3d.sel{color:var(--k100);background:var(--ho-orange);padding:1px 7px;border-radius:3px;font-weight:600;opacity:1}
+.lbl3d.rbl{color:var(--k100);opacity:1;text-shadow:0 0 3px #000,0 0 2px #000}   /* robot name (P1 …) over each robot */
 .lbl3d.zl{font-weight:400;font-size:var(--fs-meta);color:var(--zone-label);background:var(--zone-label-bg);padding:0 5px;border-radius:3px;opacity:1;transform:translate(-50%,-50%)}
 #labels{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:2}
 .vp-msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--text-2);padding:24px}

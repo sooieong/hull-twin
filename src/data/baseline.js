@@ -4,7 +4,7 @@
    좌표: x = AP 0, 선수 방향 + · y = 중심선 0, 좌현 +, 우현 − · z = 기선 0, 위 + (m)
    ========================================================= */
 export const SHIP={hull:'H-2491',name:'H-2491',kind:'파나막스급 상선'};   // hull: 보고서 파일명의 선체 번호 · name: 머리말·보고서 표지
-export const ROBOT='MAGNI';             // 측정 로봇 이름: 상태바·툴팁·측정 레코드(robot)·보고서 표지
+export const ROBOT='MAGNI';             // 측정 로봇 기종 이름 (6대 — ROBOTS)
 
 /* 제원 (m) */
 export const LOA=210, BEAM=32.3, LBP=199.3;
@@ -19,6 +19,19 @@ export const MEASURE_AREA=12600;        // 측정 대상 면적 (m²): 킬 블�
 export const X_MIN=-5, X_MAX=205;       // 트랜섬 끝 ~ 선수 벌브 끝 (LOA 210)
 export const FRAME_SPACING=0.8;         // 균일 (가정)
 export const FR_MIN=-6, FR_MAX=256;
+
+/* 측정 로봇 6대: 현측(side)마다 길이를 세 구간(fr: FR from 이상 to 미만, 마지막 구간은 FR_MAX까지)으로 나눠 한 대가 한 구간을 맡는다
+   (1 선미 · 2 중앙 · 3 선수). 각 로봇은 자기 구간의 자기 현 선측·수선부와 선저 절반(좌현 y > 0, 우현 y < 0)을 측정한다.
+   6대가 동시에 측정한다 (data/scanPath.js 로봇별 경로, data/simulator.js). name: 상태바·툴팁·상세·측정 레코드(robot) */
+export const ROBOTS=[
+  {id:'P1',side:'P',fr:[FR_MIN,80]},{id:'P2',side:'P',fr:[80,170]},{id:'P3',side:'P',fr:[170,FR_MAX]},
+  {id:'S1',side:'S',fr:[FR_MIN,80]},{id:'S2',side:'S',fr:[80,170]},{id:'S3',side:'S',fr:[170,FR_MAX]}
+].map(r=>({...r,name:`${ROBOT}-${r.id}`}));
+/* the robot that measures a point (side 'P' | 'S', frame number) */
+export const robotFor=(side,fr)=>ROBOTS.find(r=>r.side===side&&fr>=r.fr[0]&&(fr<r.fr[1]||r.fr[1]===FR_MAX));
+const idsOf=side=>{const l=ROBOTS.filter(r=>r.side===side).map(r=>r.id);return `${l[0]}~${l[l.length-1]}`;};
+export const FLEET=`${ROBOT} ${ROBOTS.length}대`;                                                   // 상태바: MAGNI 6대
+export const FLEET_DETAIL=`마그니(${ROBOT}) ${ROBOTS.length}대 · 좌현 ${idsOf('P')}, 우현 ${idsOf('S')}`;   // 보고서 표지·툴팁
 
 /* 외판열 (가정): 외판 1장 폭 약 4.5 m. K는 중심선 양쪽으로 반씩 */
 export const STRAKE_W=4.5, KEEL_HALF=2.25;

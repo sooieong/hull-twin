@@ -3,9 +3,10 @@
    UI는 이 인터페이스만 본다. 시뮬레이터와 실제 하드웨어(WebSocket)는 같은 이벤트를 보낸다.
 
    이벤트
-   - 'pose'        {ts, X, Y, Z, fr, strake, side, zone, heading:{X,Y,Z}, k, progress}
-                   k = 계획 경로(plan.points)에서 지나온 점 번호, progress = 0–1
-   - 'measurement' 측정 레코드 (SPEC 3.1). robot = 측정한 로봇 이름 (baseline.ROBOT, MAGNI).
+   - 'pose'        {ts, progress, robots:[{id, name, X, Y, Z, fr, strake, side, zone, heading:{X,Y,Z}, k, progress, done}]}
+                   로봇 6대(baseline.ROBOTS 순서) 각각의 위치. k = 그 로봇 계획 경로(plan.robots[i].points)에서 지나온 점 번호,
+                   progress = 0–1 (바깥 = 전체, 로봇마다 = 그 로봇 경로), done = 그 로봇 경로를 다 돌았음
+   - 'measurement' 측정 레코드 (SPEC 3.1). robot = 측정한 로봇 이름 (MAGNI-P1 …), robotId = 그 로봇 번호 (P1 …).
                    손상 레코드에는 aiConfidence (AI 손상 판별 신뢰도 %, 손상이 없으면 null)
    - 'state'       {state:'idle'|'mapping'|'paused'|'done', progress, ts, fresh?}
                    fresh:true = 처음부터 새로 시작한 매핑 (UI는 기존 결과를 비운다). 이어서 매핑할 때는 없다.
@@ -17,7 +18,7 @@
    - resume()      멈춘 위치에서 이어서 매핑 (state 'mapping')
    - stop()        매핑 끝내기 (state 'done')
    - setSpeed(k)   재생 배속 (시뮬레이터 전용, 하드웨어는 무시)
-   - plan          계획 주행 경로 {points, cum, total, rows, samples} (scanPath.js)
+   - plan          계획 주행 경로 {robots:[{…, points, cum, total, rows}], total, samples} (scanPath.js)
    ========================================================= */
 import { buildScanPath } from './scanPath.js';
 

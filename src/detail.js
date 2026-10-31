@@ -42,6 +42,7 @@ function createLightbox(){
 
 export function createDetailPanel(body,store,ui){
   let timer=null;const lightbox=createLightbox();
+  const robotEl=body.closest('.pane').querySelector('#dtRobot');   // panel header: the robot that measured the point shown
   /* right-hand card: small grey title, value below (a number in the shared .num-drop style, or a word) */
   const sideCard=(title,value,cls='')=>`<div class="dt-card ${cls}"><span>${title}</span>${value}</div>`;
   const mapping=()=>store.mapState==='mapping'||store.mapState==='paused';
@@ -61,6 +62,7 @@ export function createDetailPanel(body,store,ui){
       :mappingState(store,'상세 정보');
     if(last&&last.r===r&&last.layer===layer&&last.empty===empty)return;
     last={r,layer,empty};
+    if(robotEl)robotEl.textContent=r&&r.robot?`측정 로봇 ${r.robot}`:'';
     if(!r){body.innerHTML=empty;return;}
     const {level}=judge(r,layer),top=isTop(r,layer);
     const colorLevel=Math.min(gradeOf(level,top),CRIT);   // 최우선 보수 is drawn in the 경고 colour, like its chip
