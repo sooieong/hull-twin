@@ -125,7 +125,7 @@ function page4(d,imgs){
       ${box('위치 분포',sideShellMap(d.records,'defect',MAP_W,MAP_H)+dmgLegend)}
       ${box('구역별',agg)}
       ${views(imgs,'defect','rp-stack')}
-      ${box('대표 손상 사진·급한 순',`<div class="rp-phs">${photos}</div>`)}
+      ${box('대표 손상 사진',`<div class="rp-phs">${photos}</div>`)}
     </div>`;
 }
 
