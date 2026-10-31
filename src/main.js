@@ -313,26 +313,32 @@ function setRobotTarget(R,pose,snap){
   if(snap){R.group.position.copy(T.p);R.group.quaternion.copy(T.q);}
 }
 
-/* scan paths, one per robot: travelled (faint, current strake solid) and the next part — rest of the current strake + the next strake (dashed) */
+/* scan paths, one per robot, in the robot's ㄹ order (data/scanPath.js): travelled (faint, current strake solid) and the next part —
+   rest of the current strake + the next strake (dashed). Drawn only inside the measurable range: segments between two drawn
+   points of the route (the parts it crosses outside, keel blocks included, are left out) */
 const pathGroup=new THREE.Group();pathGroup.visible=false;scene.add(pathGroup);
 let paths=[],lyRobotOn=true;
 function buildPath(P){
   paths=P.robots.map(route=>{
-    const arr=new Float32Array(route.points.length*3),v=new V3(),n=new V3();
-    route.points.forEach((p,i)=>{shellNormal(p.X,p.Y,p.Z,n);toThree(p.X,p.Y,p.Z,v).addScaledVector(n,0.15).toArray(arr,i*3);});
+    const pts=route.points,v=new V3(),n=new V3(),xyz=[],upTo=new Int32Array(pts.length);   // upTo[k]: drawn segments ending at k or before
+    const at=p=>{shellNormal(p.X,p.Y,p.Z,n);toThree(p.X,p.Y,p.Z,v).addScaledVector(n,0.15);xyz.push(v.x,v.y,v.z);};
+    for(let k=1;k<pts.length;k++){upTo[k]=upTo[k-1];if(pts[k-1].drawn&&pts[k].drawn){at(pts[k-1]);at(pts[k]);upTo[k]++;}}
+    const arr=new Float32Array(xyz);
     const geo=()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(arr,3));g.setDrawRange(0,0);return g;};
-    const trail=new THREE.Line(geo(),new THREE.LineBasicMaterial({color:COLOR.robot.path,transparent:true,opacity:0.18}));
-    const row=new THREE.Line(geo(),new THREE.LineBasicMaterial({color:COLOR.k100}));
-    const next=new THREE.Line(geo(),new THREE.LineDashedMaterial({color:COLOR.robot.path,dashSize:1.2,gapSize:0.9}));next.computeLineDistances();
+    const trail=new THREE.LineSegments(geo(),new THREE.LineBasicMaterial({color:COLOR.robot.path,transparent:true,opacity:0.18}));
+    const row=new THREE.LineSegments(geo(),new THREE.LineBasicMaterial({color:COLOR.k100}));
+    const next=new THREE.LineSegments(geo(),new THREE.LineDashedMaterial({color:COLOR.robot.path,dashSize:1.2,gapSize:0.9}));next.computeLineDistances();
     pathGroup.add(trail,row,next);
-    return {route,trail,row,next};
+    return {route,upTo,trail,row,next};
   });
 }
 function showPathAt(i,k){
-  const p=paths[i];if(!p)return;const {route}=p,pts=route.points;let r=-1;
+  const p=paths[i];if(!p)return;const {route,upTo}=p,pts=route.points;let r=-1;
   for(let j=k;j<pts.length&&r<0;j++)r=pts[j].row;
   const end=r<0?pts.length-1:route.rows[Math.min(r+1,route.rows.length-1)].end,start=r<0?k:Math.min(k,route.rows[r].start);
-  p.trail.geometry.setDrawRange(0,k+1);p.row.geometry.setDrawRange(start,k-start+1);p.next.geometry.setDrawRange(k,Math.max(0,end-k+1));
+  // segments (2 vertices each): travelled = up to k · current strake = its start … k · next = k … the end of the next strake
+  const seg=(a,b)=>[2*upTo[a],2*Math.max(0,upTo[b]-upTo[a])];
+  p.trail.geometry.setDrawRange(0,2*upTo[k]);p.row.geometry.setDrawRange(...seg(start,k));p.next.geometry.setDrawRange(...seg(k,end));
 }
 
 /* selection ring, hover ring, labels */
